@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.3.0] - 2026-10-22
+
+### Añadido
+- **Acciones en lote en el inicio.** Casillas para seleccionar varios guiones (o todos) y una barra flotante con:
+  - **Marcar como revisados:** verifica todos los seleccionados de una vez;
+  - **Publicar en YouTube:** los sube uno tras otro en el orden de la lista (las partes de una serie, en orden),
+    ahora o programados y escalonados (el primero a una hora y después uno cada X horas). Antes de confirmar se ve el
+    orden, la hora de cada uno y cuáles se saltan y por qué; avisa si se pasa del cupo diario de YouTube.
+- `subir_youtube.py --cada HORAS`: con varios guiones y `--publicar-el`, escalona las horas de publicación.
+
+### Cambiado
+- El CSS lleva su versión en la dirección, así que tras cambiarlo no se queda una copia vieja en caché.
+- Los controles nativos (calendario, barras de desplazamiento) siguen el tema claro u oscuro.
+
 ## [1.2.0] - 2026-10-22
 
 ### Añadido
@@ -59,6 +73,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.3.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/luukthegoat/pipeline-curiosidades/releases/tag/v1.0.0

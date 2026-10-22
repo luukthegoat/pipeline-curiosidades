@@ -26,6 +26,22 @@
 </div>
 
 <div class="tarjeta">
+  <h2>Varios vídeos a la vez</h2>
+  <p>En el <a href="{{ url_for('inicio') }}">inicio</a>, marca la casilla de cada guion (o «Seleccionar todo») y abajo
+    aparece una barra con dos botones:</p>
+  <ul>
+    <li><strong>Marcar como revisados:</strong> los marca todos como verificados de una vez. Hazlo solo después de
+      revisarlos.</li>
+    <li><strong>Publicar en YouTube:</strong> los sube uno detrás de otro, en el orden de la lista (las partes de una
+      serie van 1, 2, 3…). Puedes subirlos ya o programarlos escalonados: el primero a la hora que elijas y los demás,
+      uno cada X horas. Antes de confirmar ves el orden, la hora de cada uno y cuáles se saltan (sin revisar, sin vídeo
+      o ya subidos).</li>
+  </ul>
+  <p class="ayuda-campo">YouTube deja subir unos 6 vídeos al día por la API: si eliges más, los que pasen del cupo
+    fallarán y tendrás que publicarlos al día siguiente.</p>
+</div>
+
+<div class="tarjeta">
   <h2>Piloto automático</h2>
   <p>En <a href="{{ url_for('piloto_automatico') }}">Piloto automático</a> lo activas y Windows crea un vídeo cada día
     (turnando efemérides, diarios y tu lista de temas), lo programa en YouTube a la hora que elijas y te avisa con una

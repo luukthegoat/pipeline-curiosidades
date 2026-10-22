@@ -20,7 +20,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -282,6 +282,8 @@ def main(argv=None) -> int:
     parser.add_argument("--pendientes", action="store_true", help="sube todos los verificados aún sin subir")
     parser.add_argument("--privacidad", choices=PRIVACIDADES, default=os.getenv("YT_PRIVACIDAD") or "private")
     parser.add_argument("--publicar-el", default="", help="AAAA-MM-DDTHH:MM (hora local) para programarlo")
+    parser.add_argument("--cada", type=float, default=0,
+                        help="con varios guiones y --publicar-el: horas entre la publicación de uno y el siguiente")
     parser.add_argument("--forzar", action="store_true", help="súbelo aunque ya se hubiera subido")
     parser.add_argument("--perfil", action="store_true",
                         help="pone en el canal la descripción y palabras clave de la carpeta marca/")
@@ -324,10 +326,14 @@ def main(argv=None) -> int:
         return 1
 
     subidos = fallidos = 0
-    for guion in guiones:
-        print(f"\n· {guion}")
+    for orden, guion in enumerate(guiones):
+        publicar_el = args.publicar_el
+        if publicar_el and args.cada:  # escalonados y en el orden dado: el primero a esa hora, luego uno cada X h
+            hora = datetime.fromisoformat(publicar_el) + timedelta(hours=args.cada * orden)
+            publicar_el = hora.strftime("%Y-%m-%dT%H:%M")
+        print(f"\n· {guion}" + (f"  (se publica el {publicar_el.replace('T', ' a las ')})" if publicar_el else ""))
         try:
-            subir(guion, args.privacidad, args.publicar_el, args.forzar, args.borrador)
+            subir(guion, args.privacidad, publicar_el, args.forzar, args.borrador)
             subidos += 1
         except HttpError as error:
             print(f"  error: {_explicar(error)}", file=sys.stderr)

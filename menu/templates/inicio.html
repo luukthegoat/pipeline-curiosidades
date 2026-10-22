@@ -72,35 +72,179 @@
   </div>
 </form>
 
-<div class="cabecera-seccion">
+<div class="cabecera-seccion" id="guiones">
   <h2>Tus guiones y vídeos</h2>
-  <form class="en-linea" method="post" action="{{ url_for('abrir_carpeta') }}">
-    <button class="secundario" type="submit">Abrir carpeta de vídeos</button>
-  </form>
+  <div class="acciones" style="margin: 0;">
+    {% if guiones %}
+      <label class="marcar-todo"><input type="checkbox" id="todos" onchange="marcarTodos(this.checked)"> Seleccionar todo</label>
+    {% endif %}
+    <form class="en-linea" method="post" action="{{ url_for('abrir_carpeta') }}">
+      <button class="secundario" type="submit">Abrir carpeta de vídeos</button>
+    </form>
+  </div>
 </div>
 
+{% if request.args.get('mensaje') %}<div class="mensaje">{{ request.args.get('mensaje') }}</div>{% endif %}
+
+<form id="lote" method="post" autocomplete="off">
 <div class="lista">
   {% for g in guiones %}
-    <a class="guion" href="{{ url_for('ver_guion', nombre=g.nombre) }}">
-      {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
-      {% else %}<span class="mini vacia"></span>{% endif %}
-      <span class="idioma">{{ g.idioma }}</span>
-      <span>
-        <span class="titulo">{{ g.titulo }}</span><br>
-        <span class="meta">{{ g.anio }} · creado para el {{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span>
-      </span>
-      <span class="estados">
-        {% if g.verificado %}<span class="etiqueta ok">verificado</span>
-        {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
-        <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
-        <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
-        {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
-      </span>
-    </a>
+    <div class="fila-guion">
+      <label class="marcar" title="Seleccionar">
+        <input type="checkbox" name="nombres" value="{{ g.nombre }}" onchange="actualizarLote()"
+               data-titulo="{{ g.titulo }}" data-verificado="{{ 1 if g.verificado else 0 }}"
+               data-video="{{ 1 if g.video else 0 }}" data-youtube="{{ 1 if g.youtube else 0 }}">
+      </label>
+      <a class="guion" href="{{ url_for('ver_guion', nombre=g.nombre) }}">
+        {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
+        {% else %}<span class="mini vacia"></span>{% endif %}
+        <span class="idioma">{{ g.idioma }}</span>
+        <span>
+          <span class="titulo">{{ g.titulo }}</span><br>
+          <span class="meta">{{ g.anio }} · creado para el {{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span>
+        </span>
+        <span class="estados">
+          {% if g.verificado %}<span class="etiqueta ok">verificado</span>
+          {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
+          <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
+          <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
+          {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+        </span>
+      </a>
+    </div>
   {% else %}
     <div class="tarjeta vacio">Aún no hay guiones. Crea el primero con el formulario de arriba.</div>
   {% endfor %}
 </div>
+
+<div class="barra-lote" id="barra-lote" hidden>
+  <span><strong id="num-lote">0</strong> seleccionados</span>
+  <button class="secundario" type="submit" formaction="{{ url_for('verificar_lote') }}">Marcar como revisados</button>
+  <button type="button" onclick="abrirPublicar()" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>Publicar en YouTube…</button>
+  <button class="quitar" type="button" onclick="marcarTodos(false)" title="Quitar la selección" aria-label="Quitar la selección">✕</button>
+</div>
+
+<dialog id="publicar" class="dialogo">
+  <h2>Publicar en YouTube</h2>
+  <p class="ayuda-campo" style="margin-top: 0;">Se suben uno detrás de otro, en este orden (el de la lista: las partes de una serie, 1, 2, 3…):</p>
+  <ol class="orden" id="orden"></ol>
+  <div id="aviso-cupo" class="aviso" hidden>YouTube deja subir unos 6 vídeos al día por la API: si pasas de ahí, los
+    demás fallarán y tendrás que publicarlos mañana.</div>
+
+  <div class="opciones" id="caja-verificar">
+    <label><input type="checkbox" name="verificar" value="1" onchange="actualizarOrden()"> Marcar también como revisados los que falten</label>
+  </div>
+
+  <label for="privacidad-lote">Visibilidad</label>
+  <select id="privacidad-lote" name="privacidad">
+    <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
+    <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+    <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+  </select>
+
+  <label>Cuándo</label>
+  <div class="opciones">
+    <label><input type="radio" name="cuando" value="ahora" checked onchange="actualizarOrden()"> Ahora, uno tras otro</label>
+    <label><input type="radio" name="cuando" value="programar" onchange="actualizarOrden()"> Programados y escalonados</label>
+  </div>
+  <div class="fila" id="programar" hidden>
+    <div>
+      <label for="publicar_el">El primero se publica el</label>
+      <input type="datetime-local" id="publicar_el" name="publicar_el" oninput="actualizarOrden()">
+    </div>
+    <div>
+      <label for="cada">Y después, uno cada <span class="ayuda-campo">(horas)</span></label>
+      <input type="number" id="cada" name="cada" value="24" min="0" max="168" step="0.5" oninput="actualizarOrden()">
+    </div>
+  </div>
+
+  <div class="acciones">
+    <button type="submit" formaction="{{ url_for('publicar_lote') }}" id="confirmar-publicar">Publicar</button>
+    <button class="secundario" type="button" onclick="document.getElementById('publicar').close()">Cancelar</button>
+  </div>
+</dialog>
+</form>
+
+<script>
+  const casillas = () => [...document.querySelectorAll('input[name=nombres]')];
+  const elegidas = () => casillas().filter(c => c.checked);
+
+  function marcarTodos(valor) {
+    casillas().forEach(c => c.checked = valor);
+    actualizarLote();
+  }
+
+  function actualizarLote() {
+    const n = elegidas().length;
+    document.getElementById('num-lote').textContent = n;
+    document.getElementById('barra-lote').hidden = n === 0;
+    const todos = document.getElementById('todos');
+    if (todos) {
+      todos.checked = n > 0 && n === casillas().length;
+      todos.indeterminate = n > 0 && n < casillas().length;
+    }
+    document.querySelectorAll('.fila-guion').forEach(f =>
+      f.classList.toggle('elegida', f.querySelector('input').checked));
+  }
+
+  function abrirPublicar() {
+    const campo = document.getElementById('publicar_el');
+    if (!campo.value) {  // por defecto: la próxima hora en punto, dentro de al menos 1 hora
+      const d = new Date(Date.now() + 60 * 60 * 1000);
+      d.setMinutes(0, 0, 0);
+      d.setHours(d.getHours() + 1);
+      campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    actualizarOrden();
+    document.getElementById('publicar').showModal();
+  }
+
+  function actualizarOrden() {
+    const verificar = document.querySelector('input[name=verificar]').checked;
+    const programar = document.querySelector('input[name=cuando]:checked').value === 'programar';
+    document.getElementById('programar').hidden = !programar;
+    const inicio = new Date(document.getElementById('publicar_el').value);
+    const cada = parseFloat(document.getElementById('cada').value) || 0;
+    const formato = new Intl.DateTimeFormat('es-ES', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+
+    const lista = document.getElementById('orden');
+    lista.innerHTML = '';
+    let orden = 0, faltan = 0;
+    for (const c of elegidas()) {
+      const li = document.createElement('li');
+      const titulo = document.createElement('span');
+      titulo.textContent = c.dataset.titulo;
+      const detalle = document.createElement('span');
+      detalle.className = 'ayuda-campo';
+      let motivo = '';
+      if (c.dataset.youtube === '1') motivo = 'ya está en YouTube';
+      else if (c.dataset.video !== '1') motivo = 'no tiene vídeo';
+      else if (c.dataset.verificado !== '1' && !verificar) { motivo = 'sin revisar'; faltan++; }
+      if (motivo) {
+        li.className = 'saltado';
+        detalle.textContent = 'se salta: ' + motivo;
+      } else {
+        detalle.textContent = programar && !isNaN(inicio)
+          ? formato.format(new Date(inicio.getTime() + orden * cada * 3600000))
+          : (orden === 0 ? 'primero' : 'después');
+        orden++;
+      }
+      li.append(titulo, detalle);
+      lista.appendChild(li);
+    }
+    document.getElementById('caja-verificar').hidden = faltan === 0 && !verificar;
+    document.getElementById('aviso-cupo').hidden = orden <= 6;
+    const boton = document.getElementById('confirmar-publicar');
+    boton.disabled = orden === 0;
+    boton.textContent = orden ? `Publicar ${orden} vídeo${orden > 1 ? 's' : ''}` : 'Nada que publicar';
+  }
+
+  marcarTodos(false);  // empieza sin nada seleccionado (el navegador a veces recuerda la selección)
+
+  document.getElementById('publicar').addEventListener('click', e => {  // clic fuera del cuadro: cerrar
+    if (e.target.id === 'publicar') e.target.close();
+  });
+</script>
 
 <script>
   function cambiarModo() {

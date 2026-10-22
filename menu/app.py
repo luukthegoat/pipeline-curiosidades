@@ -159,7 +159,9 @@ def contexto_global():
         "libera": time.strftime("%H:%M", time.localtime(min(sin_cupo.values()))) if sin_cupo else "",
     }
     return {"cola": cola, "espera_wikipedia": time.strftime("%H:%M", time.localtime(hasta)) if hasta else "",
-            "cupo_groq": cupo}
+            "cupo_groq": cupo,
+            # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
+            "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime)}
 
 
 def producir(t: Trabajo, nombres: list) -> bool:
@@ -300,7 +302,9 @@ def voces() -> list:
 
 @app.route("/")
 def inicio():
-    return render_template("inicio.html", guiones=todos(), hoy=date.today().isoformat())
+    return render_template("inicio.html", guiones=todos(), hoy=date.today().isoformat(),
+                           yt_conectado=subir_youtube.TOKEN.exists(),
+                           yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private")
 
 
 @app.post("/crear")
@@ -619,6 +623,63 @@ def subir_a_youtube(nombre):
         return t.ejecutar("subir_youtube.py", *argumentos) == 0
 
     nuevo = cola.anadir(f"Subir a YouTube «{datos.get('titulo', nombre)}»", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+# --- Acciones en lote (varios guiones a la vez, desde el inicio) ----------------------
+
+def seleccionados() -> list:
+    """Guiones marcados en el inicio, en el orden de la lista (las partes de una serie, 1, 2, 3…)."""
+    elegidos = set(request.form.getlist("nombres"))
+    return [g for g in todos() if g["nombre"] in elegidos]
+
+
+@app.post("/lote/verificar")
+def verificar_lote():
+    guiones = seleccionados()
+    for g in guiones:
+        datos = leer(g["nombre"])
+        datos["verificado"] = True
+        escribir(g["nombre"], datos)
+    return redirect(url_for("inicio", mensaje=f"{len(guiones)} guion(es) marcados como revisados.", _anchor="guiones"))
+
+
+@app.post("/lote/publicar")
+def publicar_lote():
+    guiones = seleccionados()
+    if request.form.get("verificar") == "1":  # «marcar también como revisados»
+        for g in guiones:
+            if not g["verificado"]:
+                datos = leer(g["nombre"])
+                datos["verificado"] = g["verificado"] = True
+                escribir(g["nombre"], datos)
+    listos = [g for g in guiones if g["verificado"] and g["video"] and not g["youtube"]]
+    saltados = [g for g in guiones if g not in listos]
+    if not listos:
+        return redirect(url_for("inicio", error="Ninguno de los seleccionados se puede publicar: tienen que estar "
+                                                "revisados, tener vídeo y no estar ya en YouTube.", _anchor="guiones"))
+
+    privacidad = request.form.get("privacidad", "private")
+    argumentos = ["--privacidad", privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
+    if request.form.get("cuando") == "programar" and request.form.get("publicar_el"):
+        argumentos += ["--publicar-el", request.form["publicar_el"]]
+        try:
+            argumentos += ["--cada", str(max(0.0, float(request.form.get("cada") or 0)))]
+        except ValueError:
+            pass
+
+    def trabajo(t: Trabajo) -> bool:
+        t.resultado = [g["nombre"] for g in listos]
+        for g in saltados:
+            motivo = ("ya está en YouTube" if g["youtube"] else "no tiene vídeo" if not g["video"]
+                      else "no está revisado")
+            t.escribir(f"Se salta «{g['titulo']}»: {motivo}.")
+        t.escribir(f"Se publican {len(listos)} vídeo(s) en este orden:")
+        for i, g in enumerate(listos, 1):
+            t.escribir(f"  {i}. {g['titulo']}")
+        return t.ejecutar("subir_youtube.py", *[g["nombre"] for g in listos], *argumentos) == 0
+
+    nuevo = cola.anadir(f"Publicar {len(listos)} vídeo(s) en YouTube", trabajo)
     return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
