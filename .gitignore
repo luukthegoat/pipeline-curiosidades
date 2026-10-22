@@ -16,3 +16,6 @@ musica/
 
 # Configuración personal del piloto automático (se crea sola con valores por defecto)
 automatico.json
+
+# Lanzador compilado (se crea con lanzador\crear_exe.bat)
+*.exe

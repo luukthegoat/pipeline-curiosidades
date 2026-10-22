@@ -6,7 +6,7 @@
 
 Escribes un tema («La caída de Constantinopla»), una fecha o un personaje, y el programa genera un vídeo de
 ~1 minuto para Shorts / TikTok / Reels: guion verificado contra Wikipedia, voz, imágenes, subtítulos animados,
-música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo se maneja desde un menú web local.
+música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo se maneja desde un menú que se abre como aplicación de escritorio.
 
 <p align="center"><img src="docs/demo.png" alt="Fotogramas de un vídeo generado" width="900"></p>
 
@@ -57,7 +57,8 @@ flowchart LR
     D --> F[.txt para TikTok]
     W[wikimedia.py<br/>caché y ritmo] -.-> B
     W -.-> D
-    M[menu/app.py<br/>menú web + cola de tareas] --> B & C & D & E
+    M[menu/app.py<br/>menú + cola de tareas] --> B & C & D & E
+    X[Mente Inquieta.exe<br/>menu/aplicacion.py] --> M
 ```
 
 | Archivo | Función |
@@ -71,12 +72,15 @@ flowchart LR
 | [`musica.py`](musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
 | [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
 | [`automatico.py`](automatico.py) · [`programador.py`](programador.py) | Piloto automático diario con el Programador de tareas de Windows |
-| [`menu/`](menu/) | Menú web (Flask): crear, revisar, elegir imágenes, ajustes, cola de tareas |
+| [`menu/`](menu/) | Menú (Flask): crear, revisar, elegir imágenes, ajustes, cola de tareas |
+| [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |
+| [`lanzador/`](lanzador/) | Lanzador `Mente Inquieta.exe` (C#), que abre la aplicación sin consola |
 
 ## Tecnologías
 
 Python · Groq (gpt-oss-120b / gpt-oss-20b / Qwen) · Wikipedia y Wikimedia API · The Met y Art Institute of Chicago
-APIs · edge-tts · ffmpeg (zoompan, subtítulos ASS, sidechain) · Pillow · Flask · YouTube Data API v3 (OAuth 2.0)
+APIs · edge-tts · ffmpeg (zoompan, subtítulos ASS, sidechain) · Pillow · Flask · pywebview (WebView2) · C# ·
+YouTube Data API v3 (OAuth 2.0)
 
 ## Instalación
 
@@ -89,7 +93,9 @@ pip install -r requirements.txt
 copy .env.example .env      # y pon tu clave gratuita de Groq (console.groq.com/keys)
 ```
 
-Abre el menú con doble clic en `menu\Abrir menu.bat` (o `python menu\app.py`) y sigue la ayuda integrada.
+Abre el menú como aplicación de escritorio, en su propia ventana: `pythonw menu\aplicacion.py`, o crea el
+lanzador `Mente Inquieta.exe` con `lanzador\crear_exe.bat`. También funciona en el navegador con
+`menu\Abrir menu.bat`. Después, sigue la ayuda integrada.
 Para subir a YouTube hace falta crear unas credenciales OAuth en Google Cloud: la guía está en
 [`menu/LEEME.txt`](menu/LEEME.txt) y en el propio menú (Ajustes → YouTube).
 
@@ -117,6 +123,11 @@ qué necesitaba el canal, probaba cada versión, detectaba lo que fallaba en la 
 APIs, imágenes que no encajaban, cupos agotados…) y decidía las prioridades; el asistente proponía e implementaba
 las soluciones. Ha sido una forma de aprender cómo se lleva un sistema basado en LLM de la demo a algo que funciona
 de verdad.
+
+## Novedades
+
+Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.2.0**, convierte el menú en
+una aplicación de escritorio con su propio lanzador `.exe`; la 1.1.0 rediseñó el menú con un estilo moderno y minimalista.
 
 ## Licencia
 

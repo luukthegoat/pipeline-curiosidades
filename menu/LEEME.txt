@@ -1,11 +1,18 @@
-MENÚ · VÍDEOS DE HISTORIA
-=========================
+MENÚ · MENTE INQUIETA
+=====================
 
 CÓMO ABRIRLO
-  Doble clic en «Abrir menu.bat» (en esta carpeta).
-  Se abre una ventana negra (el servidor) y el menú aparece en tu navegador
-  en http://127.0.0.1:8765. Solo se puede abrir desde tu ordenador.
-  Para apagarlo, cierra la ventana negra. Tras actualizar el programa,
+  Como aplicación: doble clic en «Mente Inquieta.exe» (carpeta principal) o en
+  su acceso directo del escritorio. El menú se abre en su propia ventana, sin
+  navegador ni consola; al cerrar la ventana se apaga (si hay tareas en marcha,
+  pregunta antes). El .exe se crea con lanzador\crear_exe.bat. Si algo falla,
+  los mensajes quedan en salida\_trabajo\menu.log.
+
+  En el navegador: doble clic en «Abrir menu.bat» (en esta carpeta). Se abre
+  una ventana negra (el servidor) y el menú aparece en http://127.0.0.1:8765.
+  Para apagarlo, cierra la ventana negra.
+
+  Solo se puede abrir desde tu ordenador. Tras actualizar el programa,
   ciérralo y vuelve a abrirlo para cargar la versión nueva.
 
 QUÉ PUEDES HACER
@@ -78,7 +85,8 @@ DÓNDE QUEDAN LOS VÍDEOS
   «_ptN» solo aparece en las series. Los vídeos en inglés llevan «_EN» al final.
 
 ARCHIVOS DE ESTA CARPETA
-  Abrir menu.bat    lanzador (doble clic)
+  Abrir menu.bat    abre el menú en el navegador (doble clic)
+  aplicacion.py     abre el menú en su propia ventana (lo usa «Mente Inquieta.exe»)
   app.py            el servidor del menú
   templates\        las páginas HTML
   static\           los estilos (CSS)
