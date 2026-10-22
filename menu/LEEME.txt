@@ -1,0 +1,84 @@
+MENÚ · VÍDEOS DE HISTORIA
+=========================
+
+CÓMO ABRIRLO
+  Doble clic en «Abrir menu.bat» (en esta carpeta).
+  Se abre una ventana negra (el servidor) y el menú aparece en tu navegador
+  en http://127.0.0.1:8765. Solo se puede abrir desde tu ordenador.
+  Para apagarlo, cierra la ventana negra. Tras actualizar el programa,
+  ciérralo y vuelve a abrirlo para cargar la versión nueva.
+
+QUÉ PUEDES HACER
+  Inicio
+    · Crear vídeos sobre el TEMA que quieras (p. ej. «Juana de Arco»), en
+      una o varias partes de ~1 minuto (una serie: pt1, pt2, pt3…).
+    · O usar las EFEMÉRIDES de una fecha («tal día como hoy»).
+    · Elegir idiomas (español / inglés) y si quieres solo el guion
+      (recomendado, para revisarlo) o guion + audio + vídeo del tirón.
+    · Ver todos tus guiones con su miniatura y su estado.
+
+  Página de cada guion
+    · Frases dudosas que el verificador no encontró en Wikipedia + fuentes.
+    · Corregir el título y el texto de cada escena.
+    · Cambiar el gancho (texto grande del inicio) y la música (escuchándola).
+    · Elegir imágenes: la foto de cada escena entre las candidatas, o subir una tuya.
+    · Marcar como verificado y generar / rehacer el audio y el vídeo.
+      Al rehacer, solo se regeneran las escenas que hayan cambiado.
+    · Ver el vídeo, su miniatura y copiar la descripción para publicar.
+
+  Tareas
+    Las tareas se ponen en cola y se hacen una detrás de otra. Muestra en
+    directo lo que se está haciendo. Puedes cancelar cualquiera.
+
+  Voz y música
+    Elegir la voz de cada idioma y la velocidad, escuchando una muestra.
+    Escuchar las músicas y abrir la carpeta «musica» para añadir las tuyas.
+
+  Ayuda
+    Explica el funcionamiento y qué revisar antes de publicar.
+
+PILOTO AUTOMÁTICO (un vídeo al día)
+  En el menú → «Piloto automático»:
+    · Elige los tipos (efemérides, diarios, temas), las horas, los personajes y la cola de temas.
+    · «Activar» crea dos tareas en el Programador de tareas de Windows:
+        «Mente Inquieta - crear video»          crea el vídeo y lo programa en YouTube
+        «Mente Inquieta - recordatorio TikTok»  te avisa, copia el texto y abre la carpeta
+      Si el ordenador está apagado a esa hora, se ejecutan al encenderlo.
+    · «Desactivar» las quita. «Ejecutar ahora» crea uno en el momento.
+    · «Pendientes de TikTok»: copiar texto, abrir carpeta, añadir al calendario y marcar como subido.
+  Los vídeos se publican sin revisión salvo que el verificador marque dudas (quedan en privado).
+  Registro de lo que hace: salida\_trabajo\automatico.log (también se ve en el menú).
+
+SUBIR A YOUTUBE SHORTS AUTOMÁTICAMENTE
+  Configuración (una sola vez):
+    1. Entra en console.cloud.google.com y crea un proyecto (p. ej. «Mente Inquieta»).
+    2. «APIs y servicios → Biblioteca»: busca «YouTube Data API v3» y pulsa «Habilitar».
+    3. «Pantalla de consentimiento de OAuth»: tipo «Externo», un nombre y tu correo.
+       En «Usuarios de prueba» añade la cuenta de Google de tu canal.
+    4. «Credenciales → Crear credenciales → ID de cliente de OAuth», tipo «App de
+       escritorio». Descarga el JSON.
+    5. En el menú: Ajustes → YouTube → «Elegir el archivo JSON» y después
+       «Conectar con YouTube». Se abre Google: inicia sesión y pulsa «Permitir»
+       (si avisa de «app no verificada», es la tuya: «Continuar»).
+  Cada vídeo:
+    En su página, cuando esté VERIFICADO: «Subir a YouTube» (privado, oculto o
+    público, y opcionalmente programado a una hora).
+  A tener en cuenta:
+    · Mientras Google no verifique tu proyecto, YouTube deja en privado lo que se
+      sube por la API: hazlo público desde YouTube Studio.
+    · El cupo gratuito da para unos 6 vídeos al día.
+    · La carpeta «credenciales» da acceso a tu canal: no la compartas.
+
+DÓNDE QUEDAN LOS VÍDEOS
+  salida\videos\<tema>\  una carpeta por tema, por ejemplo:
+    Guerra-civil\Guerra-civil_pt1.mp4            el vídeo
+    Guerra-civil\Guerra-civil_pt1.txt            qué poner al publicar (TikTok y YouTube Shorts)
+    Guerra-civil\Guerra-civil_pt1.jpg            la miniatura
+    Guerra-civil\guiones\Guerra-civil_pt1.txt    el texto del guion
+  «_ptN» solo aparece en las series. Los vídeos en inglés llevan «_EN» al final.
+
+ARCHIVOS DE ESTA CARPETA
+  Abrir menu.bat    lanzador (doble clic)
+  app.py            el servidor del menú
+  templates\        las páginas HTML
+  static\           los estilos (CSS)

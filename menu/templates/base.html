@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Vídeos de historia{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+</head>
+<body>
+  <header>
+    <div class="barra">
+      <a class="marca" href="{{ url_for('inicio') }}">🎬 Vídeos de historia</a>
+      <nav>
+        <a href="{{ url_for('inicio') }}">Inicio</a>
+        {% set activos = cola.activos() | length %}
+        <a id="nav-tarea" href="{{ url_for('ver_tarea') }}">Tareas{% if activos %} ({{ activos }} en marcha){% endif %}</a>
+        <a href="{{ url_for('piloto_automatico') }}">Piloto automático</a>
+        <a href="{{ url_for('ajustes') }}">Ajustes</a>
+        <a href="{{ url_for('ayuda') }}">Ayuda</a>
+      </nav>
+    </div>
+  </header>
+  <script>
+    // Botones «Copiar» de los prompts: copian el texto del cuadro que tienen al lado.
+    function copiar(boton) {
+      const texto = boton.parentElement.querySelector('textarea').value;
+      navigator.clipboard.writeText(texto).then(() => {
+        const antes = boton.textContent;
+        boton.textContent = '✔ Copiado';
+        setTimeout(() => boton.textContent = antes, 1500);
+      });
+    }
+  </script>
+  <main>
+    {% if espera_wikipedia %}
+      <div class="aviso">⏳ Wikipedia nos ha pedido esperar hasta las <strong>{{ espera_wikipedia }}</strong>.
+        Hasta entonces no se busca nada nuevo (lo ya descargado sigue funcionando). Las tareas que lo necesiten
+        fallarán con este aviso: vuelve a lanzarlas a esa hora.</div>
+    {% endif %}
+    {% if cupo_groq.todos %}
+      <div class="aviso">🧠 Se ha agotado el cupo diario gratuito de Groq (la IA que escribe los guiones) en todos los modelos.
+        Hasta las <strong>{{ cupo_groq.libera }}</strong> no se pueden crear guiones nuevos; el audio y el vídeo de los ya
+        creados funcionan con normalidad.</div>
+    {% elif cupo_groq.principal %}
+      <div class="aviso">🧠 El modelo principal de IA ha gastado su cupo diario gratuito (vuelve a las
+        <strong>{{ cupo_groq.principal }}</strong>). Mientras, los guiones se escriben con modelos de reserva: funcionan,
+        pero revisa el texto con algo más de atención.</div>
+    {% endif %}
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>

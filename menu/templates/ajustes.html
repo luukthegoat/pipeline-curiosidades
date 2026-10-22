@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block titulo %}Ajustes · Vídeos de historia{% endblock %}
+{% block contenido %}
+<h1>Ajustes</h1>
+<p class="sub">Voz, música y conexión con YouTube.</p>
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+
+{% if not voces %}
+  <div class="aviso">No he podido cargar la lista de voces (¿sin conexión a internet?). Recarga la página para intentarlo de nuevo.</div>
+{% endif %}
+
+<form class="tarjeta" method="post" action="{{ url_for('guardar_ajustes') }}" id="form-voz">
+  <h2>Voz</h2>
+  <div class="fila">
+    <div>
+      <label for="VOZ_ES">Voz para los vídeos en español</label>
+      <select id="VOZ_ES" name="VOZ_ES">
+        {% for v in voces if v.idioma.startswith('es-') %}
+          <option value="{{ v.id }}" {{ 'selected' if v.id == voz_es }}>{{ v.id }} · {{ v.genero }}</option>
+        {% endfor %}
+      </select>
+      <button class="secundario" type="submit" formaction="{{ url_for('muestra_voz') }}" name="voz" value=""
+              onclick="this.value = document.getElementById('VOZ_ES').value" style="margin-top: 8px;">▶ Escuchar</button>
+    </div>
+    <div>
+      <label for="VOZ_EN">Voz para los vídeos en inglés</label>
+      <select id="VOZ_EN" name="VOZ_EN">
+        {% for v in voces if v.idioma.startswith('en-') %}
+          <option value="{{ v.id }}" {{ 'selected' if v.id == voz_en }}>{{ v.id }} · {{ v.genero }}</option>
+        {% endfor %}
+      </select>
+      <button class="secundario" type="submit" formaction="{{ url_for('muestra_voz') }}" name="voz" value=""
+              onclick="this.value = document.getElementById('VOZ_EN').value" style="margin-top: 8px;">▶ Escuchar</button>
+    </div>
+  </div>
+
+  <label for="velocidad">Velocidad: <span id="valor-velocidad">{{ '%+d' % velocidad }}%</span>
+    <span class="ayuda-campo">— entre +5 % y +15 % suena natural en vídeos cortos</span></label>
+  <input type="range" id="velocidad" name="velocidad" min="-20" max="30" step="1" value="{{ velocidad }}"
+         oninput="document.getElementById('valor-velocidad').textContent = (this.value > 0 ? '+' : '') + this.value + '%'">
+
+  {% if muestra %}
+    <p style="margin-top: 16px;"><strong>Muestra:</strong> {{ muestra.split('|')[0] }} a {{ muestra.split('|')[1] }} %</p>
+    <audio controls autoplay src="{{ url_for('escuchar_muestra') }}?t={{ muestra }}" style="width: 100%;"></audio>
+  {% endif %}
+
+  <div class="acciones">
+    <button type="submit">Guardar voz</button>
+    <span class="ayuda-campo">Los vídeos ya hechos mantienen su voz hasta que los rehagas.</span>
+  </div>
+</form>
+
+<div class="tarjeta">
+  <h2>Música</h2>
+  <p>Cada guion elige un tono de música al crearse (lo puedes cambiar en su página). Las cuatro pistas
+    incluidas están generadas por el programa, así que no tienen derechos de autor:</p>
+  {% for p in pistas %}
+    <p><strong>{{ p }}</strong><br>
+      <audio controls preload="none" src="{{ url_for('escuchar_musica', pista=p) }}" style="width: 100%;"></audio></p>
+  {% endfor %}
+  <p class="ayuda-campo">Puedes añadir tus propias canciones (.mp3) a la carpeta <code>musica</code>: aparecerán aquí y en
+    cada guion con su nombre de archivo. Usa solo música que tengas derecho a usar (p. ej. la biblioteca de audio de YouTube).</p>
+  <form method="post" action="{{ url_for('abrir_carpeta_musica') }}">
+    <button class="secundario" type="submit">📂 Abrir la carpeta de música</button>
+  </form>
+</div>
+
+<div class="tarjeta" id="youtube">
+  <h2>YouTube Shorts</h2>
+  {% if yt_canal and yt_canal.id %}
+    <p><span class="etiqueta ok">✔ conectado</span> Canal: <strong>{{ yt_canal.nombre }}</strong></p>
+  {% elif yt_canal %}
+    <div class="aviso">Conectado, pero <strong>la cuenta autorizada no tiene canal de YouTube</strong>. Crea el canal en
+      youtube.com (tu foto → «Crear un canal») o, si tu canal es una cuenta de marca, pulsa «Volver a conectar» y elige
+      el canal cuando Google pregunte qué cuenta usar.</div>
+  {% elif yt_token %}
+    <p><span class="etiqueta mal">conexión caducada</span> Vuelve a conectar el canal.</p>
+  {% else %}
+    <p><span class="etiqueta mal">sin conectar</span></p>
+  {% endif %}
+
+  <ol class="pasos">
+    <li>
+      <strong>Crea las credenciales (una sola vez, ~10 minutos).</strong> En
+      <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>:
+      <ul>
+        <li>Crea un proyecto nuevo (p. ej. «Mente Inquieta»).</li>
+        <li>En «APIs y servicios → Biblioteca», busca <strong>YouTube Data API v3</strong> y pulsa «Habilitar».</li>
+        <li>En «Pantalla de consentimiento de OAuth»: tipo <strong>Externo</strong>, pon un nombre y tu correo, y en
+          «Usuarios de prueba» añade <strong>la cuenta de Google de tu canal</strong>.</li>
+        <li>En «Credenciales → Crear credenciales → ID de cliente de OAuth», tipo <strong>App de escritorio</strong>,
+          y descarga el JSON.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Sube aquí ese JSON:</strong>
+      {% if yt_cliente %}<span class="etiqueta ok">✔ guardado</span>{% endif %}
+      <form method="post" action="{{ url_for('subir_credenciales') }}" enctype="multipart/form-data" style="margin-top: 8px;">
+        <label class="boton secundario" style="margin: 0;">📤 Elegir el archivo JSON
+          <input type="file" name="credenciales" accept=".json" hidden onchange="this.form.submit()">
+        </label>
+      </form>
+    </li>
+    <li>
+      <strong>Conecta tu canal.</strong> Se abrirá Google en el navegador: inicia sesión con la cuenta del canal y
+      pulsa «Permitir». Si avisa de que «Google no ha verificado esta aplicación», es normal (la app es tuya):
+      pulsa «Continuar».
+      <div class="acciones">
+        <form method="post" action="{{ url_for('conectar_youtube') }}" class="en-linea">
+          <button type="submit" {% if not yt_cliente %}disabled{% endif %}>{{ 'Volver a conectar' if yt_token else 'Conectar con YouTube' }}</button>
+        </form>
+        {% if yt_token %}
+          <form method="post" action="{{ url_for('desconectar_youtube') }}" class="en-linea">
+            <button class="secundario" type="submit">Desconectar</button>
+          </form>
+        {% endif %}
+      </div>
+    </li>
+  </ol>
+
+  <form method="post" action="{{ url_for('privacidad_youtube') }}">
+    <label for="yt_privacidad">Visibilidad por defecto al subir</label>
+    <select id="yt_privacidad" name="privacidad" onchange="this.form.submit()">
+      <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (recomendado: lo revisas y lo publicas tú)</option>
+      <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+      <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+    </select>
+  </form>
+  <p class="ayuda-campo" style="margin-top: 12px;">
+    Importante: mientras Google no verifique tu proyecto, YouTube deja en <strong>privado</strong> todo lo que se sube
+    por la API, elijas lo que elijas; lo haces público con un clic en YouTube Studio. El cupo gratuito da para unos
+    6 vídeos al día. Las credenciales se guardan en la carpeta <code>credenciales</code>: no las compartas con nadie.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block contenido %}
+<h1>Crear un vídeo</h1>
+<p class="sub">Escribe de qué quieres el vídeo, o elige una fecha para usar lo que pasó ese día en la historia.</p>
+
+{% if request.args.get('error') %}<div class="aviso">{{ request.args.get('error') }}</div>{% endif %}
+{% if cola.en_curso() %}
+  <div class="aviso">Hay {{ cola.activos() | length }} tarea(s) en marcha (<a href="{{ url_for('ver_tarea') }}">ver</a>). Lo que crees ahora se pondrá en la cola y empezará cuando terminen.</div>
+{% endif %}
+
+<form class="tarjeta" method="post" action="{{ url_for('crear') }}">
+  <div class="pestanas">
+    <label><input type="radio" name="modo" value="tema" checked onchange="cambiarModo()"><span>✍️ Tema libre</span></label>
+    <label><input type="radio" name="modo" value="fecha" onchange="cambiarModo()"><span>📅 Efemérides de una fecha</span></label>
+    <label><input type="radio" name="modo" value="diario" onchange="cambiarModo()"><span>🎭 Diario de…</span></label>
+  </div>
+
+  <div id="modo-diario" hidden>
+    <label for="personaje">Personaje <span class="ayuda-campo">— el protagonista del diario, en su época y lugar</span></label>
+    <input type="text" id="personaje" name="personaje" placeholder="Ej.: soldado romano en Vindolanda · médico de la peste en Venecia · escriba del faraón">
+    <div class="fila">
+      <div>
+        <label for="problema">De qué se queja hoy <span class="ayuda-campo">— opcional</span></label>
+        <input type="text" id="problema" name="problema" placeholder="Ej.: la paga con descuentos · las sanguijuelas">
+      </div>
+      <div>
+        <label for="dia">Día <span class="ayuda-campo">— vacío = el siguiente</span></label>
+        <input type="number" id="dia" name="dia" min="1" max="999" placeholder="siguiente">
+      </div>
+    </div>
+    <p class="ayuda-campo">Formato «Día X como…»: humor sarcástico en primera persona, pero con hechos reales de Wikipedia.
+      Te dará los prompts para generar al personaje con IA (Sora, Runway, Midjourney…).</p>
+  </div>
+
+  <div id="modo-tema">
+    <label for="tema">¿De qué quieres el vídeo?
+      <span class="ayuda-campo">— un hecho, un personaje o un tema histórico. Se busca en Wikipedia en español.</span></label>
+    <input type="text" id="tema" name="tema" placeholder="Ej.: La caída de Constantinopla · Juana de Arco · El hundimiento del Titanic" autofocus>
+    <label for="partes">¿En cuántas partes?
+      <span class="ayuda-campo">— cada parte es un vídeo de ~1 minuto; el tema se reparte en orden entre ellas (Parte 1/3, 2/3, 3/3…)</span></label>
+    <input type="number" id="partes" name="partes" value="1" min="1" max="10" style="max-width: 120px;">
+  </div>
+
+  <div id="modo-fecha" hidden>
+    <div class="fila">
+      <div>
+        <label for="fecha">Fecha <span class="ayuda-campo">— solo cuentan el día y el mes</span></label>
+        <input type="date" id="fecha" name="fecha" value="{{ hoy }}">
+      </div>
+      <div>
+        <label for="cantidad">¿Cuántos eventos?</label>
+        <input type="number" id="cantidad" name="cantidad" value="1" min="1" max="10">
+      </div>
+    </div>
+  </div>
+
+  <label>Idiomas</label>
+  <div class="opciones">
+    <label><input type="checkbox" name="idiomas" value="es" checked> Español</label>
+    <label><input type="checkbox" name="idiomas" value="en"> Inglés</label>
+  </div>
+
+  <label>¿Qué hago?</label>
+  <div class="opciones">
+    <label><input type="radio" name="completo" value="off" checked> Solo el guion, para revisarlo antes <span class="ayuda-campo">(recomendado)</span></label>
+    <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón <span class="ayuda-campo">(sale sin verificar)</span></label>
+  </div>
+
+  <div class="acciones">
+    <button type="submit">{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}</button>
+    <span class="ayuda-campo">Tarda ~1 min por guion y ~2-3 min por vídeo.</span>
+  </div>
+</form>
+
+<div class="acciones" style="justify-content: space-between; margin-bottom: 12px;">
+  <h2 style="margin: 0;">Tus guiones y vídeos</h2>
+  <form class="en-linea" method="post" action="{{ url_for('abrir_carpeta') }}">
+    <button class="secundario" type="submit">📂 Abrir carpeta de vídeos</button>
+  </form>
+</div>
+
+<div class="lista">
+  {% for g in guiones %}
+    <a class="guion" href="{{ url_for('ver_guion', nombre=g.nombre) }}">
+      {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
+      {% else %}<span class="mini vacia"></span>{% endif %}
+      <span class="idioma">{{ g.idioma }}</span>
+      <span>
+        <span class="titulo">{{ g.titulo }}</span><br>
+        <span class="meta">{{ g.anio }} · creado para el {{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span>
+      </span>
+      <span class="estados">
+        {% if g.verificado %}<span class="etiqueta ok">✔ verificado</span>
+        {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
+        <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
+        <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
+        {% if g.youtube %}<span class="etiqueta ok">YouTube ✔</span>{% endif %}
+      </span>
+    </a>
+  {% else %}
+    <div class="tarjeta vacio">Aún no hay guiones. Crea el primero con el formulario de arriba.</div>
+  {% endfor %}
+</div>
+
+<script>
+  function cambiarModo() {
+    const modo = document.querySelector('input[name=modo]:checked').value;
+    document.getElementById('modo-tema').hidden = modo !== 'tema';
+    document.getElementById('modo-fecha').hidden = modo !== 'fecha';
+    document.getElementById('modo-diario').hidden = modo !== 'diario';
+  }
+</script>
+{% endblock %}

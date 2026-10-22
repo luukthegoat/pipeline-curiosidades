@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block titulo %}{{ datos.titulo }} · Vídeos de historia{% endblock %}
+{% block contenido %}
+<p class="sub"><a href="{{ url_for('inicio') }}">← Inicio</a></p>
+<h1>{{ datos.titulo }}</h1>
+<p class="sub">
+  {{ info.idioma | upper }} · {{ datos.evento }}
+  {% if info.duracion %} · vídeo de {{ '%.0f' % info.duracion }} s{% endif %}
+</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if cola.en_curso() %}<div class="aviso">Hay {{ cola.activos() | length }} tarea(s) en marcha (<a href="{{ url_for('ver_tarea') }}">ver</a>). Lo que lances se pondrá en la cola.</div>{% endif %}
+
+<div class="dos-columnas">
+  <div>
+    <div class="tarjeta">
+      <h2>1 · Comprueba los datos</h2>
+      {% set dudas = datos.get('sin_respaldo', []) %}
+      {% if dudas %}
+        <p>El verificador automático <strong>no encontró en Wikipedia</strong> estas frases. Compruébalas en las fuentes y corrígelas abajo si hace falta:</p>
+        {% for d in dudas %}
+          <div class="duda">Escena {{ d.escena }}: <q>{{ d.frase }}</q><br><small>{{ d.motivo }}</small></div>
+        {% endfor %}
+      {% else %}
+        <p>El verificador automático no ha encontrado frases sin respaldo. Aun así, échale un vistazo con las fuentes: no es infalible.</p>
+      {% endif %}
+      <p><strong>Fuentes:</strong></p>
+      <ul>
+        {% for f in datos.get('fuentes', []) %}<li><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.titulo }}</a></li>{% endfor %}
+      </ul>
+      {% if datos.get('editado_a_mano') %}<p class="ayuda-campo">Has editado este guion a mano: las dudas de arriba son de la versión original.</p>{% endif %}
+    </div>
+
+    {% if datos.get('diario') %}
+      <div class="tarjeta">
+        <h2>🎭 Prompts para tu generador de IA</h2>
+        <p class="ayuda-campo">Diario de «{{ datos.diario.personaje }}» · día {{ datos.diario.dia }}. Genera las imágenes o
+          clips en vertical (9:16) con Sora, Runway, Midjourney… y súbelas en «Elegir imágenes» (una por escena). Si no
+          subes ninguna, el vídeo se monta con imágenes históricas reales.</p>
+        {% if datos.get('personaje_visual') %}
+          <label>El personaje (úsalo igual en todas para que salga siempre el mismo)</label>
+          <div class="copiable"><textarea readonly rows="3">{{ datos.personaje_visual }}</textarea>
+            <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+        {% endif %}
+        {% if datos.get('prompt_video') %}
+          <label>Prompt del vídeo</label>
+          <div class="copiable"><textarea readonly rows="4">{{ datos.prompt_video }}</textarea>
+            <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+        {% endif %}
+        <label>Una imagen por escena</label>
+        {% for e in datos.escenas %}
+          <div class="copiable"><textarea readonly rows="3">{{ e.visual }}</textarea>
+            <button class="secundario" type="button" onclick="copiar(this)">Escena {{ e.numero }}</button></div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form class="tarjeta" method="post" action="{{ url_for('guardar_guion', nombre=nombre) }}">
+      <h2>2 · Corrige el texto si hace falta</h2>
+      <label for="titulo">Título del vídeo</label>
+      <input type="text" id="titulo" name="titulo" value="{{ datos.titulo }}">
+      {% set escenas_con_duda = dudas | map(attribute='escena') | list %}
+      {% for e in datos.escenas %}
+        <div class="escena {{ 'con-duda' if e.numero in escenas_con_duda }}">
+          <label for="n{{ e.numero }}"><span class="num">Escena {{ e.numero }}</span>
+            {% if e.numero in escenas_con_duda %}<span class="etiqueta mal">revisar</span>{% endif %}</label>
+          <textarea id="n{{ e.numero }}" name="narracion_{{ e.numero }}">{{ e.narracion }}</textarea>
+          <div class="visual">🖼 {{ e.visual }}</div>
+        </div>
+      {% endfor %}
+      <div class="acciones">
+        <button type="submit">Guardar cambios</button>
+        <span class="ayuda-campo">Si cambias una frase, al rehacer solo se regenera la voz y el vídeo de esa escena.</span>
+      </div>
+    </form>
+  </div>
+
+  <div>
+    <form class="tarjeta" method="post" action="{{ url_for('ajustes_guion', nombre=nombre) }}">
+      <h2>Gancho, música e imágenes</h2>
+      <label for="gancho">Gancho <span class="ayuda-campo">— 1 a 4 palabras en grande al empezar y en la miniatura</span></label>
+      <input type="text" id="gancho" name="gancho" maxlength="40" value="{{ datos.get('gancho', '') }}"
+             placeholder="Ej.: 53 días. · Un simple florero">
+      <label for="musica">Música de fondo</label>
+      {% set actual = datos.get('musica', 'neutro') %}
+      <select id="musica" name="musica" onchange="document.getElementById('oir').src = this.value === 'ninguna' ? '' : '/musica/' + encodeURIComponent(this.value) + '.mp3'">
+        <option value="ninguna" {{ 'selected' if actual == 'ninguna' }}>Sin música</option>
+        {% for p in pistas %}<option value="{{ p }}" {{ 'selected' if actual == p }}>{{ p }}</option>{% endfor %}
+      </select>
+      <audio id="oir" controls preload="none" style="width: 100%; margin-top: 8px;"
+             {% if actual != 'ninguna' %}src="{{ url_for('escuchar_musica', pista=actual) }}"{% endif %}></audio>
+      <div class="acciones">
+        <button class="secundario" type="submit">Guardar gancho y música</button>
+        <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">🖼 Elegir imágenes</a>
+      </div>
+    </form>
+
+    <div class="tarjeta">
+      <h2>3 · Verifica y produce</h2>
+      {% if info.verificado %}
+        <p><span class="etiqueta ok">✔ verificado</span></p>
+        <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
+          <input type="hidden" name="valor" value="0">
+          <button class="secundario" type="submit">Quitar verificado</button>
+        </form>
+      {% else %}
+        <p><span class="etiqueta mal">sin verificar</span> Marca esto solo cuando hayas comprobado los datos.</p>
+        <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
+          <input type="hidden" name="valor" value="1">
+          <button class="secundario" type="submit">✔ Marcar como verificado</button>
+        </form>
+      {% endif %}
+      <form method="post" action="{{ url_for('producir_guion', nombre=nombre) }}" style="margin-top: 14px;">
+        <button type="submit">
+          🎬 {{ 'Rehacer' if info.video else 'Generar' }} audio y vídeo
+        </button>
+      </form>
+      <p class="ayuda-campo">Crea la voz, los subtítulos, la música y la miniatura. La primera vez tarda ~1-2 minutos;
+        al rehacer, solo se regeneran las escenas que hayan cambiado.</p>
+    </div>
+
+    {% if info.video %}
+      <div class="tarjeta">
+        <h2>4 · Mira el vídeo</h2>
+        <video src="{{ url_for('video', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
+        <p class="ayuda-campo" style="margin-top: 10px;">📄 {{ archivo_video }}</p>
+        <form method="post" action="{{ url_for('abrir_carpeta_video', nombre=nombre) }}">
+          <button class="secundario" type="submit">📂 Abrir su carpeta</button>
+        </form>
+      </div>
+      {% if info.miniatura %}
+        <div class="tarjeta">
+          <h2>Miniatura</h2>
+          <p class="ayuda-campo">Súbela como portada del vídeo. Está en la misma carpeta.</p>
+          <img class="portada" src="{{ url_for('miniatura', nombre=nombre) }}?v={{ info.modificado }}" alt="Miniatura">
+        </div>
+      {% endif %}
+      <div class="tarjeta">
+        <h2>Publicar en YouTube Shorts</h2>
+        {% set yt = datos.get('youtube') %}
+        {% if yt %}
+          <p><span class="etiqueta ok">✔ subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}</p>
+          <p><a href="{{ yt.url }}" target="_blank" rel="noopener">{{ yt.url }}</a></p>
+          {% if yt.privacidad == 'private' and not yt.publicar_el %}
+            <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
+          {% endif %}
+        {% elif not yt_conectado %}
+          <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
+        {% elif not info.verificado %}
+          <p class="ayuda-campo">Solo se pueden subir guiones verificados. Revisa los datos y márcalo como verificado.</p>
+        {% else %}
+          <form method="post" action="{{ url_for('subir_a_youtube', nombre=nombre) }}">
+            <label for="privacidad">Visibilidad</label>
+            <select id="privacidad" name="privacidad">
+              <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
+              <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+              <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+            </select>
+            <label for="publicar_el">Programar <span class="ayuda-campo">— opcional: se publicará solo a esa hora</span></label>
+            <input type="datetime-local" id="publicar_el" name="publicar_el">
+            <div class="acciones">
+              <button type="submit">⬆ Subir a YouTube</button>
+            </div>
+          </form>
+          <p class="ayuda-campo">Se sube con el título, la descripción y las etiquetas del .txt, y marcado como «contenido sintético».</p>
+        {% endif %}
+      </div>
+      {% if descripcion %}
+        <div class="tarjeta">
+          <h2>5 · Texto para publicar</h2>
+          <p class="ayuda-campo">Un bloque para TikTok y otro para YouTube Shorts (título y descripción). Es el mismo
+            .txt que está junto al vídeo. Incluye las fuentes y los créditos de las imágenes, que la licencia obliga a citar.</p>
+          <textarea readonly rows="16" onclick="this.select()">{{ descripcion }}</textarea>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

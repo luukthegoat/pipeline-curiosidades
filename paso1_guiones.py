@@ -1,0 +1,847 @@
+"""Paso 1: genera guiones de vídeos cortos a partir de efemérides reales de Wikipedia.
+
+Descarga los eventos de «tal día como hoy» de Wikipedia en español, elige los que
+tienen más material y pide a un LLM (Groq) un guion de 60-75 segundos por idioma,
+dividido en escenas con narración y descripción visual. El guion solo puede usar
+hechos del material descargado, y el JSON guarda las fuentes para verificarlas.
+
+Uso:
+    python paso1_guiones.py
+    python paso1_guiones.py --cantidad 5 --fecha 2026-07-20
+    python paso1_guiones.py --idiomas es
+"""
+import argparse
+import json
+import os
+import re
+import sys
+import time
+import unicodedata
+from datetime import date
+from pathlib import Path
+
+import requests
+from dotenv import load_dotenv
+
+import wikimedia  # acceso a Wikipedia con caché y ritmo controlado (evita que te pongan en espera)
+
+load_dotenv()
+
+URL_GROQ = "https://api.groq.com/openai/v1/chat/completions"
+URL_EFEMERIDES = "https://es.wikipedia.org/api/rest_v1/feed/onthisday/{tipo}/{mes:02d}/{dia:02d}"
+URL_WIKI_API = "https://es.wikipedia.org/w/api.php"
+
+MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
+CARPETA_SALIDA = Path("salida/guiones")
+
+# Una narración de 60-75 s a ritmo de vídeo corto (~2,5 palabras por segundo).
+PALABRAS_POR_SEGUNDO = 2.5
+PALABRAS_MIN, PALABRAS_MAX = 140, 195
+
+ANTIGUEDAD_MINIMA = 20      # años: evita fichajes y noticias recientes
+MAX_PAGINAS_POR_EVENTO = 3
+MAX_CARACTERES_PRINCIPAL = 6000   # artículo principal del evento
+MAX_CARACTERES_PAGINA = 2500      # artículos secundarios
+
+IDIOMAS = {"es": "español", "en": "inglés"}
+
+PROMPT_SISTEMA = """Eres guionista de vídeos cortos de historia (YouTube Shorts, TikTok, Reels).
+Recibirás un MATERIAL con información de Wikipedia sobre un evento histórico.
+
+Reglas de veracidad, obligatorias:
+- Usa SOLO hechos que aparezcan en el MATERIAL. No añadas fechas, cifras, nombres, citas ni detalles que no estén ahí.
+- Si un dato no está claro en el MATERIAL, no lo menciones.
+- No inventes diálogos ni frases atribuidas a personas reales.
+
+Estilo:
+- La PRIMERA FRASE decide si la gente se queda: piensa antes 3 opciones y usa la más intrigante. Funcionan:
+  un dato sorprendente, una contradicción («la ciudad que resistió mil años cayó en 53 días») o una pregunta
+  que el espectador necesite resolver. Nunca empieces con «Hoy te voy a contar», una fecha suelta o un saludo.
+  El gancho tiene que ser cierto según el MATERIAL.
+- Frases cortas, fáciles de narrar en voz alta. Tono curioso y cercano, sin exagerar.
+- Termina con un cierre que deje pensando o invite a comentar.
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
+- Entre 6 y 8 escenas, de 20 a 30 palabras de narración cada una. Cuenta las palabras antes de responder.
+- Si te falta texto, desarrolla el contexto, las causas y las consecuencias que da el MATERIAL; nunca rellenes con datos inventados.
+
+Responde SOLO con un objeto JSON con esta forma:
+{{
+  "titulo": "título atractivo del vídeo",
+  "nombre_corto": "2 a 4 palabras que nombren el tema, sin artículo inicial ni número de parte (p. ej. «Guerra civil», «Juana de Arco»)",
+  "gancho": "1 a 4 palabras impactantes que se verán en grande en el primer segundo y en la miniatura (p. ej. «53 días.», «Un simple florero»); deben ser ciertas según el MATERIAL",
+  "tono": "uno de: epico, misterio, triste, neutro (para elegir la música de fondo)",
+  "escenas": [
+    {{"narracion": "texto que dice la voz en off", "visual": "descripción concreta de la imagen o clip: qué se ve, época, encuadre"}}
+  ],
+  "hashtags": ["#historia", "..."]
+}}
+Los NOMBRES de las claves son siempre exactamente estos, sin traducir: "titulo", "nombre_corto", "gancho", "tono", "escenas", "narracion", "visual", "hashtags".
+Los VALORES de "narracion", "titulo", "nombre_corto", "gancho" y "hashtags" van en {idioma}. El de "tono" va tal cual de la lista. El valor de "visual" va SIEMPRE en inglés (servirá para buscar o generar imágenes)."""
+
+PROMPT_DIARIO = """Eres guionista de vídeos cortos virales de humor histórico (TikTok, Shorts) con el formato «Día X de …».
+Recibirás un PERSONAJE, un número de DÍA, quizá un TEMA concreto, y un MATERIAL de Wikipedia.
+
+Veracidad, obligatoria: el humor está en el TONO, no en los hechos.
+- Todo dato histórico (lugares, fechas, costumbres, normas, objetos, comida, cifras) debe salir del MATERIAL.
+- No inventes citas, nombres propios ni cifras. Puedes exagerar emociones y usar jerga moderna, nunca hechos falsos.
+
+Formato:
+- Primera persona, como una entrada de diario: el personaje cuenta su día con tono sarcástico, agotado,
+  deadpan y muy cercano, aplicando jerga moderna a la miseria histórica.
+- Escena 1 (gancho): empieza EXACTAMENTE con «{gancho}» seguido de qué hace el personaje, y en esa misma frase
+  plantea la situación más absurda o injusta del día (piensa 3 opciones y usa la más graciosa), para que nadie deslice.
+- Escenas centrales: UNA molestia, norma absurda o penuria concreta y real de la época (si hay TEMA, esa), con detalles del MATERIAL.
+  Cada escena se apoya en al menos UN dato real y concreto del MATERIAL; el chiste es la reacción del personaje a ese dato.
+- Si el MATERIAL no dice algo, no lo afirmes (ni cifras, ni objetos, ni cargos): búscale la gracia a lo que sí dice.
+- Última escena: despedida cínica o graciosa pensando en el día siguiente.
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (unos 45 segundos). Apunta a {objetivo}.
+- Entre 5 y 7 escenas.
+
+Responde SOLO con un objeto JSON con esta forma:
+{{
+  "titulo": "título gancho que empiece por «{gancho}»",
+  "nombre_corto": "«Diario» + el personaje en 2 o 3 palabras (p. ej. «Diario soldado romano»)",
+  "gancho": "{gancho_corto}",
+  "tono": "comico",
+  "personaje_visual": "en inglés: el personaje en 3D estilo Pixar con un atuendo moderno gracioso; idéntico en todas las escenas",
+  "prompt_video": "en inglés: prompt para Sora/Runway/Midjourney con el personaje, el escenario de época, la yuxtaposición graciosa, iluminación cinematográfica, vertical 9:16",
+  "escenas": [
+    {{"narracion": "texto que dice la voz en off", "visual": "en inglés: prompt de imagen de esta escena con la descripción completa del personaje, su acción y el escenario, vertical 9:16"}}
+  ],
+  "palabras_clave": ["de 4 a 8 palabras graciosas de la narración para resaltar en los subtítulos"],
+  "hashtags": ["#historia", "..."]
+}}
+Los NOMBRES de las claves son siempre exactamente estos, sin traducir.
+Los VALORES de "titulo", "nombre_corto", "gancho", "narracion", "palabras_clave" y "hashtags" van en {idioma};
+"personaje_visual", "prompt_video" y "visual" van SIEMPRE en inglés."""
+
+PALABRAS_DIARIO = (95, 150, 120)  # mínimo, máximo y objetivo: unos 45-55 s
+
+PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL de Wikipedia y las escenas numeradas de un guion.
+Revisa cada afirmación factual de la narración (fechas, cifras, lugares, personas, cómo ocurrió algo, causas y consecuencias).
+Señala SOLO las que no estén respaldadas por el MATERIAL o lo contradigan. Ignora las frases de opinión, preguntas retóricas y llamadas a comentar.
+
+Responde SOLO con un objeto JSON:
+{"sin_respaldo": [{"escena": 1, "frase": "fragmento exacto del guion", "motivo": "qué no aparece o qué dice el material"}]}
+Si todo está respaldado, devuelve {"sin_respaldo": []}. Escribe "motivo" en español."""
+
+# Por si el modelo traduce las claves al escribir en inglés.
+CLAVES_ALTERNATIVAS = {
+    "title": "titulo", "scenes": "escenas", "narration": "narracion", "narración": "narracion",
+    "short_name": "nombre_corto", "hook": "gancho", "tone": "tono",
+}
+TONOS = ("epico", "misterio", "triste", "neutro", "comico")
+
+
+def normalizar_claves(valor):
+    if isinstance(valor, dict):
+        return {CLAVES_ALTERNATIVAS.get(k, k): normalizar_claves(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [normalizar_claves(v) for v in valor]
+    return valor
+
+
+# --- Wikipedia --------------------------------------------------------------
+
+def descargar_efemerides(fecha: date, tipo: str) -> list:
+    """tipo: "selected" (elegidas por los editores de Wikipedia) o "events" (todas)."""
+    url = URL_EFEMERIDES.format(tipo=tipo, mes=fecha.month, dia=fecha.day)
+    return wikimedia.json_api(url).get(tipo, [])
+
+
+def texto_articulo(titulo: str) -> str:
+    """Texto plano del artículo (más material que el resumen corto del feed)."""
+    parametros = {
+        "action": "query", "prop": "extracts", "explaintext": 1,
+        "redirects": 1, "titles": titulo, "format": "json", "formatversion": 2,
+    }
+    try:
+        paginas = wikimedia.json_api(URL_WIKI_API, parametros).get("query", {}).get("pages", [])
+        return (paginas[0].get("extract") or "") if paginas else ""
+    except wikimedia.WikimediaEnEspera:
+        raise  # que se vea el aviso de espera, no un «artículo vacío»
+    except requests.RequestException:
+        return ""
+
+
+def elegir_eventos(seleccionados: list, eventos: list, cantidad: int, anio_actual: int) -> list:
+    """Primero los elegidos por Wikipedia; después, eventos antiguos con artículos largos.
+
+    Uno por año para variar.
+    """
+    candidatos = [(float("inf"), e) for e in seleccionados if isinstance(e.get("year"), int) and e.get("pages")]
+    for evento in eventos:
+        anio = evento.get("year")
+        if not isinstance(anio, int) or anio > anio_actual - ANTIGUEDAD_MINIMA:
+            continue
+        riqueza = sum(len(p.get("extract", "")) for p in evento.get("pages", [])[:MAX_PAGINAS_POR_EVENTO])
+        if riqueza:
+            candidatos.append((riqueza, evento))
+    candidatos.sort(key=lambda par: par[0], reverse=True)
+
+    elegidos, anios = [], set()
+    for _, evento in candidatos:
+        if evento["year"] not in anios:
+            elegidos.append(evento)
+            anios.add(evento["year"])
+        if len(elegidos) == cantidad:
+            break
+    return elegidos
+
+
+def _titulo(pagina: dict) -> str:
+    return pagina.get("titles", {}).get("normalized") or pagina.get("title", "")
+
+
+def ordenar_paginas(evento: dict) -> list:
+    """Pone primero los artículos cuyo título aparece en el texto del evento (el protagonista)."""
+    texto = evento.get("text", "").lower()
+    paginas = evento.get("pages", [])
+    return sorted(paginas, key=lambda p: _titulo(p).lower() not in texto)
+
+
+def preparar_material(evento: dict) -> tuple:
+    """Devuelve (texto del material para el LLM, lista de fuentes)."""
+    partes = [f"EVENTO ({evento['year']}): {evento['text']}"]
+    fuentes = []
+    for pagina in ordenar_paginas(evento)[:MAX_PAGINAS_POR_EVENTO]:
+        titulo = _titulo(pagina)
+        url = pagina.get("content_urls", {}).get("desktop", {}).get("page", "")
+        texto = texto_articulo(pagina.get("title", titulo)) or pagina.get("extract", "")
+        if not texto:
+            continue
+        maximo = MAX_CARACTERES_PRINCIPAL if not fuentes else MAX_CARACTERES_PAGINA
+        partes.append(f"--- ARTÍCULO: {titulo}\n{texto[:maximo]}")
+        fuentes.append({"titulo": titulo, "url": url})
+    return "\n\n".join(partes), fuentes
+
+
+# --- Groq --------------------------------------------------------------------
+
+# La capa gratuita de Groq tiene un cupo de tokens POR DÍA y POR MODELO (p. ej. 200.000 para
+# gpt-oss-120b, unos 10-12 guiones). Cuando un modelo lo agota, se pasa al siguiente de reserva.
+MODELOS_RESERVA = [m.strip() for m in (os.getenv("MODELOS_RESERVA") or "openai/gpt-oss-20b,qwen/qwen3.8-27b").split(",")
+                   if m.strip()]
+MODELO_VERIFICADOR = os.getenv("MODELO_VERIFICADOR") or "openai/gpt-oss-20b"  # ahorra cupo del principal
+ARCHIVO_CUPO = Path("salida/_trabajo/groq_cupo.json")  # modelos sin cupo y hasta cuándo (lo lee el menú)
+ESPERA_CORTA = 60  # s; esperas más largas son el cupo diario: no se espera, se cambia de modelo
+ultimo_modelo = ""  # el modelo que respondió la última llamada
+
+
+class GroqSinCupo(RuntimeError):
+    """Todos los modelos han agotado su cupo diario gratuito."""
+
+    def __init__(self, hasta: float):
+        self.hasta = hasta
+        super().__init__(
+            f"Se ha agotado el cupo diario gratuito de Groq en todos los modelos. Vuelve a probar a las "
+            f"{time.strftime('%H:%M', time.localtime(hasta))} (o activa el plan de pago en console.groq.com)."
+        )
+
+
+class _CupoAgotado(Exception):
+    def __init__(self, segundos: float):
+        self.segundos = segundos
+
+
+def cupos_agotados() -> dict:
+    """{modelo: hora hasta la que no tiene cupo} de los que siguen agotados."""
+    try:
+        cupos = json.loads(ARCHIVO_CUPO.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {m: hasta for m, hasta in cupos.items() if hasta > time.time()}
+
+
+def _apuntar_sin_cupo(modelo: str, segundos: float) -> float:
+    cupos = cupos_agotados()
+    cupos[modelo] = time.time() + segundos
+    ARCHIVO_CUPO.parent.mkdir(parents=True, exist_ok=True)
+    ARCHIVO_CUPO.write_text(json.dumps(cupos), encoding="utf-8")
+    return cupos[modelo]
+
+
+def _llamar_modelo(api_key: str, modelo: str, sistema: str, usuario: str) -> str:
+    carga = {
+        "model": modelo,
+        "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.7,
+        "max_tokens": 3000,
+        "reasoning_effort": "low",  # gpt-oss razona antes de responder; "low" gasta menos tokens
+    }
+    if not modelo.startswith("openai/gpt-oss"):
+        del carga["reasoning_effort"]  # otros modelos no aceptan este parámetro
+    cabeceras = {"Authorization": f"Bearer {api_key}"}
+    for intento in range(4):
+        respuesta = requests.post(URL_GROQ, headers=cabeceras, json=carga, timeout=120)
+        if respuesta.status_code == 429:
+            try:
+                espera = float(respuesta.headers.get("retry-after", 10))
+            except ValueError:
+                espera = 10.0
+            if espera > ESPERA_CORTA or intento == 3:
+                raise _CupoAgotado(espera)  # cupo diario: no tiene sentido esperar aquí
+            print(f"    límite por minuto de Groq, esperando {espera:.0f} s…", flush=True)
+            time.sleep(espera)
+            continue
+        if respuesta.status_code >= 400:
+            # Mostramos el mensaje de Groq (no contiene la clave) para poder diagnosticar.
+            raise RuntimeError(f"Groq respondió {respuesta.status_code}: {respuesta.text[:300]}")
+        return respuesta.json()["choices"][0]["message"]["content"] or ""
+    raise _CupoAgotado(60)
+
+
+def llamar_groq(api_key: str, modelo: str, sistema: str, usuario: str) -> str:
+    """Llama al modelo preferido y, si no tiene cupo, a los de reserva (y al principal) por orden."""
+    global ultimo_modelo
+    principal = os.getenv("MODELO") or MODELO_POR_DEFECTO
+    orden = list(dict.fromkeys([modelo, principal, *MODELOS_RESERVA]))
+    for candidato in orden:
+        if candidato in cupos_agotados():
+            continue
+        try:
+            contenido = _llamar_modelo(api_key, candidato, sistema, usuario)
+        except _CupoAgotado as agotado:
+            hasta = _apuntar_sin_cupo(candidato, agotado.segundos)
+            print(f"    {candidato}: cupo diario agotado hasta las {time.strftime('%H:%M', time.localtime(hasta))}; "
+                  "paso al siguiente modelo", flush=True)
+            continue
+        if candidato != ultimo_modelo and candidato not in (modelo, principal):
+            print(f"    usando el modelo de reserva {candidato}", flush=True)
+        ultimo_modelo = candidato
+        return contenido
+    raise GroqSinCupo(min(cupos_agotados().values(), default=time.time() + 600))
+    raise RuntimeError("Límite de peticiones de Groq superado")
+
+
+def validar_guion(datos: dict) -> list:
+    """Comprueba la forma del guion. Devuelve la lista de escenas limpia."""
+    if not isinstance(datos, dict) or not str(datos.get("titulo", "")).strip():
+        raise ValueError("falta el título")
+    escenas = datos.get("escenas")
+    if not isinstance(escenas, list) or not escenas:
+        raise ValueError("faltan escenas")
+    limpias = []
+    for escena in escenas:
+        narracion = str((escena or {}).get("narracion", "")).strip()
+        visual = str((escena or {}).get("visual", "")).strip()
+        if not narracion or not visual:
+            raise ValueError("hay una escena sin narración o sin visual")
+        limpias.append({"narracion": narracion, "visual": visual})
+    return limpias
+
+
+def contar_palabras(escenas: list) -> int:
+    return sum(len(e["narracion"].split()) for e in escenas)
+
+
+def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicaciones: str = "",
+                  sistema: str = "", minimo: int = PALABRAS_MIN, maximo: int = PALABRAS_MAX, objetivo: int = 170) -> dict:
+    """Pide el guion y lo valida. `sistema`, `minimo`, `maximo` y `objetivo` permiten otros formatos (p. ej. el diario)."""
+    sistema = sistema or PROMPT_SISTEMA.format(min_palabras=minimo, max_palabras=maximo, idioma=IDIOMAS[idioma])
+    if indicaciones:
+        material = f"{indicaciones}\n\n{material}"
+    usuario = f"MATERIAL:\n{material}"
+    ultimo_error = mejor = None
+    for _ in range(3):  # reintenta si el JSON o la longitud no valen
+        try:
+            datos = normalizar_claves(json.loads(llamar_groq(api_key, modelo, sistema, usuario)))
+            escenas = validar_guion(datos)
+            palabras = contar_palabras(escenas)
+            if minimo <= palabras <= maximo:
+                return {**datos, "escenas": escenas}
+            if mejor is None or abs(palabras - objetivo) < abs(contar_palabras(mejor["escenas"]) - objetivo):
+                mejor = {**datos, "escenas": escenas}
+            direccion = "corto: añade" if palabras < minimo else "largo: quita"
+            raise ValueError(
+                f"tiene {palabras} palabras y debe tener entre {minimo} y {maximo}; "
+                f"es demasiado {direccion} unas {abs(objetivo - palabras)} palabras"
+            )
+        except ValueError as error:  # incluye JSON inválido
+            ultimo_error = error
+            usuario = f"MATERIAL:\n{material}\n\nTu intento anterior no era válido ({error}). Corrígelo."
+    if mejor is not None:  # forma correcta pero longitud fuera de rango: se guarda avisando
+        print(f"    aviso: {ultimo_error}; se guarda el intento más cercano")
+        return mejor
+    raise ValueError(f"no se obtuvo un guion válido: {ultimo_error}")
+
+
+AVISO_HUMOR = """
+ATENCIÓN: este guion es de HUMOR en primera persona («Día X como…»). Ignora las exageraciones evidentes, las
+quejas, las opiniones, las comparaciones absurdas, la jerga moderna y los chistes que nadie tomaría como un dato.
+Señala SOLO las afirmaciones que un espectador creería como hechos históricos (objetos, costumbres, cifras,
+cargos, lugares, fechas) y que el MATERIAL no respalda."""
+
+
+def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, humor: bool = False) -> list:
+    """Segunda pasada: lista las frases del guion que el material no respalda.
+
+    Con `humor` (formato diario) no cuenta los chistes como datos: solo las afirmaciones históricas.
+    """
+    numeradas = "\n".join(f"{i}. {e['narracion']}" for i, e in enumerate(escenas, start=1))
+    sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "")
+    respuesta = llamar_groq(api_key, MODELO_VERIFICADOR, sistema, f"MATERIAL:\n{material}\n\nGUION:\n{numeradas}")
+    try:
+        datos = json.loads(respuesta)
+    except ValueError:
+        return [{"escena": None, "frase": "", "motivo": "el verificador no devolvió JSON válido: revisa todo a mano"}]
+    dudas = datos.get("sin_respaldo", []) if isinstance(datos, dict) else []
+    return [
+        {"escena": d.get("escena"), "frase": str(d.get("frase", "")), "motivo": str(d.get("motivo", ""))}
+        for d in dudas
+        if isinstance(d, dict)
+    ]
+
+
+# --- Salida --------------------------------------------------------------------
+
+def slug(texto: str, maximo: int = 40) -> str:
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", texto.lower()).strip("-")[:maximo].rstrip("-") or "evento"
+
+
+def acortar_nombre(nombre) -> str:
+    """Nombre corto de verdad: hasta la primera coma o dos puntos, y 4 palabras como mucho."""
+    nombre = re.split(r"[,:;(]", str(nombre or ""))[0]
+    return " ".join(nombre.split()[:4]).strip(" .-")
+
+
+def normalizar_tono(tono) -> str:
+    tono = unicodedata.normalize("NFKD", str(tono or "")).encode("ascii", "ignore").decode().lower().strip()
+    return tono if tono in TONOS else ""
+
+
+def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, idioma: str, modelo: str) -> Path:
+    escenas = [{"numero": i, **escena} for i, escena in enumerate(guion["escenas"], start=1)]
+    palabras = contar_palabras(escenas)
+    titulo = guion["titulo"].strip()
+    parte, total = evento.get("parte"), evento.get("total")
+    if total and total > 1:
+        titulo = f"{titulo} ({'Part' if idioma == 'en' else 'Parte'} {parte}/{total})"
+    documento = {
+        "fecha": fecha.isoformat(),
+        "anio_evento": evento["year"],
+        "evento": evento["text"],
+        "idioma": idioma,
+        "titulo": titulo,
+        "palabras": palabras,
+        "duracion_estimada_s": round(palabras / PALABRAS_POR_SEGUNDO),
+        "escenas": escenas,
+        # Nombre del archivo de vídeo y de su carpeta (p. ej. «Guerra civil» → «Guerra civil pt3.mp4»).
+        "nombre_corto": acortar_nombre(guion.get("nombre_corto")),
+        # Frase corta en grande al empezar el vídeo y en la miniatura.
+        "gancho": str(guion.get("gancho") or "").strip()[:40],
+        # Música de fondo: un tono de salida/musica (epico, misterio, triste, neutro) o "ninguna".
+        "musica": normalizar_tono(guion.get("tono")) or "neutro",
+        "hashtags": [h for h in guion.get("hashtags", []) if isinstance(h, str)],
+        # Palabras que los subtítulos resaltan siempre (las graciosas o clave).
+        "palabras_clave": [str(p) for p in guion.get("palabras_clave", []) if isinstance(p, str)][:10],
+        "fuentes": fuentes,
+        # Frases que el verificador automático no encontró en el material: corrígelas o compruébalas.
+        "sin_respaldo": dudas,
+        "verificado": False,  # cámbialo a true cuando hayas comprobado los datos con las fuentes
+        "modelo": modelo,
+    }
+    sufijo = ""
+    if total and total > 1:
+        documento["serie"] = {"tema": evento["text"], "parte": parte, "total": total}
+        sufijo = f"_parte{parte}de{total}"
+    prefijo = evento["year"] if evento.get("year") else "tema"
+    if evento.get("diario"):  # formato «Día X como…»: prompts para el generador de IA y el número de día
+        diario = evento["diario"]
+        documento["diario"] = diario
+        documento["nombre_corto"] = diario["nombre_corto"] or documento["nombre_corto"]
+        documento["personaje_visual"] = str(guion.get("personaje_visual") or "").strip()
+        documento["prompt_video"] = str(guion.get("prompt_video") or "").strip()
+        prefijo, sufijo = "diario", f"_dia{diario['dia']}"
+    CARPETA_SALIDA.mkdir(parents=True, exist_ok=True)
+    nombre = f"{fecha.isoformat()}_{prefijo}_{slug(evento['text'])}{sufijo}_{idioma}.json"
+    ruta = CARPETA_SALIDA / nombre
+    ruta.write_text(json.dumps(documento, ensure_ascii=False, indent=2), encoding="utf-8")
+    return ruta
+
+
+# Artículos sobre obras (no sobre el hecho histórico): se descartan al buscar un tema.
+OBRAS = re.compile(r"\((película|serie|telenovela|canción|álbum|banda|videojuego|novela|libro|musical|ópera|obra)", re.I)
+
+
+def buscar_articulo(tema: str) -> str:
+    """Título del artículo de Wikipedia en español que mejor encaja con el tema, o ""."""
+    parametros = {
+        "action": "query", "list": "search", "srsearch": tema, "srlimit": 5,
+        "srprop": "size", "format": "json", "formatversion": 2,
+    }
+    datos = wikimedia.json_api(URL_WIKI_API, parametros, caducidad=24 * 3600)  # búsquedas: 1 día
+    resultados = [r for r in datos.get("query", {}).get("search", []) if not OBRAS.search(r["title"])]
+    if not resultados:
+        return ""
+    # Entre los 3 más relevantes, el más completo (un artículo corto da poco material para el guion).
+    return max(resultados[:3], key=lambda r: r.get("size", 0))["title"]
+
+
+# Secciones del final de los artículos que no aportan hechos para el guion.
+SECCIONES_FINALES = re.compile(
+    r"^==+\s*(Referencias|Notas|Notas y referencias|Bibliografía|Bibliografía adicional|Enlaces externos|"
+    r"Véase también|Fuentes|Galería)\s*==+\s*$",
+    re.M | re.I,
+)
+MAX_CARACTERES_PARTE = 6000   # material por parte de una serie
+MIN_CARACTERES_PARTE = 1500   # por debajo no hay material para un vídeo de 1 minuto
+
+
+def dividir_en_partes(texto: str, partes: int) -> list:
+    """Reparte el artículo, en orden, en tramos de tamaño parecido (uno por vídeo)."""
+    final = SECCIONES_FINALES.search(texto)
+    if final:
+        texto = texto[: final.start()]
+    parrafos = [p.strip() for p in texto.split("\n") if p.strip()]
+    objetivo = sum(len(p) for p in parrafos) / partes
+    tramos, acumulado = [[] for _ in range(partes)], 0
+    for parrafo in parrafos:
+        tramos[min(int(acumulado / objetivo), partes - 1)].append(parrafo)
+        acumulado += len(parrafo)
+    return ["\n".join(t)[:MAX_CARACTERES_PARTE] for t in tramos]
+
+
+PROMPT_INDICE = """Planificas una serie de {partes} vídeos cortos de historia (~1 minuto cada uno) sobre «{tema}».
+Recibirás las secciones numeradas de un artículo de Wikipedia, con su tamaño y su comienzo.
+
+Reparte las secciones entre las {partes} partes:
+- En orden narrativo (normalmente cronológico): antecedentes → desarrollo → desenlace y consecuencias.
+- Cada sección en una sola parte. Puedes dejar fuera secciones que no aporten hechos interesantes.
+- Cada parte necesita material suficiente: al menos {minimo} caracteres en total.
+- El desenlace (el momento clave final) va en la ÚLTIMA parte; las anteriores deben crear intriga sin adelantarlo.
+
+Responde SOLO con un objeto JSON:
+{{"partes": [{{"secciones": [1, 2], "enfoque": "qué cuenta esta parte, en una frase"}}],
+  "desenlace": "en una frase, lo que las partes anteriores a la última NO deben revelar"}}"""
+
+
+def secciones_articulo(texto: str) -> list:
+    """[(título, texto)] del artículo, sin las secciones finales (referencias, enlaces…)."""
+    final = SECCIONES_FINALES.search(texto)
+    if final:
+        texto = texto[: final.start()]
+    trozos = re.split(r"^(==+)\s*(.+?)\s*\1\s*$", texto, flags=re.M)
+    secciones = [("Introducción", trozos[0].strip())]
+    for i in range(1, len(trozos) - 2, 3):
+        secciones.append((trozos[i + 1].strip(), trozos[i + 2].strip()))
+    return [(titulo, cuerpo) for titulo, cuerpo in secciones if len(cuerpo) > 80]
+
+
+def indice_serie(api_key: str, modelo: str, tema: str, secciones: list, partes: int):
+    """Pide a la IA el reparto de secciones por parte. Devuelve (lista de partes, desenlace) o None."""
+    lista = "\n".join(
+        f"{i}. {titulo} ({len(cuerpo)} caracteres): {cuerpo[:150].replace(chr(10), ' ')}…"
+        for i, (titulo, cuerpo) in enumerate(secciones, start=1)
+    )
+    sistema = PROMPT_INDICE.format(partes=partes, tema=tema, minimo=MIN_CARACTERES_PARTE)
+    try:
+        datos = json.loads(llamar_groq(api_key, modelo, sistema, f"SECCIONES:\n{lista}"))
+        plan = datos["partes"]
+        if not isinstance(plan, list) or len(plan) != partes:
+            return None
+        for parte in plan:
+            numeros = [int(n) for n in parte.get("secciones", []) if 1 <= int(n) <= len(secciones)]
+            if not numeros:
+                return None
+            parte["secciones"] = sorted(set(numeros))  # en el orden del artículo
+        return plan, str(datos.get("desenlace", ""))
+    except (ValueError, KeyError, TypeError, RuntimeError, requests.RequestException):
+        return None
+
+
+def material_de_secciones(secciones: list, numeros: list) -> str:
+    """Texto de las secciones elegidas, repartiendo el máximo de caracteres entre ellas."""
+    cupo = MAX_CARACTERES_PARTE // len(numeros)
+    return "\n\n".join(f"== {secciones[n - 1][0]} ==\n{secciones[n - 1][1][:cupo]}" for n in numeros)
+
+
+def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = MODELO_POR_DEFECTO) -> list:
+    """Material para un tema libre: el artículo de Wikipedia que mejor encaja.
+
+    Con varias partes, la IA hace primero un índice de la serie (qué secciones cuenta cada
+    parte); si falla, el artículo se reparte en orden en tramos iguales.
+    Devuelve una lista de (evento, material, fuentes), una por vídeo.
+    """
+    titulo = buscar_articulo(tema)
+    texto = texto_articulo(titulo) if titulo else ""
+    if not texto:
+        raise ValueError(f"No encuentro un artículo de Wikipedia en español sobre «{tema}»")
+    url = "https://es.wikipedia.org/wiki/" + requests.utils.quote(titulo.replace(" ", "_"))
+    fuentes = [{"titulo": titulo, "url": url}]
+    if partes <= 1:
+        material = f"TEMA: {tema}\n\n--- ARTÍCULO: {titulo}\n{texto[:MAX_CARACTERES_PRINCIPAL]}"
+        return [({"year": None, "text": tema}, material, fuentes)]
+
+    posibles = max(1, len(SECCIONES_FINALES.split(texto)[0]) // MIN_CARACTERES_PARTE)
+    if partes > posibles:
+        print(f"Aviso: el artículo solo da para unas {posibles} partes de 1 minuto; hago {posibles}.")
+        partes = posibles
+        if partes == 1:
+            return preparar_tema(tema, 1)
+    contexto = texto[:600]
+
+    secciones = secciones_articulo(texto)
+    indice = indice_serie(api_key, modelo, tema, secciones, partes) if api_key and len(secciones) >= partes else None
+    if indice:
+        plan, desenlace = indice
+        print("Índice de la serie:")
+        for numero, parte in enumerate(plan, start=1):
+            print(f"  Parte {numero}: {parte.get('enfoque', '')}  [secciones {parte['secciones']}]")
+        tramos = [material_de_secciones(secciones, parte["secciones"]) for parte in plan]
+        enfoques = [str(parte.get("enfoque", "")) for parte in plan]
+    else:
+        print("Índice de la serie no disponible: reparto el artículo en tramos iguales.")
+        tramos, enfoques, desenlace = dividir_en_partes(texto, partes), [""] * partes, ""
+
+    trabajos = []
+    for numero, tramo in enumerate(tramos, start=1):
+        material = f"TEMA: {tema}\n\n"
+        if numero > 1:
+            material += f"CONTEXTO (solo para situarte; no lo vuelvas a contar):\n{contexto}\n\n"
+        material += f"--- ARTÍCULO: {titulo} (tramo {numero} de {partes})\n{tramo}"
+        evento = {
+            "year": None, "text": tema, "parte": numero, "total": partes,
+            "enfoque": enfoques[numero - 1], "desenlace": desenlace, "enfoques": enfoques,
+        }
+        trabajos.append((evento, material, fuentes))
+    return trabajos
+
+
+# --- Diario («Día X como…») --------------------------------------------------------
+
+ARCHIVO_DIARIOS = Path("salida/_trabajo/diarios.json")  # nombre corto de cada personaje (igual en todos sus días)
+
+
+def clave_personaje(personaje: str, idioma: str = "") -> str:
+    return slug(personaje, 60) + (f"|{idioma}" if idioma else "")
+
+
+def siguiente_dia(personaje: str) -> int:
+    """El día que toca: uno más que el último diario guardado de ese personaje (1 si no hay ninguno)."""
+    clave, ultimo = clave_personaje(personaje), 0
+    for ruta in CARPETA_SALIDA.glob("*.json") if CARPETA_SALIDA.exists() else []:
+        try:
+            diario = json.loads(ruta.read_text(encoding="utf-8")).get("diario") or {}
+        except (OSError, ValueError):
+            continue
+        if clave_personaje(diario.get("personaje", "")) == clave:
+            ultimo = max(ultimo, int(diario.get("dia") or 0))
+    return ultimo + 1
+
+
+def _nombres_diario() -> dict:
+    try:
+        return json.loads(ARCHIVO_DIARIOS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def nombre_diario(personaje: str, idioma: str) -> str:
+    return _nombres_diario().get(clave_personaje(personaje, idioma), "")
+
+
+def apuntar_nombre_diario(personaje: str, idioma: str, nombre: str) -> None:
+    nombres = _nombres_diario()
+    nombres[clave_personaje(personaje, idioma)] = nombre
+    ARCHIVO_DIARIOS.parent.mkdir(parents=True, exist_ok=True)
+    ARCHIVO_DIARIOS.write_text(json.dumps(nombres, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def buscar_resultados(consulta: str, cuantos: int) -> list:
+    """Títulos de Wikipedia por orden de relevancia (sin películas, novelas…)."""
+    parametros = {"action": "query", "list": "search", "srsearch": consulta, "srlimit": cuantos + 3,
+                  "format": "json", "formatversion": 2}
+    datos = wikimedia.json_api(URL_WIKI_API, parametros, caducidad=24 * 3600)
+    return [r["title"] for r in datos.get("query", {}).get("search", []) if not OBRAS.search(r["title"])][:cuantos]
+
+
+def parrafos_relevantes(texto: str, claves: set, limite: int) -> str:
+    """El principio del artículo y, sobre todo, los párrafos que hablan del tema (hasta `limite` caracteres)."""
+    parrafos = [p.strip() for p in SECCIONES_FINALES.split(texto)[0].split("\n") if len(p.strip()) > 60]
+    if not parrafos:
+        return ""
+    def puntos(p):
+        return sum(1 for c in claves if c in slug(p, 10_000).replace("-", " "))
+    elegidos = [parrafos[0]] + sorted(parrafos[1:], key=puntos, reverse=True)  # la entradilla siempre
+    resultado = ""
+    for parrafo in elegidos:
+        if len(resultado) + len(parrafo) > limite:
+            break
+        resultado += parrafo + "\n"
+    return resultado.strip()
+
+
+def preparar_diario(personaje: str, problema: str, dia: int) -> tuple:
+    """Material de Wikipedia para un diario: los artículos más relevantes del personaje y del tema.
+
+    Devuelve (evento, material, fuentes).
+    """
+    titulos = buscar_resultados(personaje, 2)
+    if problema:
+        # Solo junto al personaje: el tema suelto trae artículos sin relación (series, libros…).
+        titulos += buscar_resultados(f"{problema} {personaje}", 1)
+    titulos = list(dict.fromkeys(titulos))[:3]
+    claves = {p for p in slug(f"{problema} {personaje}", 200).split("-") if len(p) > 3}
+    partes, fuentes = [], []
+    for titulo in titulos:
+        texto = parrafos_relevantes(texto_articulo(titulo), claves, MAX_CARACTERES_PRINCIPAL // len(titulos))
+        if texto:
+            partes.append(f"--- ARTÍCULO: {titulo}\n{texto}")
+            fuentes.append({"titulo": titulo, "url": "https://es.wikipedia.org/wiki/"
+                            + requests.utils.quote(titulo.replace(" ", "_"))})
+    if not partes:
+        raise ValueError(f"No encuentro en Wikipedia material sobre «{personaje}»")
+    material = (
+        f"PERSONAJE: {personaje}\nDÍA: {dia}\n"
+        f"TEMA: {problema or '(elige tú una molestia o norma absurda real que aparezca en el MATERIAL)'}\n\n"
+        + "\n\n".join(partes)
+    )
+    evento = {"year": None, "text": personaje,
+              "diario": {"personaje": personaje, "dia": dia, "problema": problema, "nombre_corto": ""}}
+    return evento, material, fuentes
+
+
+def sistema_diario(dia: int, idioma: str) -> str:
+    gancho, corto = (f"Day {dia} as", f"DAY {dia}") if idioma == "en" else (f"Día {dia} como", f"DÍA {dia}")
+    minimo, maximo, objetivo = PALABRAS_DIARIO
+    return PROMPT_DIARIO.format(gancho=gancho, gancho_corto=corto, min_palabras=minimo, max_palabras=maximo,
+                                objetivo=objetivo, idioma=IDIOMAS[idioma])
+
+
+def indicaciones_serie(evento: dict, titulos_previos: list) -> str:
+    """Instrucciones extra para que cada parte de una serie encaje con las demás."""
+    parte, total = evento.get("parte"), evento.get("total")
+    if not total or total <= 1:
+        return ""
+    lineas = [
+        f"SERIE: este guion es la PARTE {parte} DE {total} de una serie de vídeos sobre «{evento['text']}».",
+        "Cuenta SOLO los hechos del tramo del artículo que viene en el MATERIAL; las otras partes cubren el resto.",
+        f"El \"nombre_corto\" resume en 2 a 4 palabras el tema de toda la serie, no solo esta parte "
+        f"(tema: «{evento['text']}»; si es largo, NO lo copies: resúmelo, p. ej. «Guerra civil»).",
+    ]
+    if evento.get("enfoque"):
+        lineas.append(f"Esta parte cuenta: {evento['enfoque']}")
+    if evento.get("enfoques"):
+        lineas.append("Índice de la serie: " + " | ".join(f"{i}. {e}" for i, e in enumerate(evento["enfoques"], 1)))
+    if parte == 1:
+        lineas.append("Es la primera parte: presenta el tema con un gancho fuerte.")
+    else:
+        lineas.append("No es la primera parte: abre retomando la historia en una frase, sin repetir lo ya contado.")
+        lineas.append("Títulos de las partes anteriores: " + " | ".join(titulos_previos))
+    if parte < total:
+        if evento.get("desenlace"):
+            lineas.append(f"NO reveles el desenlace, que se cuenta en la última parte: {evento['desenlace']}")
+        lineas.append("Termina invitando a ver la parte siguiente, sin desvelar qué pasa.")
+    else:
+        lineas.append("Es la última parte: cierra la historia e invita a comentar.")
+    return "\n".join(lineas)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Genera guiones a partir de Wikipedia (efemérides o un tema libre)")
+    parser.add_argument("--tema", help='tema libre, p. ej. "La caída de Constantinopla" (en vez de efemérides)')
+    parser.add_argument("--partes", type=int, default=1, help="con --tema: dividirlo en varios vídeos de ~1 minuto")
+    parser.add_argument("--diario", metavar="PERSONAJE",
+                        help='formato «Día X como…» de humor histórico, p. ej. "soldado romano en Vindolanda"')
+    parser.add_argument("--dia", type=int, default=0, help="con --diario: número de día (por defecto, el siguiente)")
+    parser.add_argument("--problema", default="", help="con --diario: la molestia o norma de la época a contar")
+    parser.add_argument("--cantidad", type=int, default=3, help="número de eventos (por defecto 3)")
+    parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (por defecto hoy)")
+    parser.add_argument("--idiomas", default="es,en", help="idiomas separados por comas: es,en")
+    args = parser.parse_args(argv)
+
+    api_key = os.getenv("GROQ_API_KEY", "")
+    modelo = os.getenv("MODELO") or MODELO_POR_DEFECTO
+    if not api_key:
+        print("[error] Falta GROQ_API_KEY en el archivo .env", file=sys.stderr)
+        return 1
+    idiomas = [i.strip() for i in args.idiomas.split(",") if i.strip()]
+    desconocidos = [i for i in idiomas if i not in IDIOMAS]
+    if desconocidos:
+        print(f"[error] Idiomas no soportados: {desconocidos}. Usa: {list(IDIOMAS)}", file=sys.stderr)
+        return 1
+
+    if args.diario:
+        dia = args.dia if args.dia > 0 else siguiente_dia(args.diario)
+        print(f"Diario de «{args.diario}» · día {dia}" + (f" · tema: {args.problema}" if args.problema else ""))
+        try:
+            trabajos = [preparar_diario(args.diario, args.problema, dia)]
+        except (ValueError, requests.RequestException) as error:
+            print(f"[error] {error}", file=sys.stderr)
+            return 1
+        print(f"Material de Wikipedia: {trabajos[0][2][0]['titulo']} ({trabajos[0][2][0]['url']})")
+    elif args.tema:
+        print(f"Buscando «{args.tema}» en Wikipedia…")
+        try:
+            trabajos = preparar_tema(args.tema, max(1, min(args.partes, 10)), api_key, modelo)
+        except (ValueError, requests.RequestException) as error:
+            print(f"[error] {error}", file=sys.stderr)
+            return 1
+        print(f"Artículo encontrado: {trabajos[0][2][0]['titulo']} ({trabajos[0][2][0]['url']})")
+        if len(trabajos) > 1:
+            print(f"Serie de {len(trabajos)} partes de ~1 minuto")
+    else:
+        print(f"Descargando efemérides del {args.fecha:%d/%m}…")
+        try:
+            eventos = elegir_eventos(
+                descargar_efemerides(args.fecha, "selected"),
+                descargar_efemerides(args.fecha, "events"),
+                args.cantidad,
+                date.today().year,
+            )
+            if not eventos:
+                print("[error] No hay eventos con material suficiente para esa fecha", file=sys.stderr)
+                return 1
+            trabajos = [(evento, *preparar_material(evento)) for evento in eventos]
+        except requests.RequestException as error:  # incluye el aviso de espera de Wikipedia
+            print(f"[error] {error}", file=sys.stderr)
+            return 1
+
+    generados = fallidos = 0
+    titulos_previos = {idioma: [] for idioma in idiomas}  # para que cada parte de una serie siga a la anterior
+    nombres_serie = {}  # idioma → nombre corto común a todas las partes
+    for evento, material, fuentes in trabajos:
+        parte = f" · parte {evento['parte']}/{evento['total']}" if evento.get("total") else ""
+        print(f"\n· {evento['year'] or 'Tema'}: {evento['text'][:90]}{parte}")
+        for idioma in idiomas:
+            try:
+                if evento.get("diario"):
+                    diario = evento["diario"]
+                    minimo, maximo, objetivo = PALABRAS_DIARIO
+                    guion = generar_guion(api_key, modelo, material, idioma, "",
+                                          sistema_diario(diario["dia"], idioma), minimo, maximo, objetivo)
+                    # Todos los días de un personaje comparten nombre (y carpeta): se fija la primera vez.
+                    nombre = nombre_diario(diario["personaje"], idioma) or acortar_nombre(guion.get("nombre_corto"))
+                    apuntar_nombre_diario(diario["personaje"], idioma, nombre)
+                    evento = {**evento, "diario": {**diario, "nombre_corto": nombre}}
+                else:
+                    indicaciones = indicaciones_serie(evento, titulos_previos[idioma])
+                    guion = generar_guion(api_key, modelo, material, idioma, indicaciones)
+                modelo_usado = ultimo_modelo or modelo  # puede ser uno de reserva
+                titulos_previos[idioma].append(guion["titulo"])
+                if evento.get("total"):  # todas las partes de una serie comparten el nombre de la primera
+                    guion["nombre_corto"] = nombres_serie.setdefault(idioma, guion.get("nombre_corto") or "")
+                dudas = verificar_guion(api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")))
+                ruta = guardar(guion, evento, fuentes, dudas, args.fecha, idioma, modelo_usado)
+                aviso = f" · {len(dudas)} frase(s) sin respaldo, revísalas" if dudas else " · verificado contra el material"
+                print(f"  [{idioma}] {ruta}{aviso} · escrito con {modelo_usado}")
+                generados += 1
+            except GroqSinCupo as error:  # no queda cupo en ningún modelo: no tiene sentido seguir
+                print(f"[error] {error}", file=sys.stderr)
+                fallidos += 1
+                print(f"\nGuiones generados: {generados} · Con error: {fallidos}")
+                return 2
+            except (ValueError, RuntimeError, requests.RequestException) as error:
+                print(f"  [{idioma}] error: {error}", file=sys.stderr)
+                fallidos += 1
+
+    print(f"\nGuiones generados: {generados} · Con error: {fallidos}")
+    print("Revisa cada guion con sus fuentes antes de publicarlo.")
+    return 0 if fallidos == 0 else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

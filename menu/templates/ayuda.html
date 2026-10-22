@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titulo %}Ayuda · Vídeos de historia{% endblock %}
+{% block contenido %}
+<h1>Cómo funciona</h1>
+<p class="sub">El programa convierte un tema o una fecha histórica en vídeos verticales para Shorts, TikTok o Reels.</p>
+
+<div class="tarjeta">
+  <h2>Los tres pasos</h2>
+  <ol class="pasos">
+    <li><strong>Guion.</strong> Busca el tema en Wikipedia (o lo que pasó en esa fecha) y la IA de Groq escribe un guion de 60-75 segundos dividido en escenas, con un gancho, un tono de música y un nombre corto. Después, un verificador automático compara cada frase con Wikipedia y marca las que no encuentra. Si pides varias partes, primero hace un índice de la serie: qué cuenta cada parte y qué desenlace guarda para la última.</li>
+    <li><strong>Audio.</strong> Cada escena se convierte en voz y se mide su duración exacta. Si cambias una frase, solo se rehace esa escena.</li>
+    <li><strong>Vídeo.</strong> Une imágenes reales de Wikipedia, Wikimedia Commons y dos museos con obras de dominio público (The Met de Nueva York y el Art Institute of Chicago), con un zoom lento, la voz, subtítulos que resaltan la palabra que suena, el gancho en grande al empezar y música de fondo que baja sola cuando se habla. Crea también la miniatura y la descripción con fuentes y créditos.</li>
+  </ol>
+</div>
+
+<div class="tarjeta">
+  <h2>Flujo recomendado</h2>
+  <ol class="pasos">
+    <li>En <a href="{{ url_for('inicio') }}">Inicio</a>, escribe el tema y elige «Solo el guion». Si el tema da para más, elige varias partes.</li>
+    <li>Abre el guion: comprueba las frases marcadas con las fuentes y corrige lo necesario.</li>
+    <li>Revisa el gancho y la música (puedes escucharla) y, si quieres, pulsa «Elegir imágenes» para escoger la foto de cada escena o subir una tuya.</li>
+    <li>Marca el guion como verificado y pulsa «Generar audio y vídeo».</li>
+    <li>Mira el vídeo entero. Si algo no te gusta, cámbialo y pulsa «Rehacer»: solo se rehacen las escenas cambiadas, en segundos.</li>
+    <li>Publica: en YouTube Shorts, con el botón «Subir a YouTube» de su página (configúralo antes en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>); en TikTok, copiando el texto del .txt que está junto al vídeo (incluye los créditos obligatorios de las imágenes).</li>
+  </ol>
+</div>
+
+<div class="tarjeta">
+  <h2>🤖 Piloto automático</h2>
+  <p>En <a href="{{ url_for('piloto_automatico') }}">Piloto automático</a> lo activas y Windows crea un vídeo cada día
+    (turnando efemérides, diarios y tu lista de temas), lo programa en YouTube a la hora que elijas y te avisa con una
+    notificación para subirlo a TikTok: te copia el texto y abre su carpeta. Allí también marcas los de TikTok como
+    subidos o los añades a tu calendario del móvil.</p>
+  <p class="ayuda-campo">Los vídeos se publican sin revisión, salvo que el verificador marque frases dudosas (entonces
+    quedan en privado y te avisa). Mientras Google no audite tu proyecto, YouTube los deja en privado igualmente.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>🎭 Formato «Diario de…»</h2>
+  <p>Humor histórico en primera persona: «Día 4 como soldado romano en Vindolanda…». Escribes el personaje, de qué se
+    queja (opcional) y el día (si lo dejas vacío, sigue la numeración sola). La IA escribe un guion de ~45 s sarcástico
+    pero con hechos reales de Wikipedia, y el verificador revisa solo las afirmaciones históricas, no los chistes.</p>
+  <p>En la página del guion tienes los <strong>prompts para tu generador de IA</strong> (Sora, Runway, Midjourney…):
+    uno del personaje, uno del vídeo y uno por escena. Genera las imágenes en vertical (9:16) y súbelas en
+    «Elegir imágenes». Todos los días del mismo personaje van a la misma carpeta: <code>Diario-soldado-romano_dia4.mp4</code>.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>Cola de tareas</h2>
+  <p>Puedes lanzar varias cosas seguidas (crear guiones, generar vídeos…): se ponen en la <a href="{{ url_for('ver_tarea') }}">cola</a> y se hacen una detrás de otra. Puedes cancelar cualquiera.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>Voz y música</h2>
+  <p>En <a href="{{ url_for('ajustes') }}">Voz y música</a> eliges la voz de cada idioma y su velocidad, y la escuchas antes de guardarla. Las cuatro músicas incluidas están generadas por el programa (sin derechos de autor); puedes añadir tus propias canciones .mp3 a la carpeta <code>musica</code>.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>Antes de publicar</h2>
+  <ul>
+    <li><strong>Los datos:</strong> un error histórico te hunde en los comentarios. El verificador ayuda, pero no es infalible.</li>
+    <li><strong>Las imágenes:</strong> se eligen automáticamente y a veces no encajan. Mira el vídeo entero y cámbialas si hace falta.</li>
+    <li><strong>Etiqueta de IA:</strong> YouTube y TikTok piden marcar el contenido generado con IA cuando pueda parecer real.</li>
+    <li><strong>Créditos:</strong> muchas fotos tienen licencia CC BY-SA, que obliga a citar al autor (ya va en la descripción).</li>
+    <li><strong>La voz:</strong> edge-tts usa un servicio de Microsoft que no es oficial; para un canal monetizado, valora una voz con licencia comercial.</li>
+  </ul>
+</div>
+
+<div class="tarjeta">
+  <h2>Dónde está cada cosa</h2>
+  <ul>
+    <li><code>salida\guiones\</code>: los guiones (JSON).</li>
+    <li><code>salida\audio\</code>: la voz de cada escena y los subtítulos.</li>
+    <li><code>salida\videos\</code>: una carpeta por tema, p. ej. <code>Guerra-civil\</code>, con cada vídeo (<code>Guerra-civil_pt3.mp4</code>), su texto para publicar en TikTok y YouTube Shorts (<code>Guerra-civil_pt3.txt</code>), su miniatura (<code>Guerra-civil_pt3.jpg</code>) y una subcarpeta <code>guiones\</code> con el texto de cada guion. Los vídeos en inglés llevan «_EN» al final.</li>
+    <li><code>salida\_trabajo\</code>: escenas ya montadas (caché para rehacer rápido). Se puede borrar sin problema.</li>
+    <li><code>musica\</code>: las pistas de música, incluidas las tuyas.</li>
+    <li><code>.env</code> (carpeta principal): tu clave de Groq, la voz y el contacto para Wikimedia.</li>
+  </ul>
+  <p class="ayuda-campo">Para apagar el menú, cierra la ventana negra que se abrió al empezar.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block titulo %}Imágenes · {{ datos.titulo }}{% endblock %}
+{% block contenido %}
+<p class="sub"><a href="{{ url_for('ver_guion', nombre=nombre) }}">← Volver al guion</a></p>
+<h1>Elige las imágenes</h1>
+<p class="sub">
+  {{ total }} imágenes encontradas en Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago. Pincha la que quieras para cada escena
+  (se marca en naranja) o sube una tuya. Después, vuelve al guion y pulsa «Rehacer audio y vídeo»: solo se
+  rehacen las escenas cambiadas.
+  <a href="{{ url_for('imagenes_guion', nombre=nombre, renovar=1) }}">Buscar imágenes de nuevo</a>
+</p>
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+
+{% for item in escenas %}
+  {% set e = item.escena %}
+  <div class="tarjeta" id="escena-{{ e.numero }}">
+    <h2>Escena {{ e.numero }}</h2>
+    <p>{{ e.narracion }}</p>
+    {% if datos.get('diario') %}
+      <label>Prompt para tu generador de IA (genera la imagen en 9:16 y súbela aquí abajo)</label>
+      <div class="copiable"><textarea readonly rows="3">{{ e.visual }}</textarea>
+        <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+    {% else %}
+      <p class="ayuda-campo">🖼 Idea visual: {{ e.visual }}</p>
+    {% endif %}
+
+    <p><strong>Ahora:</strong>
+      {% if item.actual %}
+        {{ item.actual.archivo }}
+        {% if item.a_mano %}<span class="etiqueta ok">elegida a mano</span>
+        {% else %}<span class="etiqueta">automática</span>{% endif %}
+      {% else %}
+        <span class="ayuda-campo">se elegirá automáticamente al hacer el vídeo</span>
+      {% endif %}
+    </p>
+
+    <div class="rejilla">
+      {% for o in item.opciones %}
+        {% set elegida = item.actual and item.actual.archivo == o.archivo %}
+        <form method="post" action="{{ url_for('elegir_imagen', nombre=nombre) }}">
+          <input type="hidden" name="escena" value="{{ e.numero }}">
+          <input type="hidden" name="archivo" value="{{ o.archivo }}">
+          <button type="submit" class="opcion {{ 'elegida' if elegida }}" title="{{ o.archivo }} — {{ o.autor }} ({{ o.licencia }})">
+            <img src="{{ url_for('miniatura_wikimedia', u=miniatura(o)) }}" alt="{{ o.archivo }}" loading="lazy">
+            <span>{{ o.archivo[:38] }}</span>
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+
+    <div class="acciones">
+      <form method="post" action="{{ url_for('subir_imagen', nombre=nombre) }}" enctype="multipart/form-data" class="en-linea">
+        <input type="hidden" name="escena" value="{{ e.numero }}">
+        <label class="boton secundario" style="margin: 0;">📤 Subir una imagen tuya
+          <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" hidden onchange="this.form.submit()">
+        </label>
+      </form>
+      {% if item.a_mano %}
+        <form method="post" action="{{ url_for('elegir_imagen', nombre=nombre) }}" class="en-linea">
+          <input type="hidden" name="escena" value="{{ e.numero }}">
+          <input type="hidden" name="archivo" value="auto">
+          <button class="secundario" type="submit">Volver a automática</button>
+        </form>
+      {% endif %}
+      {% if item.actual and item.actual.ruta %}
+        <img class="propia" src="{{ url_for('imagen_propia', nombre=nombre, numero=e.numero) }}" alt="Tu imagen">
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}
+
+<div class="acciones">
+  <a class="boton" href="{{ url_for('ver_guion', nombre=nombre) }}">Listo, volver al guion</a>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block titulo %}Piloto automático · Vídeos de historia{% endblock %}
+{% block contenido %}
+<h1>Piloto automático</h1>
+<p class="sub">Crea un vídeo al día, lo programa en YouTube a la mejor hora y te avisa para subirlo a TikTok.</p>
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if not yt_conectado %}
+  <div class="aviso">YouTube no está conectado: los vídeos se crearán, pero no se podrán programar.
+    Conéctalo en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</div>
+{% endif %}
+
+<div class="dos-columnas">
+  <div>
+    <form class="tarjeta" method="post" action="{{ url_for('guardar_automatico') }}">
+      <h2>Qué crea y cuándo</h2>
+      <label>Tipos de vídeo (se van turnando, uno cada día)</label>
+      <div class="opciones">
+        <label><input type="checkbox" name="tipos" value="efemerides" {{ 'checked' if 'efemerides' in config.tipos }}> 📅 Efemérides del día</label>
+        <label><input type="checkbox" name="tipos" value="diario" {{ 'checked' if 'diario' in config.tipos }}> 🎭 Diarios</label>
+        <label><input type="checkbox" name="tipos" value="tema" {{ 'checked' if 'tema' in config.tipos }}> ✍️ Lista de temas</label>
+      </div>
+
+      <div class="fila">
+        <div>
+          <label for="hora_creacion">Hora de crear el vídeo</label>
+          <input type="text" id="hora_creacion" name="hora_creacion" value="{{ config.hora_creacion }}" pattern="\d{2}:\d{2}">
+        </div>
+        <div>
+          <label for="hora_youtube">Publicar en YouTube a las</label>
+          <input type="text" id="hora_youtube" name="hora_youtube" value="{{ config.hora_youtube }}" pattern="\d{2}:\d{2}">
+        </div>
+      </div>
+      <label for="hora_tiktok">Recordatorio de TikTok a las</label>
+      <input type="text" id="hora_tiktok" name="hora_tiktok" value="{{ config.hora_tiktok }}" pattern="\d{2}:\d{2}" style="max-width: 160px;">
+      <p class="ayuda-campo">Para público de España suelen funcionar las 13:00-15:00 y las 20:00-22:00. Cuando tengas
+        datos, mira en YouTube Studio → Estadísticas → «Cuándo están conectados tus espectadores» y ajústalo.</p>
+
+      <label for="personajes">Personajes de los diarios <span class="ayuda-campo">— uno por línea; se turnan y cada uno avanza un día</span></label>
+      <textarea id="personajes" name="personajes" rows="5">{{ config.personajes | join('\n') }}</textarea>
+
+      <label for="temas">Cola de temas <span class="ayuda-campo">— uno por línea; se hacen en orden y salen de la lista</span></label>
+      <textarea id="temas" name="temas" rows="6">{{ config.temas | join('\n') }}</textarea>
+
+      <label>Opciones</label>
+      <div class="opciones">
+        <label><input type="checkbox" name="imagenes_ia_en_diarios" {{ 'checked' if config.imagenes_ia_en_diarios }}>
+          Imágenes generadas con IA en los diarios (Pollinations)</label>
+        <label><input type="checkbox" name="solo_publicar_sin_dudas" {{ 'checked' if config.solo_publicar_sin_dudas }}>
+          Si el verificador marca frases dudosas, subir en privado y avisarme (recomendado)</label>
+      </div>
+      <div class="acciones"><button type="submit">Guardar</button></div>
+    </form>
+
+    <div class="tarjeta" id="tiktok">
+      <h2>Pendientes de TikTok</h2>
+      {% for p in pendientes %}
+        <div class="escena">
+          <p><strong>{{ p.titulo }}</strong><br>
+            <span class="ayuda-campo">{{ p.hora_bonita }} · {{ p.video }}</span>
+            {% if p.hecho %}<span class="etiqueta ok">✔ subido</span>{% elif p.avisado %}<span class="etiqueta mal">pendiente</span>{% endif %}</p>
+          {% if not p.hecho %}
+            <div class="copiable"><textarea readonly rows="4">{{ p.texto_tiktok }}</textarea>
+              <button class="secundario" type="button" onclick="copiar(this)">Copiar texto</button></div>
+            <div class="acciones">
+              <form method="post" action="{{ url_for('tiktok_carpeta', nombre=p.nombre) }}" class="en-linea">
+                <button class="secundario" type="submit">📂 Abrir carpeta</button></form>
+              <a class="boton secundario" href="https://www.tiktok.com/upload" target="_blank" rel="noopener">Abrir TikTok</a>
+              <a class="boton secundario" href="{{ url_for('tiktok_calendario', nombre=p.nombre) }}">📅 Añadir al calendario</a>
+              <form method="post" action="{{ url_for('tiktok_hecho', nombre=p.nombre) }}" class="en-linea">
+                <input type="hidden" name="valor" value="1"><button type="submit">✔ Ya lo he subido</button></form>
+            </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <p class="ayuda-campo">No hay vídeos pendientes. Aparecerán aquí cuando el piloto automático cree alguno.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div>
+    <div class="tarjeta">
+      <h2>Estado</h2>
+      {% set crear = tareas.crear %}
+      {% if crear.existe %}
+        <p><span class="etiqueta ok">✔ activado en Windows</span></p>
+        <p class="ayuda-campo">Próximo vídeo: {{ crear.proxima or '—' }}<br>Última ejecución: {{ crear.ultima or '—' }}</p>
+        <form method="post" action="{{ url_for('desactivar_automatico') }}">
+          <button class="secundario" type="submit">Desactivar</button></form>
+      {% else %}
+        <p><span class="etiqueta mal">desactivado</span></p>
+        <p class="ayuda-campo">Al activarlo, Windows ejecutará el piloto cada día a las {{ config.hora_creacion }}
+          (si el ordenador está apagado, en cuanto lo enciendas) y te avisará para TikTok a las {{ config.hora_tiktok }}.</p>
+        <form method="post" action="{{ url_for('activar_automatico') }}"><button type="submit">Activar</button></form>
+      {% endif %}
+      <form method="post" action="{{ url_for('ejecutar_automatico') }}" style="margin-top: 14px;">
+        <label for="tipo">Crear uno ahora</label>
+        <select id="tipo" name="tipo">
+          <option value="">El que toque</option>
+          <option value="efemerides">📅 Efeméride de hoy</option>
+          <option value="diario">🎭 Siguiente diario</option>
+          <option value="tema">✍️ Siguiente tema</option>
+        </select>
+        <div class="acciones"><button class="secundario" type="submit">▶ Ejecutar ahora</button></div>
+      </form>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Importante</h2>
+      <ul class="ayuda-campo">
+        <li>Mientras Google no audite tu proyecto, YouTube deja <strong>en privado</strong> todo lo que se sube por la
+          API, aunque esté programado: tendrás que hacerlos públicos en YouTube Studio. Para que se publiquen solos,
+          solicita la auditoría en el formulario «YouTube API Services - Audit and Quota Extension».</li>
+        <li>Los vídeos se publican <strong>sin revisión</strong>. Mira el registro y los vídeos cuando puedas: si ves un
+          error, bórralo o corrígelo en YouTube Studio.</li>
+        <li>El ordenador tiene que estar encendido (o encenderse) a esas horas, con tu sesión iniciada.</li>
+      </ul>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Registro</h2>
+      <pre class="consola" style="height: 300px;">{{ registro | join('\n') if registro else 'Todavía no se ha ejecutado.' }}</pre>
+    </div>
+  </div>
+</div>
+{% endblock %}

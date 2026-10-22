@@ -1,0 +1,18 @@
+# Claves y credenciales: NUNCA al repositorio
+.env
+credenciales/
+
+# Entorno de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Todo lo generado (guiones, audio, vídeos, cachés)
+salida/
+
+# Música: la generan los scripts (python musica.py); las pistas propias pueden tener derechos
+musica/
+
+# Configuración personal del piloto automático (se crea sola con valores por defecto)
+automatico.json

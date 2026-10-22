@@ -1,0 +1,1123 @@
+"""Paso 3: monta el vídeo vertical (1080x1920) con imágenes, voz, subtítulos y música.
+
+Lee salida/audio/<guion>/escenas.json (paso 2) y crea una carpeta por tema en salida/videos/:
+  - Guerra-civil/Guerra-civil_pt3.mp4            : vídeo listo para Shorts / TikTok / Reels
+  - Guerra-civil/Guerra-civil_pt3.txt            : qué poner al publicar en TikTok y en YouTube Shorts
+  - Guerra-civil/Guerra-civil_pt3.jpg            : miniatura con el gancho en grande
+  - Guerra-civil/guiones/Guerra-civil_pt3.txt    : el texto del guion
+  («_pt3» solo en las series; los vídeos que no están en español llevan el idioma: «_EN»)
+
+Imágenes: las de los artículos de Wikipedia del guion y una búsqueda en Wikimedia Commons
+(con su autor y licencia). A cada escena se le asigna la que mejor encaja con su texto,
+salvo que la hayas elegido a mano en el menú. Llevan un zoom lento (efecto Ken Burns).
+Subtítulos: grandes, resaltando la palabra que suena. Al empezar, el gancho en grande.
+Música: la del guion ("musica": epico, misterio, triste, neutro, una tuya o "ninguna"),
+que baja de volumen sola cuando habla la voz.
+
+Cada escena se guarda en caché (salida/_trabajo): al cambiar una imagen o una frase solo
+se rehace esa escena. Las escenas se montan en paralelo.
+
+Uso:
+    python paso3_video.py                    # todos los guiones con audio
+    python paso3_video.py salida/audio/X     # solo uno
+    python paso3_video.py --solo-verificados
+    python paso3_video.py --forzar           # rehace aunque ya exista el vídeo
+"""
+import argparse
+import hashlib
+import html
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+import imageio_ffmpeg
+import requests
+from dotenv import load_dotenv
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+
+import cierre
+import musica
+import wikimedia  # acceso a Wikimedia con caché y ritmo controlado (evita que te pongan en espera)
+
+load_dotenv()
+
+CARPETA_AUDIO = Path("salida/audio")
+CARPETA_VIDEOS = Path("salida/videos")
+CARPETA_GUIONES = Path("salida/guiones")
+CARPETA_TRABAJO = Path("salida/_trabajo")      # escenas en caché, candidatas e imágenes elegidas
+CARPETA_CACHE = Path("salida/cache_imagenes")  # cada imagen se descarga una sola vez
+CARPETA_PROPIAS = Path("salida/imagenes_propias")  # imágenes que subes desde el menú
+ANCHO_DESCARGA = 1280  # tamaño estándar de Wikimedia: los no estándar tienen límites mucho más estrictos
+PUNTUACION_MINIMA = 0.45  # por debajo, la imagen apenas tiene que ver con la escena: se repite una buena
+MAX_COMMONS = 25       # imágenes extra buscadas en Wikimedia Commons
+
+ANCHO, ALTO, FPS = 1080, 1920, 30
+ALTO_IMAGEN = 0.54    # fracción de la altura que ocupa la imagen
+CENTRO_IMAGEN = 0.48  # posición vertical de su centro (0 arriba, 1 abajo)
+ZOOM_FINAL = 1.08               # zoom lento a lo largo de cada escena
+COLA_TRAS_ULTIMA_PALABRA = 0.2  # s de audio que se dejan tras la última palabra (recorta el silencio final)
+PAUSA_ENTRE_ESCENAS = 0.15      # s
+DURACION_GANCHO = 2.2           # s que el gancho se ve en grande al empezar
+DURACION_TITULO = 3.0           # s del título arriba (solo si el guion no tiene gancho)
+VOLUMEN_MUSICA = 0.22           # volumen de la música bajo la voz (además baja sola cuando se habla)
+HILOS = max(1, min(4, (os.cpu_count() or 2) // 2))  # escenas que se montan a la vez
+VERSION_ESCENA = "3"            # cámbiala si cambia el aspecto de las escenas: invalida la caché
+
+PALABRAS_POR_SUBTITULO = 3
+CORTE_POR_SILENCIO = 0.35
+
+URL_WIKI_API = "https://es.wikipedia.org/w/api.php"
+URL_COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+MIMES_VALIDOS = ("image/jpeg", "image/png")
+TAMANO_MINIMO = 500
+EXCLUIR = re.compile(r"logo|icon|icono|signature|firma|coat of arms|escudo|flag|bandera|seal|sello|\.svg", re.I)
+
+PALABRAS_VACIAS = set(
+    "el la los las un una unos unas de del al y o en que por para con sin su sus se lo le les es fue era "
+    "como mas pero este esta estos estas ese esa eso muy ya hoy dia the of and a an in on at to for with "
+    "from by his her their was were is are it its this that as into who which "
+    "archivo file jpg jpeg png".split()
+)
+
+
+# --- Imágenes candidatas -------------------------------------------------------------
+
+def normalizar(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", " ", texto)
+
+
+def palabras_clave(texto: str) -> set:
+    return {p for p in normalizar(texto).split() if len(p) > 2 and p not in PALABRAS_VACIAS}
+
+
+def limpiar_html(valor: str) -> str:
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", valor or ""))).strip()
+
+
+def titulo_desde_url(url: str) -> str:
+    return unquote(urlparse(url).path.rsplit("/", 1)[-1]).replace("_", " ")
+
+
+def _imagenes(url_api: str, parametros: dict, origen: str) -> list:
+    """Consulta imágenes a una API de Wikimedia y devuelve las válidas con URL, autor y licencia."""
+    parametros = {
+        **parametros,
+        "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata", "iiurlwidth": ANCHO_DESCARGA,
+        "iiextmetadatafilter": "Artist|LicenseShortName|ImageDescription",
+        "format": "json", "formatversion": 2,
+    }
+    imagenes = []
+    for pagina in wikimedia.json_api(url_api, parametros).get("query", {}).get("pages", []):
+        info = (pagina.get("imageinfo") or [{}])[0]
+        nombre = pagina.get("title", "")
+        if (
+            info.get("mime") not in MIMES_VALIDOS
+            or min(info.get("width", 0), info.get("height", 0)) < TAMANO_MINIMO
+            or EXCLUIR.search(nombre)
+        ):
+            continue
+        meta = info.get("extmetadata")
+        meta = meta if isinstance(meta, dict) else {}  # Wikimedia devuelve [] cuando no hay metadatos
+        descripcion = limpiar_html(meta.get("ImageDescription", {}).get("value", ""))
+        # Años en el nombre o la descripción (la época que muestra; la fecha de la foto no sirve:
+        # una foto de 2012 de un objeto de 1810 es válida).
+        anios = [int(a) for a in re.findall(r"\b(1[0-9]{3}|20[0-9]{2})\b", f"{nombre} {descripcion[:300]}")]
+        # Las imágenes cuyo ancho ya es estándar se sirven tal cual (si es menor que 1280, sin miniatura).
+        url = info.get("thumburl") if info.get("width", 0) > ANCHO_DESCARGA else info.get("url")
+        imagenes.append(
+            {
+                "archivo": nombre.split(":", 1)[-1],
+                "url": url or info.get("url"),
+                "anio": min(anios) if anios else None,
+                "articulo": origen,
+                "pagina": info.get("descriptionurl", ""),
+                "autor": limpiar_html(meta.get("Artist", {}).get("value", "")) or "Autor desconocido",
+                "licencia": meta.get("LicenseShortName", {}).get("value", "") or "ver página del archivo",
+                "descripcion": descripcion[:200],
+                "claves": sorted(palabras_clave(f"{nombre} {descripcion[:300]}")),
+            }
+        )
+    return imagenes
+
+
+def imagenes_de_articulo(titulo: str) -> list:
+    parametros = {"action": "query", "generator": "images", "titles": titulo, "gimlimit": 50, "redirects": 1}
+    return _imagenes(URL_WIKI_API, parametros, titulo)
+
+
+def imagenes_de_commons(busqueda: str) -> list:
+    """Búsqueda de imágenes en Wikimedia Commons (amplía las opciones más allá del artículo)."""
+    parametros = {
+        "action": "query", "generator": "search", "gsrsearch": f"{busqueda} filetype:bitmap",
+        "gsrnamespace": 6, "gsrlimit": MAX_COMMONS,
+    }
+    return _imagenes(URL_COMMONS_API, parametros, "Wikimedia Commons")
+
+
+# --- Museos (imágenes de dominio público, buscan en inglés) ------------------------------
+
+URL_MET = "https://collectionapi.metmuseum.org/public/collection"
+URL_AIC = "https://api.artic.edu/api/v1/artworks/search"
+MAX_MUSEO = 12  # obras que se consultan en cada museo
+UN_MES = 30 * 24 * 3600
+
+
+def tema_en_ingles(datos: dict) -> str:
+    """Título en inglés del artículo fuente (los museos buscan mejor en inglés)."""
+    fuente = (datos.get("fuentes") or [{}])[0]
+    titulo = fuente.get("titulo") or titulo_desde_url(fuente.get("url", ""))
+    if titulo:
+        parametros = {"action": "query", "prop": "langlinks", "lllang": "en", "titles": titulo,
+                      "redirects": 1, "format": "json", "formatversion": 2}
+        paginas = wikimedia.json_api(URL_WIKI_API, parametros, caducidad=UN_MES).get("query", {}).get("pages", [])
+        enlaces = paginas[0].get("langlinks", []) if paginas else []
+        if enlaces:
+            return enlaces[0]["title"]
+    return nombre_corto(datos)
+
+
+# «Fall of Constantinople» → «Constantinople»: los museos buscan por palabras sueltas y
+# «Fall» trae «The Fall of Icarus», «Fall of Man»…
+GENERICAS = re.compile(
+    r"^(the )?(fall|siege|sack|sinking|battle|history|death|assassination|execution|conquest|founding|"
+    r"invasion|discovery|independence|war|revolution|reign|life|trial|burning|destruction)"
+    r"( of| for| in| on)?( the)? ",
+    re.I,
+)
+
+
+def busqueda_museos(titulo_en: str) -> str:
+    esencial = GENERICAS.sub("", titulo_en.strip())
+    return re.sub(r"\s*\(.*?\)", "", esencial).strip() or titulo_en  # sin aclaraciones entre paréntesis
+
+
+def _anio(valor):
+    return valor if isinstance(valor, int) and -3000 < valor < 2100 and valor != 0 else None
+
+
+def imagenes_del_met(busqueda: str) -> list:
+    """Obras de dominio público del Metropolitan Museum of Art (Nueva York)."""
+    ids = wikimedia.json_api(f"{URL_MET}/v1.1/search",
+                             {"q": busqueda, "hasImages": "true", "limit": MAX_MUSEO}).get("objectIDs") or []
+    imagenes = []
+    for id_obra in ids[:MAX_MUSEO]:
+        obra = wikimedia.json_api(f"{URL_MET}/v1/objects/{id_obra}", caducidad=UN_MES)
+        url = obra.get("primaryImageSmall") or obra.get("primaryImage")
+        if not obra.get("isPublicDomain") or not url:
+            continue
+        titulo = obra.get("title") or "Obra"
+        texto = " ".join(str(obra.get(k) or "") for k in ("title", "artistDisplayName", "culture", "objectName", "period"))
+        imagenes.append({
+            "archivo": f"Met {id_obra} - {titulo[:80]}",
+            "url": url,
+            "anio": _anio(obra.get("objectBeginDate")),
+            "articulo": "The Met",
+            "pagina": obra.get("objectURL", ""),
+            "autor": obra.get("artistDisplayName") or "The Metropolitan Museum of Art",
+            "licencia": "Dominio público (CC0)",
+            "descripcion": f"{titulo} ({obra.get('objectDate', '')})"[:200],
+            "claves": sorted(palabras_clave(texto)),
+        })
+    return imagenes
+
+
+def imagenes_del_art_institute(busqueda: str) -> list:
+    """Obras de dominio público del Art Institute of Chicago."""
+    campos = "id,title,artist_display,date_start,date_display,image_id,is_public_domain,place_of_origin,medium_display"
+    datos = wikimedia.json_api(URL_AIC, {"q": busqueda, "limit": MAX_MUSEO, "fields": campos})
+    iiif = (datos.get("config") or {}).get("iiif_url", "https://www.artic.edu/iiif/2")
+    imagenes = []
+    for obra in datos.get("data", []):
+        if not obra.get("is_public_domain") or not obra.get("image_id"):
+            continue
+        titulo = obra.get("title") or "Obra"
+        texto = " ".join(str(obra.get(k) or "") for k in ("title", "artist_display", "place_of_origin", "medium_display"))
+        imagenes.append({
+            "archivo": f"AIC {obra['id']} - {titulo[:80]}",
+            "url": f"{iiif}/{obra['image_id']}/full/843,/0/default.jpg",  # 843 px: el tamaño que recomiendan
+            "anio": _anio(obra.get("date_start")),
+            "articulo": "Art Institute of Chicago",
+            "pagina": f"https://www.artic.edu/artworks/{obra['id']}",
+            "autor": (obra.get("artist_display") or "Art Institute of Chicago").split("\n")[0],
+            "licencia": "Dominio público (CC0)",
+            "descripcion": f"{titulo} ({obra.get('date_display', '')})"[:200],
+            "claves": sorted(palabras_clave(texto)),
+        })
+    return imagenes
+
+
+VERSION_CANDIDATAS = 3  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
+
+
+def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
+    """Imágenes posibles para un guion (artículos fuente, Commons y museos), guardadas en caché."""
+    ruta = CARPETA_TRABAJO / nombre / "candidatas.json"
+    if ruta.exists() and not renovar:
+        guardadas = json.loads(ruta.read_text(encoding="utf-8"))
+        if isinstance(guardadas, dict) and guardadas.get("version") == VERSION_CANDIDATAS:
+            return guardadas["imagenes"]
+    imagenes = []
+    for fuente in datos.get("fuentes", []):
+        try:
+            imagenes += imagenes_de_articulo(fuente.get("titulo") or titulo_desde_url(fuente["url"]))
+        except wikimedia.WikimediaEnEspera:
+            raise  # sin la lista completa no se guarda nada: se reintenta cuando acabe la espera
+        except requests.RequestException:
+            print(f"  aviso: no se pudieron leer las imágenes de {fuente.get('titulo')}")
+    busqueda = ((datos.get("diario") or {}).get("personaje") or (datos.get("serie") or {}).get("tema")
+                or nombre_corto(datos))
+    try:
+        imagenes += imagenes_de_commons(busqueda)
+    except wikimedia.WikimediaEnEspera:
+        raise
+    except requests.RequestException:
+        print("  aviso: no se pudo buscar en Wikimedia Commons")
+    # Museos: si fallan, se sigue sin ellos (no dependen de Wikimedia).
+    en_ingles = busqueda_museos(tema_en_ingles(datos))
+    for museo, buscar in (("The Met", imagenes_del_met), ("Art Institute of Chicago", imagenes_del_art_institute)):
+        try:
+            encontradas = buscar(en_ingles)
+            imagenes += encontradas
+            print(f"  {museo}: {len(encontradas)} obras de dominio público para «{en_ingles}»")
+        except (requests.RequestException, ValueError, KeyError) as error:
+            print(f"  aviso: no se pudo buscar en {museo} ({type(error).__name__})")
+    imagenes = list({i["archivo"]: i for i in reversed(imagenes)}.values())[::-1]  # sin repetidas
+    if imagenes:  # una lista vacía (fallo puntual) no se guarda, para volver a buscar la próxima vez
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(json.dumps({"version": VERSION_CANDIDATAS, "imagenes": imagenes}, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+    return imagenes
+
+
+def miniatura_url(imagen: dict) -> str:
+    """URL pequeña para mostrar la imagen en el menú (330 px en Wikimedia, 400 px en el Art Institute)."""
+    url = imagen.get("url", "")
+    if "/thumb/" in url:
+        return re.sub(r"/\d+px-", "/330px-", url)
+    if "/iiif/" in url:
+        return url.replace("/full/843,/", "/full/400,/")
+    return url
+
+
+class SelectorImagenes:
+    """Elige y descarga la imagen de cada escena para un guion."""
+
+    def __init__(self, imagenes: list, evento: str, anio_evento):
+        self.imagenes = imagenes
+        self.claves = [set(i["claves"]) for i in imagenes]
+        self.claves_evento = palabras_clave(evento)
+        self.anio_evento = anio_evento if isinstance(anio_evento, int) else None
+        self.articulos = list(dict.fromkeys(i["articulo"] for i in imagenes))
+        # Palabras que salen en muchas imágenes (p. ej. "colombia") distinguen poco: pesan menos.
+        frecuencia = {}
+        for claves in self.claves:
+            for clave in claves:
+                frecuencia[clave] = frecuencia.get(clave, 0) + 1
+        self.peso = {c: 1 / (1 + n) ** 0.5 for c, n in frecuencia.items()}
+        self.usadas, self.fallidas, self.descargadas = set(), set(), {}
+        self.bloqueados = set()  # grupos de servidores que nos han pedido esperar
+        self.anterior = None  # para no repetir la misma imagen en dos escenas seguidas
+
+    def puntuacion(self, indice: int, claves: set) -> float:
+        imagen = self.imagenes[indice]
+        puntos = sum(self.peso.get(c, 0) for c in self.claves[indice] & claves)
+        if self.anio_evento and imagen["anio"] and not (
+            self.anio_evento - 150 <= imagen["anio"] <= self.anio_evento + 60
+        ):
+            puntos -= 1.5  # de una época muy distinta a la del evento
+        puntos -= 0.1 * self.articulos.index(imagen["articulo"])  # desempate: artículo principal primero
+        return puntos
+
+    def ranking(self, escena: dict) -> list:
+        """Índices de las imágenes de mejor a peor para la escena."""
+        claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
+        return sorted(range(len(self.imagenes)), key=lambda i: self.puntuacion(i, claves), reverse=True)
+
+    def marcar_usada(self, imagen: dict) -> None:
+        """Una imagen elegida a mano no se vuelve a proponer para otra escena."""
+        for i, candidata in enumerate(self.imagenes):
+            if candidata["archivo"] == imagen.get("archivo"):
+                self.usadas.add(i)
+
+    def _grupo(self, indice: int) -> str:
+        return wikimedia.grupo(urlparse(self.imagenes[indice].get("url", "")).hostname or "")
+
+    def _bloqueada(self, indice: int) -> bool:
+        """Su servidor nos ha pedido esperar y no la tenemos ya descargada."""
+        return self._grupo(indice) in self.bloqueados and not ruta_en_cache(self.imagenes[indice]).exists()
+
+    def _descargar(self, indice: int):
+        try:
+            self.descargadas[indice] = descargar(self.imagenes[indice])
+            self.usadas.add(indice)
+            self.anterior = indice
+            return self.imagenes[indice], self.descargadas[indice]
+        except WikimediaBloqueado as aviso:
+            print(f"    {aviso} Mientras, uso imágenes de otras fuentes o ya descargadas.")
+            self.bloqueados.add(self._grupo(indice))
+        except requests.RequestException:
+            print(f"    no se pudo descargar {self.imagenes[indice]['archivo'][:50]}; pruebo otra")
+            self.fallidas.add(indice)
+        return None
+
+    def para_escena(self, escena: dict):
+        """Devuelve (imagen, ruta) de la mejor imagen disponible, o (None, None)."""
+        claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
+        ranking = self.ranking(escena)
+        nuevas = [
+            i for i in ranking
+            if i not in self.usadas and i not in self.fallidas and self.puntuacion(i, claves) >= PUNTUACION_MINIMA
+        ]
+        for indice in [i for i in nuevas if not self._bloqueada(i)][:5]:
+            if resultado := self._descargar(indice):
+                return resultado
+        # Sin imagen nueva relevante: mejor repetir una buena (sin repetir la de la escena anterior).
+        repetibles = [i for i in ranking if i in self.descargadas]
+        for indice in [i for i in repetibles if i != self.anterior] or repetibles:
+            self.anterior = indice
+            return self.imagenes[indice], self.descargadas[indice]
+        # Aún no hay ninguna descargada (p. ej. primera escena sin coincidencias): la mejor disponible.
+        for indice in [i for i in ranking if i not in self.fallidas and not self._bloqueada(i)][:5]:
+            if resultado := self._descargar(indice):
+                return resultado
+        return None, None
+
+
+# Wikimedia pide esperar demasiado: no se descargan más imágenes en esta ejecución.
+WikimediaBloqueado = wikimedia.WikimediaEnEspera
+
+
+def normalizar_nombre(texto: str) -> str:
+    return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+
+
+def ruta_en_cache(imagen: dict) -> Path:
+    nombre = re.sub(r"[^\w.-]+", "_", normalizar_nombre(imagen["archivo"]))[:120]
+    extension = ".png" if nombre.lower().endswith(".png") else ".jpg"
+    return CARPETA_CACHE / f"{Path(nombre).stem}_{ANCHO_DESCARGA}{extension}"
+
+
+def descargar(imagen: dict) -> Path:
+    """Descarga (o reutiliza de la caché) la imagen, al ritmo que permite Wikimedia."""
+    if imagen.get("ruta"):  # imagen propia subida desde el menú
+        return Path(imagen["ruta"])
+    return wikimedia.archivo(imagen["url"], ruta_en_cache(imagen))
+
+
+def componer_fotograma(ruta_imagen, destino: Path) -> Path:
+    """Imagen completa centrada sobre un fondo de la misma imagen desenfocada (formato vertical)."""
+    if ruta_imagen is None:  # sin imagen: degradado oscuro
+        fondo = Image.linear_gradient("L").resize((ANCHO, ALTO)).convert("RGB")
+        ImageEnhance.Brightness(ImageOps.colorize(fondo.convert("L"), "#0b1a2e", "#3a2a14")).enhance(0.9).save(destino)
+        return destino
+    imagen = ImageOps.exif_transpose(Image.open(ruta_imagen)).convert("RGB")
+    fondo = ImageOps.fit(imagen, (ANCHO, ALTO)).filter(ImageFilter.GaussianBlur(40))
+    fondo = ImageEnhance.Brightness(fondo).enhance(0.45)
+    # La imagen ocupa la franja central: arriba queda sitio para el título y abajo para los subtítulos.
+    alto_maximo = int(ALTO * ALTO_IMAGEN)
+    frente = imagen.copy()
+    frente.thumbnail((ANCHO, alto_maximo), Image.LANCZOS)
+    if frente.width < ANCHO * 0.85:  # imágenes pequeñas: se amplían para llenar el ancho
+        frente = imagen.resize((ANCHO, int(imagen.height * ANCHO / imagen.width)), Image.LANCZOS)
+        if frente.height > alto_maximo:
+            frente = ImageOps.fit(frente, (ANCHO, alto_maximo))
+    x = (ANCHO - frente.width) // 2
+    y = int(ALTO * CENTRO_IMAGEN) - frente.height // 2
+    fondo.paste(frente, (x, y))
+    fondo.save(destino)
+    return destino
+
+
+# --- Subtítulos (ASS) -----------------------------------------------------------
+
+def tiempo_ass(segundos: float) -> str:
+    centesimas = round(max(segundos, 0) * 100)
+    horas, resto = divmod(centesimas, 360_000)
+    minutos, resto = divmod(resto, 6000)
+    segs, cs = divmod(resto, 100)
+    return f"{horas}:{minutos:02d}:{segs:02d}.{cs:02d}"
+
+
+def escapar_ass(texto: str) -> str:
+    return texto.replace("\\", "").replace("{", "(").replace("}", ")")
+
+
+CABECERA_ASS = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {ANCHO}
+PlayResY: {ALTO}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Sub,Arial Black,72,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,6,2,2,70,70,430,1
+Style: Titulo,Arial Black,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,0,0,3,16,0,8,80,80,120,1
+Style: Gancho,Arial Black,160,&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,0,0,0,0,100,100,0,0,1,10,4,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+AMARILLO = r"{\c&H00D7FF&}"  # BGR: amarillo dorado para la palabra que suena
+BLANCO = r"{\c&HFFFFFF&}"
+
+
+def bloques_de_palabras(palabras: list) -> list:
+    bloques, actual = [], []
+    for palabra in palabras:
+        if actual and (
+            len(actual) >= PALABRAS_POR_SUBTITULO or palabra["inicio_s"] - actual[-1]["fin_s"] > CORTE_POR_SILENCIO
+        ):
+            bloques.append(actual)
+            actual = []
+        actual.append(palabra)
+    if actual:
+        bloques.append(actual)
+    return bloques
+
+
+def _es_clave(palabra: str, claves: set) -> bool:
+    return normalizar(palabra).strip() in claves
+
+
+def texto_ass(palabras: list, total: float, gancho: str = "", titulo: str = "", claves=()) -> str:
+    """Subtítulos de una escena (tiempos relativos a su inicio). En la primera, el gancho o el título.
+
+    Las `claves` (palabras graciosas o importantes) salen siempre en mayúsculas, doradas y algo más grandes.
+    """
+    # «tabla de madera» → «tabla», «madera»: las palabras vacías («de», «la»…) nunca se resaltan.
+    claves = {p for c in claves for p in normalizar(c).split() if len(p) > 2 and p not in PALABRAS_VACIAS}
+    eventos = []
+    if gancho:  # aparece con un pequeño «salto» y se desvanece
+        fin = min(DURACION_GANCHO, total - 0.05)
+        eventos.append(
+            f"Dialogue: 1,{tiempo_ass(0)},{tiempo_ass(fin)},Gancho,,0,0,0,,"
+            rf"{{\fad(80,300)\fscx70\fscy70\t(0,180,\fscx100\fscy100)}}{escapar_ass(gancho)}"
+        )
+    elif titulo:
+        fin = min(DURACION_TITULO, total - 0.05)
+        eventos.append(
+            f"Dialogue: 1,{tiempo_ass(0)},{tiempo_ass(fin)},Titulo,,0,0,0,,{{\\fad(200,400)}}{escapar_ass(titulo)}"
+        )
+    for bloque in bloques_de_palabras(palabras):
+        for i, palabra in enumerate(bloque):
+            inicio = palabra["inicio_s"]
+            fin = bloque[i + 1]["inicio_s"] if i + 1 < len(bloque) else min(palabra["fin_s"] + 0.15, total)
+            partes = []
+            for j, p in enumerate(bloque):
+                texto_palabra = escapar_ass(p["texto"])
+                if _es_clave(p["texto"], claves):  # palabra clave: siempre destacada
+                    partes.append(rf"{AMARILLO}{{\fscx118\fscy118}}{texto_palabra.upper()}{{\fscx100\fscy100}}{BLANCO}")
+                elif j == i:
+                    partes.append(f"{AMARILLO}{texto_palabra}{BLANCO}")
+                else:
+                    partes.append(texto_palabra)
+            texto = " ".join(partes)
+            eventos.append(f"Dialogue: 0,{tiempo_ass(inicio)},{tiempo_ass(fin)},Sub,,0,0,0,,{texto}")
+    return CABECERA_ASS + "\n".join(eventos) + "\n"
+
+
+# --- Vídeo -------------------------------------------------------------------------
+
+def ffmpeg(argumentos: list, cwd: Path) -> None:
+    comando = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y", *argumentos]
+    resultado = subprocess.run(
+        comando, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    if resultado.returncode != 0:
+        raise RuntimeError(f"ffmpeg falló: {resultado.stderr.strip()[-500:]}")
+
+
+def huella(*partes) -> str:
+    return hashlib.sha1(json.dumps(partes, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def info_archivo(ruta) -> list:
+    ruta = Path(ruta) if ruta else None
+    if not ruta or not ruta.exists():
+        return [str(ruta)]
+    estado = ruta.stat()
+    return [str(ruta), estado.st_size, int(estado.st_mtime)]
+
+
+def segmento_escena(trabajo: Path, numero: int, ruta_imagen, audio: Path, util: float, total: float,
+                    subtitulos: str) -> Path:
+    """Vídeo de una escena (imagen con zoom lento + su audio + subtítulos ya grabados), con caché."""
+    salida = trabajo / f"seg_{numero:02d}.mp4"
+    clave = trabajo / f"seg_{numero:02d}.clave"
+    firma = huella(VERSION_ESCENA, info_archivo(ruta_imagen), info_archivo(audio), round(util, 3),
+                   round(total, 3), subtitulos)
+    if salida.exists() and clave.exists() and clave.read_text() == firma:
+        return salida  # nada ha cambiado en esta escena
+
+    fotograma = componer_fotograma(ruta_imagen, trabajo / f"frame_{numero:02d}.png")
+    (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
+    fotogramas = max(1, round(total * FPS))
+    zoom = f"min(1+{ZOOM_FINAL - 1:.3f}*on/{fotogramas},{ZOOM_FINAL})"
+    filtro_video = (
+        f"scale={ANCHO * 2}:{ALTO * 2},"
+        f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={fotogramas}:s={ANCHO}x{ALTO}:fps={FPS},"
+        f"ass=sub_{numero:02d}.ass,format=yuv420p"
+    )
+    ffmpeg(
+        [
+            "-i", fotograma.name, "-i", str(audio.resolve()),
+            "-filter_complex", f"[0:v]{filtro_video}[v];[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
+            "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
+            salida.name,
+        ],
+        trabajo,
+    )
+    clave.write_text(firma)
+    return salida
+
+
+def unir(trabajo: Path, segmentos: list, destino: Path, pista, duracion: float) -> None:
+    """Une las escenas sin recodificar el vídeo y mezcla la música (que baja cuando habla la voz)."""
+    (trabajo / "lista.txt").write_text("".join(f"file '{s.name}'\n" for s in segmentos), encoding="utf-8")
+    if pista is None:
+        argumentos = ["-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy"]
+    else:
+        fundido = max(0.0, duracion - 1.5)
+        filtro = (
+            f"[1:a]volume={VOLUMEN_MUSICA},afade=t=in:d=1,afade=t=out:st={fundido:.2f}:d=1.5,"
+            "aformat=sample_rates=44100:channel_layouts=stereo[musica];"
+            "[0:a]asplit=2[voz][guia];"
+            "[musica][guia]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=350[fondo];"
+            "[voz][fondo]amix=inputs=2:duration=first:normalize=0[a]"
+        )
+        argumentos = [
+            "-f", "concat", "-safe", "0", "-i", "lista.txt",
+            "-stream_loop", "-1", "-i", str(Path(pista).resolve()),
+            "-filter_complex", filtro, "-map", "0:v", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion:.3f}",
+        ]
+    ffmpeg([*argumentos, "-movflags", "+faststart", "final.mp4"], trabajo)
+    shutil.move(str(trabajo / "final.mp4"), destino)
+
+
+def crear_miniatura(fotograma: Path, texto: str, destino: Path, parte: str = "") -> None:
+    """Portada 1080x1920: la imagen de la primera escena con el gancho en grande."""
+    imagen = ImageEnhance.Brightness(Image.open(fotograma).convert("RGB")).enhance(0.8)
+    dibujo = ImageDraw.Draw(imagen)
+    texto = re.sub(r"\s*\((Parte|Part) \d+/\d+\)\s*$", "", texto)  # la parte ya va en la etiqueta
+
+    def partir(fuente) -> list:
+        lineas, actual = [], ""
+        for palabra in texto.split():
+            prueba = f"{actual} {palabra}".strip()
+            if actual and dibujo.textlength(prueba, font=fuente) > ANCHO - 120:
+                lineas.append(actual)
+                actual = palabra
+            else:
+                actual = prueba
+        return lineas + [actual]
+
+    # La letra más grande con la que el texto cabe a lo ancho en 4 líneas como mucho.
+    try:
+        fuente_parte = ImageFont.truetype("ariblk.ttf", 70)
+        for tamano in range(150, 60, -10):
+            fuente = ImageFont.truetype("ariblk.ttf", tamano)
+            lineas = partir(fuente)
+            if len(lineas) <= 4 and all(dibujo.textlength(l, font=fuente) <= ANCHO - 80 for l in lineas):
+                break
+    except OSError:
+        fuente = fuente_parte = ImageFont.load_default()
+        tamano, lineas = 40, partir(fuente)
+    alto_linea = int(tamano * 1.1)
+    y = int(ALTO * 0.2)
+    for linea in lineas[:4]:
+        ancho = dibujo.textlength(linea, font=fuente)
+        dibujo.text(((ANCHO - ancho) / 2, y), linea, font=fuente, fill=(255, 215, 0),
+                    stroke_width=max(4, tamano // 15), stroke_fill=(0, 0, 0))
+        y += alto_linea
+    if parte:
+        ancho = dibujo.textlength(parte, font=fuente_parte)
+        dibujo.rounded_rectangle(((ANCHO - ancho) / 2 - 30, ALTO - 360, (ANCHO + ancho) / 2 + 30, ALTO - 250),
+                                 radius=24, fill=(181, 86, 43))
+        dibujo.text(((ANCHO - ancho) / 2, ALTO - 352), parte, font=fuente_parte, fill=(255, 255, 255))
+    imagen.save(destino, quality=90)
+
+
+# --- Nombres y carpetas de los vídeos ---------------------------------------------------
+# salida/videos/Guerra-civil/
+#     Guerra-civil_pt1.mp4   el vídeo
+#     Guerra-civil_pt1.txt   lo que poner al publicar (TikTok y YouTube Shorts)
+#     Guerra-civil_pt1.jpg   la miniatura
+#     guiones/Guerra-civil_pt1.txt   el texto del guion
+# («_ptN» solo en las series; los vídeos que no están en español llevan el idioma: «_EN»)
+
+PROHIBIDOS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')  # caracteres no válidos en nombres de Windows
+ARTICULOS = {"el", "la", "los", "las", "lo", "un", "una", "the", "a", "an"}
+
+
+def nombre_corto(datos: dict) -> str:
+    """Nombre corto del tema (p. ej. «Guerra civil»), seguro para usarlo como nombre de archivo."""
+    # Hasta la primera coma y 4 palabras como mucho (por si la IA devolvió el tema entero).
+    nombre = " ".join(re.split(r"[,:;(]", str(datos.get("nombre_corto") or ""))[0].split()[:4])
+    if not nombre:  # guiones antiguos: primeras palabras del tema o del evento
+        base = (datos.get("serie") or {}).get("tema") or datos.get("evento") or datos.get("titulo") or "Vídeo"
+        palabras = base.split()
+        while len(palabras) > 1 and palabras[0].lower() in ARTICULOS:
+            palabras.pop(0)
+        nombre = " ".join(palabras[:3])
+    nombre = PROHIBIDOS.sub("", nombre).strip(" .")[:40].strip(" .") or "Video"
+    return nombre[0].upper() + nombre[1:]
+
+
+def ruta_guion_de(nombre: str) -> Path:
+    return CARPETA_GUIONES / f"{nombre}.json"
+
+
+def nombre_archivo(datos: dict) -> str:
+    """«Guerra civil» → «Guerra-civil»: sin espacios, para nombres de archivo cortos."""
+    return re.sub(r"\s+", "-", nombre_corto(datos))
+
+
+def ruta_esperada(datos: dict) -> Path:
+    """Ruta que le corresponde a un vídeo según su nombre corto (sin comprobar si ya existe)."""
+    corto = nombre_archivo(datos)
+    serie = datos.get("serie") or {}
+    base = f"{corto}_pt{serie['parte']}" if serie.get("total", 1) > 1 else corto
+    if datos.get("diario"):  # «Diario-soldado-romano_dia4»
+        base = f"{corto}_dia{datos['diario']['dia']}"
+    if datos.get("idioma", "es") != "es":  # p. ej. «Pancho-Villa_EN» junto a «Pancho-Villa»
+        base += f"_{datos['idioma'].upper()}"
+    return CARPETA_VIDEOS / corto / f"{base}.mp4"
+
+
+def destino_nuevo(datos: dict) -> Path:
+    """Ruta que le toca a un vídeo nuevo, sin pisar la de otro guion."""
+    esperada = ruta_esperada(datos)
+    candidato, numero = esperada, 2
+    while candidato.exists():  # otro vídeo ya usa ese nombre
+        candidato = esperada.with_name(f"{esperada.stem}_{numero}.mp4")
+        numero += 1
+    return candidato
+
+
+def destino_video(nombre: str, datos: dict) -> Path:
+    """Ruta del vídeo de un guion: la que ya tenía guardada o una nueva."""
+    if datos.get("video"):
+        return Path(datos["video"])
+    return destino_nuevo(datos)
+
+
+def ruta_descripcion(video: Path) -> Path:
+    return video.with_suffix(".txt")
+
+
+def ruta_miniatura(video: Path) -> Path:
+    return video.with_suffix(".jpg")
+
+
+def ruta_guion_texto(video: Path) -> Path:
+    return video.parent / "guiones" / f"{video.stem}.txt"
+
+
+def guardar_ruta_video(nombre: str, video: Path) -> None:
+    """Apunta en el guion dónde quedó su vídeo (lo usan el menú y las siguientes ejecuciones)."""
+    ruta = ruta_guion_de(nombre)
+    if not ruta.exists():
+        return
+    guion = json.loads(ruta.read_text(encoding="utf-8"))
+    guion["video"] = video.as_posix()
+    ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _creditos_antiguos(descripcion: Path) -> list:
+    """Créditos de imágenes de una descripción de las versiones anteriores (líneas «- …» tras «Imágenes»)."""
+    if not descripcion.exists():
+        return []
+    creditos, dentro = [], False
+    for linea in descripcion.read_text(encoding="utf-8").splitlines():
+        if linea.strip().rstrip(":").lower().startswith(("imágenes", "images")):
+            dentro = True
+        elif dentro and linea.startswith("- "):
+            creditos.append(linea[2:].strip())
+        elif dentro and not linea.strip():
+            break
+    return creditos
+
+
+def _creditos_guardados(nombre: str) -> list:
+    """Créditos de las imágenes que se usaron la última vez que se montó el vídeo."""
+    ruta = elegidas_path(nombre)
+    if not ruta.exists():
+        return []
+    creditos = []
+    for eleccion in json.loads(ruta.read_text(encoding="utf-8")).values():
+        imagen = eleccion.get("imagen")
+        if imagen and imagen["archivo"] not in [c["archivo"] for c in creditos]:
+            creditos.append(imagen)
+    return creditos
+
+
+def migrar_videos_antiguos() -> None:
+    """Pasa los vídeos de formatos anteriores al actual (Tema/Tema_ptN.mp4 + .txt + .jpg + guiones/)."""
+    # 1. Formato más antiguo: salida/videos/<guion>.mp4 sueltos.
+    for antiguo in CARPETA_VIDEOS.glob("*.mp4"):
+        if ruta_guion_de(antiguo.stem).exists():
+            guion = json.loads(ruta_guion_de(antiguo.stem).read_text(encoding="utf-8"))
+            if not guion.get("video"):
+                guardar_ruta_video(antiguo.stem, antiguo)
+    # 2. Cualquier vídeo cuyo nombre no siga el formato actual.
+    for ruta in CARPETA_GUIONES.glob("*.json"):
+        guion = json.loads(ruta.read_text(encoding="utf-8"))
+        actual = Path(guion["video"]) if guion.get("video") else None
+        if not actual or not actual.exists():
+            continue
+        descripcion_vieja = next((p for p in (actual.with_name(f"{actual.stem} - descripcion.txt"),
+                                              actual.with_name(f"{actual.stem}_descripcion.txt")) if p.exists()), None)
+        miniatura_vieja = actual.with_name(f"{actual.stem} - miniatura.jpg")
+        esperada = ruta_esperada(guion)
+        if not descripcion_vieja and not miniatura_vieja.exists() and actual.parent == esperada.parent:
+            continue  # ya está en el formato actual
+        if actual.resolve() == esperada.resolve():
+            nuevo = actual  # el nombre ya vale: solo cambian sus textos
+        else:
+            nuevo = esperada if not esperada.exists() else destino_nuevo(guion)
+            nuevo.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(actual), nuevo)
+        if miniatura_vieja.exists():
+            shutil.move(str(miniatura_vieja), ruta_miniatura(nuevo))
+        creditos = _creditos_guardados(ruta.stem) or (_creditos_antiguos(descripcion_vieja) if descripcion_vieja else [])
+        if descripcion_vieja:
+            descripcion_vieja.unlink()
+        datos = leer_datos(CARPETA_AUDIO / ruta.stem) if (CARPETA_AUDIO / ruta.stem / "escenas.json").exists() else guion
+        # Los vídeos montados con la versión con música tienen «elegidas.json»; los anteriores, no.
+        pista = guion.get("musica", "neutro") if elegidas_path(ruta.stem).exists() else ""
+        escribir_textos(nuevo, ruta.stem, datos, creditos, pista)
+        guardar_ruta_video(ruta.stem, nuevo)
+        print(f"Formato nuevo: {actual} → {nuevo}")
+        if actual.parent != nuevo.parent and actual.parent.exists() and not any(actual.parent.iterdir()):
+            actual.parent.rmdir()  # la carpeta antigua del tema quedó vacía
+
+
+# --- Montaje ---------------------------------------------------------------------
+
+def leer_datos(carpeta_audio: Path) -> dict:
+    """Tiempos del audio (paso 2) + lo último del guion: título, gancho, música e imágenes elegidas."""
+    datos = json.loads((carpeta_audio / "escenas.json").read_text(encoding="utf-8"))
+    ruta = ruta_guion_de(carpeta_audio.name)
+    if not ruta.exists():
+        return datos
+    guion = json.loads(ruta.read_text(encoding="utf-8"))
+    elegidas = {e.get("numero"): e.get("imagen") for e in guion.get("escenas", []) if e.get("imagen")}
+    escenas = [{**e, "imagen": elegidas.get(e["numero"])} for e in datos["escenas"]]
+    return {**datos, **{k: v for k, v in guion.items() if k != "escenas"}, "escenas": escenas}
+
+
+def elegidas_path(nombre: str) -> Path:
+    return CARPETA_TRABAJO / nombre / "elegidas.json"
+
+
+def montar(carpeta_audio: Path, forzar: bool) -> Path:
+    nombre = carpeta_audio.name
+    datos = leer_datos(carpeta_audio)
+    ruta_video = destino_video(nombre, datos)
+    if ruta_video.exists() and not forzar:
+        print(f"  ya tiene vídeo: {ruta_video} (usa --forzar para rehacerlo)")
+        return ruta_video
+    ruta_video.parent.mkdir(parents=True, exist_ok=True)
+    trabajo = CARPETA_TRABAJO / nombre
+    trabajo.mkdir(parents=True, exist_ok=True)
+
+    # 1. Imagen de cada escena: la elegida a mano o la que mejor encaja
+    imagenes = candidatas(nombre, datos)
+    print(f"  {len(imagenes)} imágenes candidatas")
+    selector = SelectorImagenes(imagenes, datos.get("evento", ""), datos.get("anio_evento"))
+    for escena in datos["escenas"]:
+        if escena.get("imagen"):
+            selector.marcar_usada(escena["imagen"])
+    elegidas, creditos = {}, []
+    for escena in datos["escenas"]:
+        imagen, ruta = escena.get("imagen"), None
+        if imagen:
+            try:
+                ruta = descargar(imagen)
+            except (WikimediaBloqueado, requests.RequestException):
+                print(f"    no se pudo descargar la imagen elegida de la escena {escena['numero']}; elijo otra")
+                imagen = None
+        if not imagen:
+            imagen, ruta = selector.para_escena(escena)
+        elegidas[escena["numero"]] = {"imagen": imagen, "ruta": str(ruta) if ruta else None,
+                                      "a_mano": bool(escena.get("imagen")) and imagen is escena.get("imagen")}
+        if imagen and imagen["archivo"] not in [c["archivo"] for c in creditos]:
+            creditos.append(imagen)
+        if ruta is None and selector.bloqueados:
+            # Mejor esperar que montar un vídeo con escenas sin imagen.
+            raise wikimedia.WikimediaEnEspera(wikimedia.en_espera_hasta() or time.time() + 120)
+    elegidas_path(nombre).write_text(json.dumps(elegidas, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 2. Un segmento por escena (en paralelo y con caché), con la línea de tiempo ya recortada
+    gancho = str(datos.get("gancho") or "").strip()
+    trabajos, cursor = [], 0.0
+    for indice, escena in enumerate(datos["escenas"]):
+        tiempos = escena.get("palabras_tiempos", [])
+        ultima = (tiempos[-1]["fin_s"] - escena["inicio_s"]) if tiempos else escena["duracion_s"]
+        util = min(escena["duracion_s"], ultima + COLA_TRAS_ULTIMA_PALABRA)
+        total = util + PAUSA_ENTRE_ESCENAS
+        relativas = [{"texto": p["texto"], "inicio_s": p["inicio_s"] - escena["inicio_s"],
+                      "fin_s": p["fin_s"] - escena["inicio_s"]} for p in tiempos]
+        subtitulos = texto_ass(relativas, total, gancho if indice == 0 else "",
+                               datos.get("titulo", "") if indice == 0 else "", datos.get("palabras_clave", []))
+        eleccion = elegidas[escena["numero"]]
+        trabajos.append((trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
+                         util, total, subtitulos))
+        imagen = eleccion["imagen"]
+        marca = (" (generada con IA)" if (imagen or {}).get("ia") else " (elegida a mano)") if eleccion["a_mano"] else ""
+        print(f"  escena {escena['numero']}: {total:.2f} s · {imagen['archivo'][:55] if imagen else 'sin imagen'}{marca}")
+        cursor += total
+
+    inicio = time.time()
+    with ThreadPoolExecutor(max_workers=HILOS) as hilos:
+        segmentos = list(hilos.map(lambda argumentos: segmento_escena(*argumentos), trabajos))
+    print(f"  escenas listas en {time.time() - inicio:.0f} s ({HILOS} a la vez; las que no cambiaron, de la caché)")
+
+    # Toma final: «¿Quieres la parte 2? Dale a like y suscríbete» (sobria en los vídeos de tono triste)
+    segmento_cierre, duracion_cierre = cierre.crear(datos, trabajo, huella)
+    segmentos.append(segmento_cierre)
+    cursor += duracion_cierre
+    print(f"  cierre: «{cierre.textos(datos)['voz']}» ({duracion_cierre:.1f} s)")
+
+    # 3. Unir, música, descripción y miniatura
+    pista = musica.ruta_pista(datos.get("musica", "neutro"))
+    unir(trabajo, segmentos, ruta_video, pista, cursor)
+    escribir_textos(ruta_video, nombre, datos, creditos, datos.get("musica", "neutro") if pista else "")
+    serie = datos.get("serie") or {}
+    etiqueta = ""
+    if serie.get("total", 1) > 1:
+        etiqueta = f"{'PART' if datos.get('idioma') == 'en' else 'PARTE'} {serie['parte']}/{serie['total']}"
+    primera = trabajo / f"frame_{datos['escenas'][0]['numero']:02d}.png"
+    if not primera.exists():
+        componer_fotograma(elegidas[datos["escenas"][0]["numero"]]["ruta"], primera)
+    crear_miniatura(primera, gancho or datos.get("titulo", ""), ruta_miniatura(ruta_video), etiqueta)
+    guardar_ruta_video(nombre, ruta_video)
+    print(f"  duración: {cursor:.1f} s · música: {datos.get('musica', 'neutro') if pista else 'ninguna'}")
+    return ruta_video
+
+
+# --- Textos para publicar ----------------------------------------------------------
+
+LIMITE_TITULO_YT = 100
+SEPARADOR = "=" * 60
+
+
+def _linea_credito(c, ingles: bool) -> str:
+    if isinstance(c, str):  # crédito copiado de una descripción antigua
+        return f"- {c}"
+    if c.get("ia"):
+        return f"- {c['archivo']} — {'AI-generated image (Pollinations)' if ingles else 'imagen generada con IA (Pollinations)'}"
+    if c.get("ruta"):
+        return f"- {c['archivo']} — {'own image' if ingles else 'imagen propia'}"
+    return f"- {c['archivo']} — {c['autor']} — {c['licencia']} — {c['pagina']}"
+
+
+def _hashtags(datos: dict, maximo: int) -> str:
+    """Los del guion + uno genérico del canal, sin repetir."""
+    extra = ["#didyouknow", "#facts"] if datos.get("idioma") == "en" else ["#curiosidades", "#sabiasque"]
+    etiquetas = []
+    for h in [*datos.get("hashtags", []), *extra]:
+        h = "#" + re.sub(r"[^\w]", "", str(h).lstrip("#"))
+        if len(h) > 1 and h.lower() not in [e.lower() for e in etiquetas]:
+            etiquetas.append(h)
+    return " ".join(etiquetas[:maximo])
+
+
+def _linea_diario(datos: dict, donde_es: str, donde_en: str) -> str:
+    """«📓 Día 4 · El día 5, pronto en mi perfil» para los vídeos del formato diario ("" si no lo es)."""
+    diario = datos.get("diario")
+    if not diario:
+        return ""
+    dia = diario["dia"]
+    if datos.get("idioma") == "en":
+        return f"📓 Day {dia} · Day {dia + 1} coming soon {donde_en}"
+    return f"📓 Día {dia} · El día {dia + 1}, pronto {donde_es}"
+
+
+def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
+    """Lo que hay que pegar al subir el vídeo: un bloque para TikTok y otro para YouTube Shorts."""
+    ingles = datos.get("idioma") == "en"
+    titulo = datos.get("titulo", "").strip()
+    titulo_sin_parte = re.sub(r"\s*\((Parte|Part) \d+/\d+\)\s*$", "", titulo)
+    escenas = datos.get("escenas", [])
+    entrada = escenas[0]["narracion"].strip() if escenas else ""
+    serie = datos.get("serie") or {}
+    linea_serie = ""
+    if serie.get("total", 1) > 1:
+        parte, total = serie["parte"], serie["total"]
+        if ingles:
+            linea_serie = f"📺 Part {parte}/{total}" + (f" · Part {parte + 1} on my profile" if parte < total else " · Final part")
+        else:
+            linea_serie = f"📺 Parte {parte}/{total}" + (f" · La parte {parte + 1}, en mi perfil" if parte < total
+                                                        else " · Parte final")
+    linea_serie = linea_serie or _linea_diario(datos, "en mi perfil", "on my profile")
+    # TikTok: corto y directo. Los enlaces no son clicables, así que se nombran las fuentes.
+    tiktok = [titulo_sin_parte, "", entrada]
+    if linea_serie:
+        tiktok += ["", linea_serie]
+    tiktok += ["", "💬 Did you know? Tell me in the comments." if ingles else "💬 ¿Lo sabías? Te leo en comentarios.", ""]
+    nombres_fuentes = ", ".join(f["titulo"] for f in datos.get("fuentes", []))
+    tiktok.append(f"{'Source' if ingles else 'Fuente'}: Wikipedia ({nombres_fuentes})" if nombres_fuentes else "")
+    autores = set()
+    for c in creditos:
+        if isinstance(c, str):  # «archivo — autor — licencia — página»
+            partes = c.split(" — ")
+            autores.add(partes[1].strip() if len(partes) > 1 else "")
+        else:
+            autores.add(str(c.get("autor", "")).strip())
+    autores = sorted(a for a in autores - {"", "Propia", "Autor desconocido", "Generada con IA (Pollinations)"}
+                     if len(a) < 60)
+    if any(isinstance(c, dict) and c.get("ia") for c in creditos):
+        tiktok.append("Images: AI-generated (Pollinations)." if ingles else "Imágenes: generadas con IA (Pollinations).")
+    elif creditos:
+        tiktok.append(f"{'Images' if ingles else 'Imágenes'}: Wikimedia Commons / museos"
+                      + (f" ({', '.join(autores[:6])})" if autores else "")
+                      + (". Full credits on YouTube." if ingles else ". Créditos completos en YouTube."))
+    tiktok += ["", _hashtags(datos, 5)]
+
+    youtube = publicacion_youtube(datos, creditos, pista)
+
+    aviso = ("Before publishing: check the facts and tick the AI-generated content label if the platform asks."
+             if ingles else
+             "Antes de publicar: comprueba los datos y marca la etiqueta de «contenido generado con IA» si la plataforma la pide.")
+    return "\n".join([
+        f"⚠ {aviso}", "",
+        SEPARADOR, "TIKTOK — copy everything below as the caption" if ingles else "TIKTOK — copia todo esto en la descripción",
+        SEPARADOR, *tiktok, "", "",
+        SEPARADOR, "YOUTUBE SHORTS", SEPARADOR,
+        "TITLE (paste in «Title»):" if ingles else "TÍTULO (pégalo en «Título»):", youtube["titulo"], "",
+        "DESCRIPTION (paste in «Description»):" if ingles else "DESCRIPCIÓN (pégala en «Descripción»):",
+        youtube["descripcion"],
+    ]) + "\n"
+
+
+def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
+    """Título (máx. 100 caracteres, con #Shorts), descripción y etiquetas para YouTube Shorts.
+
+    Lo usan el .txt de cada vídeo y la subida automática (subir_youtube.py): así son idénticos.
+    """
+    ingles = datos.get("idioma") == "en"
+    titulo = datos.get("titulo", "").strip()
+    escenas = datos.get("escenas", [])
+    lineas = [escenas[0]["narracion"].strip() if escenas else ""]
+    serie = datos.get("serie") or {}
+    if serie.get("total", 1) > 1:
+        parte, total = serie["parte"], serie["total"]
+        if ingles:
+            lineas += ["", f"📺 Part {parte}/{total}" + (f" · Part {parte + 1} on my channel" if parte < total else " · Final part")]
+        else:
+            lineas += ["", f"📺 Parte {parte}/{total}" + (f" · La parte {parte + 1}, en mi canal" if parte < total
+                                                           else " · Parte final")]
+    if datos.get("diario"):
+        lineas += ["", _linea_diario(datos, "en mi canal", "on my channel")]
+    lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos.get("fuentes", [])]]
+    lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos], ""]
+    if pista in musica.TONOS:
+        lineas.append("Music: generated, royalty-free." if ingles else "Música: generada, sin derechos de autor.")
+    elif pista:
+        lineas.append(f"{'Music' if ingles else 'Música'}: {pista}")
+    lineas += ["Synthetic voice (AI)." if ingles else "Voz sintética (IA).", "", _hashtags(datos, 8)]
+    # YouTube rechaza «<» y «>» en título y descripción, y corta la descripción a 5.000 caracteres.
+    descripcion = "\n".join(lineas).replace("<", "‹").replace(">", "›")[:4900]
+    etiquetas, largo = [], 0
+    for h in _hashtags(datos, 15).split():
+        etiqueta = h.lstrip("#")
+        if largo + len(etiqueta) + 1 > 450:  # las etiquetas suman 500 caracteres como mucho
+            break
+        etiquetas.append(etiqueta)
+        largo += len(etiqueta) + 1
+    titulo_yt = titulo.replace("<", "‹").replace(">", "›")[: LIMITE_TITULO_YT - len(" #Shorts")].rstrip() + " #Shorts"
+    return {"titulo": titulo_yt, "descripcion": descripcion, "etiquetas": etiquetas}
+
+
+def texto_guion(datos: dict, elegidas: dict = None) -> str:
+    """El guion en texto legible: escenas, imagen de cada una, dudas y fuentes."""
+    elegidas = elegidas or {}
+    duracion = (datos.get("audio") or {}).get("duracion_total_s")
+    lineas = [datos.get("titulo", ""), "=" * len(datos.get("titulo", "") or "x")]
+    if datos.get("gancho"):
+        lineas.append(f"Gancho: {datos['gancho']}")
+    detalles = [f"idioma: {datos.get('idioma', '?')}", f"verificado: {'sí' if datos.get('verificado') else 'NO'}"]
+    if duracion:
+        detalles.append(f"duración: {duracion:.0f} s")
+    if datos.get("modelo"):
+        detalles.append(f"escrito con: {datos['modelo']}")
+    lineas += [" · ".join(detalles), ""]
+    for escena in datos.get("escenas", []):
+        lineas.append(f"[{escena.get('numero')}] {escena.get('narracion', '').strip()}")
+        eleccion = elegidas.get(escena.get("numero")) or elegidas.get(str(escena.get("numero"))) or {}
+        imagen = (eleccion.get("imagen") or {}).get("archivo") if isinstance(eleccion, dict) else None
+        lineas.append(f"    imagen: {imagen or escena.get('visual', '')}")
+        lineas.append("")
+    dudas = datos.get("sin_respaldo", [])
+    if dudas:
+        lineas.append("FRASES A REVISAR (el verificador no las encontró en las fuentes):")
+        lineas += [f"- escena {d.get('escena')}: «{d.get('frase')}» → {d.get('motivo')}" for d in dudas]
+        lineas.append("")
+    lineas.append("Fuentes:")
+    lineas += [f"- {f['titulo']}: {f['url']}" for f in datos.get("fuentes", [])]
+    return "\n".join(lineas) + "\n"
+
+
+def escribir_textos(video: Path, nombre: str, datos: dict, creditos: list, pista: str) -> None:
+    """Junto al vídeo: <video>.txt (para publicar) y guiones/<video>.txt (el guion)."""
+    ruta_descripcion(video).write_text(texto_publicacion(datos, creditos, pista), encoding="utf-8")
+    ruta = ruta_guion_texto(video)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    elegidas = json.loads(elegidas_path(nombre).read_text(encoding="utf-8")) if elegidas_path(nombre).exists() else {}
+    ruta.write_text(texto_guion(datos, elegidas), encoding="utf-8")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Monta el vídeo vertical de cada guion con audio")
+    parser.add_argument("carpetas", nargs="*", type=Path, help="carpetas de salida/audio (por defecto, todas)")
+    parser.add_argument("--solo-verificados", action="store_true", help='omite guiones sin "verificado": true')
+    parser.add_argument("--forzar", action="store_true", help="rehace el vídeo aunque ya exista")
+    args = parser.parse_args(argv)
+
+    musica.asegurar_pistas()
+    migrar_videos_antiguos()
+    carpetas = args.carpetas or sorted(p.parent for p in CARPETA_AUDIO.glob("*/escenas.json"))
+    if not carpetas:
+        print(f"[error] No hay audio en {CARPETA_AUDIO}. Ejecuta antes paso2_audio.py", file=sys.stderr)
+        return 1
+
+    hechos = omitidos = fallidos = 0
+    for carpeta in carpetas:
+        print(f"\n· {carpeta.name}")
+        try:
+            datos = leer_datos(carpeta)
+            if not datos.get("verificado"):
+                if args.solo_verificados:
+                    print("  omitido: no está verificado")
+                    omitidos += 1
+                    continue
+                print("  aviso: guion sin verificar; revísalo antes de publicar")
+            print(f"  → {montar(carpeta, args.forzar)}")
+            hechos += 1
+        except (ValueError, KeyError, RuntimeError, OSError, requests.RequestException) as error:
+            print(f"  error: {error}", file=sys.stderr)
+            fallidos += 1
+        except Exception as error:  # un fallo inesperado en un vídeo no debe parar los demás
+            print(f"  error inesperado ({type(error).__name__}): {error}", file=sys.stderr)
+            fallidos += 1
+
+    print(f"\nVídeos: {hechos} · Omitidos: {omitidos} · Con error: {fallidos}")
+    return 0 if fallidos == 0 else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
