@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block titulo %}Imágenes · {{ datos.titulo }}{% endblock %}
 {% block contenido %}
-<p class="sub"><a href="{{ url_for('ver_guion', nombre=nombre) }}">← Volver al guion</a></p>
+<a class="volver" href="{{ url_for('ver_guion', nombre=nombre) }}">← Volver al guion</a>
 <h1>Elige las imágenes</h1>
 <p class="sub">
   {{ total }} imágenes encontradas en Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago. Pincha la que quieras para cada escena
-  (se marca en naranja) o sube una tuya. Después, vuelve al guion y pulsa «Rehacer audio y vídeo»: solo se
+  (se marca en dorado) o sube una tuya. Después, vuelve al guion y pulsa «Rehacer audio y vídeo»: solo se
   rehacen las escenas cambiadas.
   <a href="{{ url_for('imagenes_guion', nombre=nombre, renovar=1) }}">Buscar imágenes de nuevo</a>
 </p>
@@ -21,7 +21,7 @@
       <div class="copiable"><textarea readonly rows="3">{{ e.visual }}</textarea>
         <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
     {% else %}
-      <p class="ayuda-campo">🖼 Idea visual: {{ e.visual }}</p>
+      <p class="ayuda-campo">Idea visual: {{ e.visual }}</p>
     {% endif %}
 
     <p><strong>Ahora:</strong>
@@ -51,7 +51,7 @@
     <div class="acciones">
       <form method="post" action="{{ url_for('subir_imagen', nombre=nombre) }}" enctype="multipart/form-data" class="en-linea">
         <input type="hidden" name="escena" value="{{ e.numero }}">
-        <label class="boton secundario" style="margin: 0;">📤 Subir una imagen tuya
+        <label class="boton secundario" style="margin: 0;">Subir una imagen tuya
           <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" hidden onchange="this.form.submit()">
         </label>
       </form>

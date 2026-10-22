@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block titulo %}{{ datos.titulo }} · Vídeos de historia{% endblock %}
+{% block titulo %}{{ datos.titulo }} · Mente Inquieta{% endblock %}
 {% block contenido %}
-<p class="sub"><a href="{{ url_for('inicio') }}">← Inicio</a></p>
+<a class="volver" href="{{ url_for('inicio') }}">← Inicio</a>
 <h1>{{ datos.titulo }}</h1>
 <p class="sub">
   {{ info.idioma | upper }} · {{ datos.evento }}
@@ -33,7 +33,7 @@
 
     {% if datos.get('diario') %}
       <div class="tarjeta">
-        <h2>🎭 Prompts para tu generador de IA</h2>
+        <h2>Prompts para tu generador de IA</h2>
         <p class="ayuda-campo">Diario de «{{ datos.diario.personaje }}» · día {{ datos.diario.dia }}. Genera las imágenes o
           clips en vertical (9:16) con Sora, Runway, Midjourney… y súbelas en «Elegir imágenes» (una por escena). Si no
           subes ninguna, el vídeo se monta con imágenes históricas reales.</p>
@@ -65,7 +65,7 @@
           <label for="n{{ e.numero }}"><span class="num">Escena {{ e.numero }}</span>
             {% if e.numero in escenas_con_duda %}<span class="etiqueta mal">revisar</span>{% endif %}</label>
           <textarea id="n{{ e.numero }}" name="narracion_{{ e.numero }}">{{ e.narracion }}</textarea>
-          <div class="visual">🖼 {{ e.visual }}</div>
+          <div class="visual">Imagen: {{ e.visual }}</div>
         </div>
       {% endfor %}
       <div class="acciones">
@@ -91,14 +91,14 @@
              {% if actual != 'ninguna' %}src="{{ url_for('escuchar_musica', pista=actual) }}"{% endif %}></audio>
       <div class="acciones">
         <button class="secundario" type="submit">Guardar gancho y música</button>
-        <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">🖼 Elegir imágenes</a>
+        <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">Elegir imágenes</a>
       </div>
     </form>
 
     <div class="tarjeta">
       <h2>3 · Verifica y produce</h2>
       {% if info.verificado %}
-        <p><span class="etiqueta ok">✔ verificado</span></p>
+        <p><span class="etiqueta ok">verificado</span></p>
         <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
           <input type="hidden" name="valor" value="0">
           <button class="secundario" type="submit">Quitar verificado</button>
@@ -107,12 +107,12 @@
         <p><span class="etiqueta mal">sin verificar</span> Marca esto solo cuando hayas comprobado los datos.</p>
         <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
           <input type="hidden" name="valor" value="1">
-          <button class="secundario" type="submit">✔ Marcar como verificado</button>
+          <button class="secundario" type="submit">Marcar como verificado</button>
         </form>
       {% endif %}
       <form method="post" action="{{ url_for('producir_guion', nombre=nombre) }}" style="margin-top: 14px;">
         <button type="submit">
-          🎬 {{ 'Rehacer' if info.video else 'Generar' }} audio y vídeo
+          {{ 'Rehacer' if info.video else 'Generar' }} audio y vídeo
         </button>
       </form>
       <p class="ayuda-campo">Crea la voz, los subtítulos, la música y la miniatura. La primera vez tarda ~1-2 minutos;
@@ -123,9 +123,9 @@
       <div class="tarjeta">
         <h2>4 · Mira el vídeo</h2>
         <video src="{{ url_for('video', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
-        <p class="ayuda-campo" style="margin-top: 10px;">📄 {{ archivo_video }}</p>
+        <p class="ayuda-campo" style="margin-top: 10px;">{{ archivo_video }}</p>
         <form method="post" action="{{ url_for('abrir_carpeta_video', nombre=nombre) }}">
-          <button class="secundario" type="submit">📂 Abrir su carpeta</button>
+          <button class="secundario" type="submit">Abrir su carpeta</button>
         </form>
       </div>
       {% if info.miniatura %}
@@ -139,7 +139,7 @@
         <h2>Publicar en YouTube Shorts</h2>
         {% set yt = datos.get('youtube') %}
         {% if yt %}
-          <p><span class="etiqueta ok">✔ subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}</p>
+          <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}</p>
           <p><a href="{{ yt.url }}" target="_blank" rel="noopener">{{ yt.url }}</a></p>
           {% if yt.privacidad == 'private' and not yt.publicar_el %}
             <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
@@ -159,7 +159,7 @@
             <label for="publicar_el">Programar <span class="ayuda-campo">— opcional: se publicará solo a esa hora</span></label>
             <input type="datetime-local" id="publicar_el" name="publicar_el">
             <div class="acciones">
-              <button type="submit">⬆ Subir a YouTube</button>
+              <button type="submit">Subir a YouTube</button>
             </div>
           </form>
           <p class="ayuda-campo">Se sube con el título, la descripción y las etiquetas del .txt, y marcado como «contenido sintético».</p>

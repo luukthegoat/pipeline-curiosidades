@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Tareas · Vídeos de historia{% endblock %}
+{% block titulo %}Tareas · Mente Inquieta{% endblock %}
 {% block contenido %}
 {% if not trabajo %}
   <h1>Tareas</h1>
@@ -63,7 +63,9 @@
     document.getElementById('estado').textContent = t.estado;
     document.getElementById('cancelar').hidden = !['en curso', 'en cola'].includes(t.estado);
     const activos = datos.trabajos.filter(x => ['en curso', 'en cola'].includes(x.estado)).length;
-    document.getElementById('nav-tarea').textContent = activos ? `Tareas (${activos} en marcha)` : 'Tareas';
+    const contador = document.getElementById('nav-contador');
+    contador.textContent = activos;
+    contador.hidden = !activos;
     const lista = document.getElementById('cola');
     lista.innerHTML = '';
     for (const x of datos.trabajos) lista.appendChild(enlace(x.titulo, '/tarea?id=' + x.id, x.id === id, x.estado));

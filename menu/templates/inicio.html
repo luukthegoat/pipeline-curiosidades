@@ -10,9 +10,9 @@
 
 <form class="tarjeta" method="post" action="{{ url_for('crear') }}">
   <div class="pestanas">
-    <label><input type="radio" name="modo" value="tema" checked onchange="cambiarModo()"><span>✍️ Tema libre</span></label>
-    <label><input type="radio" name="modo" value="fecha" onchange="cambiarModo()"><span>📅 Efemérides de una fecha</span></label>
-    <label><input type="radio" name="modo" value="diario" onchange="cambiarModo()"><span>🎭 Diario de…</span></label>
+    <label><input type="radio" name="modo" value="tema" checked onchange="cambiarModo()"><span>Tema libre</span></label>
+    <label><input type="radio" name="modo" value="fecha" onchange="cambiarModo()"><span>Efemérides de una fecha</span></label>
+    <label><input type="radio" name="modo" value="diario" onchange="cambiarModo()"><span>Diario de…</span></label>
   </div>
 
   <div id="modo-diario" hidden>
@@ -72,10 +72,10 @@
   </div>
 </form>
 
-<div class="acciones" style="justify-content: space-between; margin-bottom: 12px;">
-  <h2 style="margin: 0;">Tus guiones y vídeos</h2>
+<div class="cabecera-seccion">
+  <h2>Tus guiones y vídeos</h2>
   <form class="en-linea" method="post" action="{{ url_for('abrir_carpeta') }}">
-    <button class="secundario" type="submit">📂 Abrir carpeta de vídeos</button>
+    <button class="secundario" type="submit">Abrir carpeta de vídeos</button>
   </form>
 </div>
 
@@ -90,11 +90,11 @@
         <span class="meta">{{ g.anio }} · creado para el {{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span>
       </span>
       <span class="estados">
-        {% if g.verificado %}<span class="etiqueta ok">✔ verificado</span>
+        {% if g.verificado %}<span class="etiqueta ok">verificado</span>
         {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
         <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
         <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
-        {% if g.youtube %}<span class="etiqueta ok">YouTube ✔</span>{% endif %}
+        {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
       </span>
     </a>
   {% else %}

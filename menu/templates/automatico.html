@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Piloto automático · Vídeos de historia{% endblock %}
+{% block titulo %}Piloto automático · Mente Inquieta{% endblock %}
 {% block contenido %}
 <h1>Piloto automático</h1>
 <p class="sub">Crea un vídeo al día, lo programa en YouTube a la mejor hora y te avisa para subirlo a TikTok.</p>
@@ -15,9 +15,9 @@
       <h2>Qué crea y cuándo</h2>
       <label>Tipos de vídeo (se van turnando, uno cada día)</label>
       <div class="opciones">
-        <label><input type="checkbox" name="tipos" value="efemerides" {{ 'checked' if 'efemerides' in config.tipos }}> 📅 Efemérides del día</label>
-        <label><input type="checkbox" name="tipos" value="diario" {{ 'checked' if 'diario' in config.tipos }}> 🎭 Diarios</label>
-        <label><input type="checkbox" name="tipos" value="tema" {{ 'checked' if 'tema' in config.tipos }}> ✍️ Lista de temas</label>
+        <label><input type="checkbox" name="tipos" value="efemerides" {{ 'checked' if 'efemerides' in config.tipos }}> Efemérides del día</label>
+        <label><input type="checkbox" name="tipos" value="diario" {{ 'checked' if 'diario' in config.tipos }}> Diarios</label>
+        <label><input type="checkbox" name="tipos" value="tema" {{ 'checked' if 'tema' in config.tipos }}> Lista de temas</label>
       </div>
 
       <div class="fila">
@@ -57,17 +57,17 @@
         <div class="escena">
           <p><strong>{{ p.titulo }}</strong><br>
             <span class="ayuda-campo">{{ p.hora_bonita }} · {{ p.video }}</span>
-            {% if p.hecho %}<span class="etiqueta ok">✔ subido</span>{% elif p.avisado %}<span class="etiqueta mal">pendiente</span>{% endif %}</p>
+            {% if p.hecho %}<span class="etiqueta ok">subido</span>{% elif p.avisado %}<span class="etiqueta mal">pendiente</span>{% endif %}</p>
           {% if not p.hecho %}
             <div class="copiable"><textarea readonly rows="4">{{ p.texto_tiktok }}</textarea>
               <button class="secundario" type="button" onclick="copiar(this)">Copiar texto</button></div>
             <div class="acciones">
               <form method="post" action="{{ url_for('tiktok_carpeta', nombre=p.nombre) }}" class="en-linea">
-                <button class="secundario" type="submit">📂 Abrir carpeta</button></form>
+                <button class="secundario" type="submit">Abrir carpeta</button></form>
               <a class="boton secundario" href="https://www.tiktok.com/upload" target="_blank" rel="noopener">Abrir TikTok</a>
-              <a class="boton secundario" href="{{ url_for('tiktok_calendario', nombre=p.nombre) }}">📅 Añadir al calendario</a>
+              <a class="boton secundario" href="{{ url_for('tiktok_calendario', nombre=p.nombre) }}">Añadir al calendario</a>
               <form method="post" action="{{ url_for('tiktok_hecho', nombre=p.nombre) }}" class="en-linea">
-                <input type="hidden" name="valor" value="1"><button type="submit">✔ Ya lo he subido</button></form>
+                <input type="hidden" name="valor" value="1"><button type="submit">Ya lo he subido</button></form>
             </div>
           {% endif %}
         </div>
@@ -82,7 +82,7 @@
       <h2>Estado</h2>
       {% set crear = tareas.crear %}
       {% if crear.existe %}
-        <p><span class="etiqueta ok">✔ activado en Windows</span></p>
+        <p><span class="etiqueta ok">activado en Windows</span></p>
         <p class="ayuda-campo">Próximo vídeo: {{ crear.proxima or '—' }}<br>Última ejecución: {{ crear.ultima or '—' }}</p>
         <form method="post" action="{{ url_for('desactivar_automatico') }}">
           <button class="secundario" type="submit">Desactivar</button></form>
@@ -96,11 +96,11 @@
         <label for="tipo">Crear uno ahora</label>
         <select id="tipo" name="tipo">
           <option value="">El que toque</option>
-          <option value="efemerides">📅 Efeméride de hoy</option>
-          <option value="diario">🎭 Siguiente diario</option>
-          <option value="tema">✍️ Siguiente tema</option>
+          <option value="efemerides">Efeméride de hoy</option>
+          <option value="diario">Siguiente diario</option>
+          <option value="tema">Siguiente tema</option>
         </select>
-        <div class="acciones"><button class="secundario" type="submit">▶ Ejecutar ahora</button></div>
+        <div class="acciones"><button class="secundario" type="submit">Ejecutar ahora</button></div>
       </form>
     </div>
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Ajustes · Vídeos de historia{% endblock %}
+{% block titulo %}Ajustes · Mente Inquieta{% endblock %}
 {% block contenido %}
 <h1>Ajustes</h1>
 <p class="sub">Voz, música y conexión con YouTube.</p>
@@ -20,7 +20,7 @@
         {% endfor %}
       </select>
       <button class="secundario" type="submit" formaction="{{ url_for('muestra_voz') }}" name="voz" value=""
-              onclick="this.value = document.getElementById('VOZ_ES').value" style="margin-top: 8px;">▶ Escuchar</button>
+              onclick="this.value = document.getElementById('VOZ_ES').value" style="margin-top: 8px;">Escuchar</button>
     </div>
     <div>
       <label for="VOZ_EN">Voz para los vídeos en inglés</label>
@@ -30,7 +30,7 @@
         {% endfor %}
       </select>
       <button class="secundario" type="submit" formaction="{{ url_for('muestra_voz') }}" name="voz" value=""
-              onclick="this.value = document.getElementById('VOZ_EN').value" style="margin-top: 8px;">▶ Escuchar</button>
+              onclick="this.value = document.getElementById('VOZ_EN').value" style="margin-top: 8px;">Escuchar</button>
     </div>
   </div>
 
@@ -61,14 +61,14 @@
   <p class="ayuda-campo">Puedes añadir tus propias canciones (.mp3) a la carpeta <code>musica</code>: aparecerán aquí y en
     cada guion con su nombre de archivo. Usa solo música que tengas derecho a usar (p. ej. la biblioteca de audio de YouTube).</p>
   <form method="post" action="{{ url_for('abrir_carpeta_musica') }}">
-    <button class="secundario" type="submit">📂 Abrir la carpeta de música</button>
+    <button class="secundario" type="submit">Abrir la carpeta de música</button>
   </form>
 </div>
 
 <div class="tarjeta" id="youtube">
   <h2>YouTube Shorts</h2>
   {% if yt_canal and yt_canal.id %}
-    <p><span class="etiqueta ok">✔ conectado</span> Canal: <strong>{{ yt_canal.nombre }}</strong></p>
+    <p><span class="etiqueta ok">conectado</span> Canal: <strong>{{ yt_canal.nombre }}</strong></p>
   {% elif yt_canal %}
     <div class="aviso">Conectado, pero <strong>la cuenta autorizada no tiene canal de YouTube</strong>. Crea el canal en
       youtube.com (tu foto → «Crear un canal») o, si tu canal es una cuenta de marca, pulsa «Volver a conectar» y elige
@@ -94,9 +94,9 @@
     </li>
     <li>
       <strong>Sube aquí ese JSON:</strong>
-      {% if yt_cliente %}<span class="etiqueta ok">✔ guardado</span>{% endif %}
+      {% if yt_cliente %}<span class="etiqueta ok">guardado</span>{% endif %}
       <form method="post" action="{{ url_for('subir_credenciales') }}" enctype="multipart/form-data" style="margin-top: 8px;">
-        <label class="boton secundario" style="margin: 0;">📤 Elegir el archivo JSON
+        <label class="boton secundario" style="margin: 0;">Elegir el archivo JSON
           <input type="file" name="credenciales" accept=".json" hidden onchange="this.form.submit()">
         </label>
       </form>
