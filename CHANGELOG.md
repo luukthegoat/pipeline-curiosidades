@@ -3,6 +3,28 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.4.0] - 2026-10-23
+
+### Añadido
+- **Programados en modo mixto** ([`programados.py`](programados.py)). Programar ya no sube el vídeo al momento: queda
+  en una cola del programa, que lo sube a YouTube entre 48 h y unos minutos antes de su hora, ya programado, y YouTube
+  lo publica a su hora aunque el ordenador esté apagado.
+  - Como mucho 3 subidas en 24 h (contando las manuales), para no chocar con el límite de subidas de YouTube; si
+    YouTube frena igualmente, el vídeo sigue en cola y se reintenta solo.
+  - Si un vídeo no llegó a subirse a tiempo (ordenador apagado), se publica en cuanto se sube.
+  - Lo revisa el menú cada minuto mientras está abierto y una tarea de Windows que se reprograma sola para la próxima
+    subida y también se lanza al iniciar sesión. Aviso de Windows tras cada subida o error.
+- **Página «Programados»** en la barra lateral: todos los vídeos programados con su día, hora y estado (en cola, en
+  YouTube, con error), cuánto falta y las subidas de las últimas 24 h. Desde ahí se puede publicar uno ya, cambiarle
+  la hora o quitarlo (si ya estaba en YouTube, se cambia allí también), y ver el historial de publicados.
+- Los guiones programados se marcan en el inicio y en su página.
+- `subir_youtube.cambiar_publicacion()`: cambia la hora o la visibilidad de un vídeo ya subido.
+- Ajustes `PROGRAMADOS_ANTELACION_H` y `PROGRAMADOS_MAX_DIA` en `.env`.
+
+### Cambiado
+- En la página del vídeo, «Publicar en YouTube» pide primero **Ahora** o **Programar**.
+- «Programados y escalonados» (al publicar varios) usa la nueva cola.
+
 ## [1.3.1] - 2026-10-23
 
 ### Corregido
@@ -81,6 +103,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.4.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.1.0...v1.2.0

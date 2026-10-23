@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block titulo %}Programados · Mente Inquieta{% endblock %}
+{% block contenido %}
+<h1>Programados</h1>
+<p class="sub">El programa sube cada vídeo a YouTube hasta {{ antelacion }} h antes de su hora (como mucho {{ max_dia }} al día,
+  para no chocar con el límite de subidas) y lo deja programado: YouTube lo publica a su hora aunque tengas el
+  ordenador apagado.</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso">{{ error }}</div>{% endif %}
+{% if not yt_conectado %}
+  <div class="aviso">YouTube no está conectado: los vídeos esperarán en la cola hasta que lo conectes en
+    <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</div>
+{% endif %}
+
+{% set proximos = cola_prog.proximos %}
+{% set historial = cola_prog.historial %}
+
+<div class="resumen-prog">
+  <div><span class="cifra">{{ proximos | length }}</span><span>programados</span></div>
+  <div><span class="cifra">{{ proximos | selectattr('estado', 'equalto', 'en_youtube') | list | length }}</span><span>ya en YouTube</span></div>
+  <div><span class="cifra">{{ subidas_hoy }}<small>/{{ max_dia }}</small></span><span>subidas en 24 h</span></div>
+  <form method="post" action="{{ url_for('revisar_programados') }}" class="en-linea">
+    <button class="secundario" type="submit" title="Mira ahora si toca subir algo">Revisar ahora</button>
+  </form>
+</div>
+
+<div class="cabecera-seccion"><h2>Próximos</h2></div>
+<div class="lista">
+  {% for v in proximos %}
+    <div class="programado estado-{{ v.estado }}">
+      <div class="fecha">
+        <span class="dia-semana">{{ v.dia_semana }}</span>
+        <span class="dia">{{ v.dia }}</span>
+        <span class="mes">{{ v.mes }}</span>
+      </div>
+      <img class="mini" src="{{ url_for('miniatura', nombre=v.nombre) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="cuerpo">
+        <a class="titulo" href="{{ url_for('ver_guion', nombre=v.nombre) }}">{{ v.titulo }}</a>
+        <div class="meta"><strong>{{ v.hhmm }}</strong> · {{ v.relativo }}</div>
+        <div class="meta">
+          {% if v.estado == 'en_cola' %}
+            {% if v.en_ventana %}<span class="etiqueta">en cola</span> Se sube a YouTube en cuanto haya hueco.
+            {% else %}<span class="etiqueta">en cola</span> En el ordenador. Se sube a YouTube a partir del {{ v.sube_desde }}.{% endif %}
+          {% elif v.estado == 'subiendo' %}<span class="etiqueta mal">subiendo</span> Subiéndose a YouTube…
+          {% elif v.estado == 'en_youtube' %}<span class="etiqueta ok">en YouTube</span> Programado: se publica solo a su hora.
+            {% if v.url %}<a href="{{ v.url }}" target="_blank" rel="noopener">Ver</a>{% endif %}
+          {% elif v.estado == 'error' %}<span class="etiqueta error">error</span>{% endif %}
+        </div>
+        {% if v.mensaje %}<div class="meta nota">{{ v.mensaje }}</div>{% endif %}
+
+        <details class="cambiar-hora" id="hora-{{ loop.index }}">
+          <summary>Cambiar hora</summary>
+          <form method="post" action="{{ url_for('hora_programado', nombre=v.nombre) }}">
+            <input type="datetime-local" name="hora" value="{{ v.hora[:16] }}" required>
+            <button type="submit" class="secundario">Guardar</button>
+          </form>
+        </details>
+      </div>
+      <div class="botones">
+        {% if v.estado != 'subiendo' %}
+          <form method="post" action="{{ url_for('ya_programado', nombre=v.nombre) }}"
+                onsubmit="return confirm('¿Publicar «{{ v.titulo | replace("'", "") }}» ya mismo?')">
+            <button class="secundario" type="submit">{{ 'Reintentar ya' if v.estado == 'error' else 'Publicar ya' }}</button>
+          </form>
+          <button class="secundario" type="button" onclick="document.getElementById('hora-{{ loop.index }}').toggleAttribute('open')">Cambiar hora</button>
+          <form method="post" action="{{ url_for('quitar_programado', nombre=v.nombre) }}"
+                onsubmit="return confirm('{{ '¿Quitarlo? En YouTube quedará en privado y no se publicará.' if v.estado == 'en_youtube' else '¿Quitarlo de la cola?' }}')">
+            <button class="secundario peligro" type="submit">Quitar</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">
+      No hay nada programado.<br>
+      <span class="ayuda-campo">Programa un vídeo desde su página (Publicar en YouTube → Programar) o selecciona
+        varios en el <a href="{{ url_for('inicio') }}#guiones">inicio</a> y elige «Programados y escalonados».</span>
+    </div>
+  {% endfor %}
+</div>
+
+{% if historial %}
+  <div class="cabecera-seccion">
+    <h2>Publicados</h2>
+    <form method="post" action="{{ url_for('limpiar_programados') }}" class="en-linea">
+      <button class="secundario" type="submit">Limpiar historial</button>
+    </form>
+  </div>
+  <div class="lista">
+    {% for v in historial %}
+      <div class="programado pasado">
+        <div class="fecha">
+          <span class="dia-semana">{{ v.dia_semana }}</span>
+          <span class="dia">{{ v.dia }}</span>
+          <span class="mes">{{ v.mes }}</span>
+        </div>
+        <div class="cuerpo">
+          <a class="titulo" href="{{ url_for('ver_guion', nombre=v.nombre) }}">{{ v.titulo }}</a>
+          <div class="meta">{{ v.hhmm }} · {{ v.relativo }}{% if v.url %} · <a href="{{ v.url }}" target="_blank" rel="noopener">Ver en YouTube</a>{% endif %}</div>
+          {% if v.mensaje %}<div class="meta nota">{{ v.mensaje }}</div>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<p class="ayuda-campo" style="margin-top: 28px;">
+  Para subirlos, el ordenador tiene que encenderse (con tu sesión iniciada) al menos una vez antes de la hora de cada
+  vídeo: lo hace solo una tarea de Windows{% if proxima %} (próxima subida: {{ proxima.strftime('%d/%m a las %H:%M') }}){% endif %}, y
+  también el menú cada minuto mientras está abierto. Si un vídeo no llegó a subirse a tiempo, se publica en cuanto se
+  suba. Registro: <code>salida\_trabajo\programados.log</code>.
+</p>
+
+{% if proximos | selectattr('estado', 'equalto', 'subiendo') | list or proximos | selectattr('en_ventana') | selectattr('estado', 'equalto', 'en_cola') | list %}
+  <script>setTimeout(() => location.reload(), 15000);  // se está subiendo algo: refresca para ver cómo va</script>
+{% endif %}
+{% endblock %}

@@ -265,6 +265,27 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
     return resultado
 
 
+def cambiar_publicacion(id_video: str, privacidad: str = "public", publicar_el: str = "") -> dict:
+    """Cambia cuándo y cómo se publica un vídeo ya subido.
+
+    - con `publicar_el` (hora local): queda privado y YouTube lo publica solo a esa hora;
+    - sin ella: pasa ya a `privacidad` (public = publicarlo ahora, private = retirarlo).
+    Devuelve el estado nuevo. Se reenvían los demás ajustes de estado tal cual: si no, YouTube los reinicia.
+    """
+    youtube = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
+    respuesta = youtube.videos().list(part="status", id=id_video).execute()
+    if not respuesta.get("items"):
+        raise ValueError("ese vídeo ya no está en tu canal de YouTube")
+    actual = respuesta["items"][0]["status"]
+    editables = ("embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids", "containsSyntheticMedia")
+    estado = {k: actual[k] for k in editables if k in actual}
+    if publicar_el:
+        estado.update(privacyStatus="private", publishAt=_hora_utc(publicar_el))
+    else:
+        estado["privacyStatus"] = privacidad
+    return youtube.videos().update(part="status", body={"id": id_video, "status": estado}).execute()["status"]
+
+
 def pendientes() -> list:
     """Guiones verificados, con vídeo y aún sin subir."""
     lista = []

@@ -32,6 +32,7 @@ import subir_youtube  # noqa: E402  (subida a YouTube Shorts)
 import automatico  # noqa: E402  (piloto automático)
 import programador  # noqa: E402  (tareas del Programador de tareas de Windows)
 import recordatorio_tiktok  # noqa: E402  (texto de TikTok de cada vídeo)
+import programados  # noqa: E402  (cola de publicaciones programadas)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -160,6 +161,7 @@ def contexto_global():
     }
     return {"cola": cola, "espera_wikipedia": time.strftime("%H:%M", time.localtime(hasta)) if hasta else "",
             "cupo_groq": cupo,
+            "num_programados": len(programados.por_guion()),
             # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
             "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime)}
 
@@ -226,6 +228,7 @@ def resumen(ruta: Path) -> dict:
         "youtube": datos.get("youtube"),
         "modificado": ruta.stat().st_mtime,
         "serie": datos.get("serie"),
+        "programado": programados.por_guion().get(nombre),
     }
 
 
@@ -613,10 +616,17 @@ def subir_a_youtube(nombre):
     datos = leer(nombre)
     if not datos.get("verificado"):
         return redirect(url_for("ver_guion", nombre=nombre, mensaje="Antes de subirlo, márcalo como verificado."))
+    if request.form.get("publicar_el"):  # programado: lo apunta en la cola y lo sube el programa a su tiempo
+        if not ruta_video(datos):
+            return redirect(url_for("ver_guion", nombre=nombre, mensaje="Antes de programarlo, genera el vídeo."))
+        try:
+            programados.anadir(nombre, request.form["publicar_el"])
+        except ValueError as error:
+            return redirect(url_for("ver_guion", nombre=nombre, mensaje=f"No se ha podido programar: {error}."))
+        despertar_programados()
+        return redirect(url_for("ver_programados", mensaje=f"«{datos.get('titulo', nombre)}» programado."))
     privacidad = request.form.get("privacidad", "private")
     argumentos = [nombre, "--privacidad", privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
-    if request.form.get("publicar_el"):
-        argumentos += ["--publicar-el", request.form["publicar_el"]]
 
     def trabajo(t: Trabajo) -> bool:
         t.resultado = [nombre]
@@ -659,14 +669,26 @@ def publicar_lote():
         return redirect(url_for("inicio", error="Ninguno de los seleccionados se puede publicar: tienen que estar "
                                                 "revisados, tener vídeo y no estar ya en YouTube.", _anchor="guiones"))
 
+    if request.form.get("cuando") == "programar" and request.form.get("publicar_el"):
+        try:
+            inicio = datetime.fromisoformat(request.form["publicar_el"])
+            cada = max(0.0, float(request.form.get("cada") or 0))
+        except ValueError:
+            return redirect(url_for("inicio", error="La fecha o el intervalo no son válidos.", _anchor="guiones"))
+        fallos = []
+        for orden, g in enumerate(listos):
+            try:
+                programados.anadir(g["nombre"], (inicio + timedelta(hours=cada * orden)).strftime("%Y-%m-%dT%H:%M"))
+            except ValueError as error:
+                fallos.append(f"«{g['titulo']}»: {error}")
+        despertar_programados()
+        mensaje = f"{len(listos) - len(fallos)} vídeo(s) programados."
+        if fallos:
+            mensaje += " No se han podido programar: " + "; ".join(fallos)
+        return redirect(url_for("ver_programados", mensaje=mensaje))
+
     privacidad = request.form.get("privacidad", "private")
     argumentos = ["--privacidad", privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
-    if request.form.get("cuando") == "programar" and request.form.get("publicar_el"):
-        argumentos += ["--publicar-el", request.form["publicar_el"]]
-        try:
-            argumentos += ["--cada", str(max(0.0, float(request.form.get("cada") or 0)))]
-        except ValueError:
-            pass
 
     def trabajo(t: Trabajo) -> bool:
         t.resultado = [g["nombre"] for g in listos]
@@ -681,6 +703,79 @@ def publicar_lote():
 
     nuevo = cola.anadir(f"Publicar {len(listos)} vídeo(s) en YouTube", trabajo)
     return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+# --- Programados: la cola la lleva el programa y YouTube publica a su hora ------------------
+
+_despertador = threading.Event()
+
+
+def despertar_programados() -> None:
+    """Que la vigilancia revise la cola ya (tras programar algo), sin esperar al siguiente minuto."""
+    _despertador.set()
+
+
+def vigilar_programados() -> None:
+    """Mientras el menú está abierto, mira cada minuto si hay que subir algún vídeo programado."""
+    def bucle():
+        while True:
+            try:
+                if programados.toca_revisar():
+                    subprocess.run([sys.executable, str(RAIZ / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as error:  # noqa: BLE001 — la vigilancia no debe caerse nunca
+                print(f"[programados] {error}", file=sys.stderr)
+            _despertador.wait(60)
+            _despertador.clear()
+
+    threading.Thread(target=bucle, daemon=True, name="programados").start()
+
+
+@app.route("/programados")
+def ver_programados():
+    return render_template("programados.html", cola_prog=programados.para_mostrar(),
+                           proxima=programados.proxima_revision(), mensaje=request.args.get("mensaje", ""),
+                           error=request.args.get("error", ""), max_dia=programados.MAX_SUBIDAS_DIA,
+                           antelacion=int(programados.ANTELACION_H), subidas_hoy=programados.subidas_ultimas_24h(),
+                           yt_conectado=subir_youtube.TOKEN.exists())
+
+
+def _accion_programado(funcion, *argumentos):
+    try:
+        mensaje = funcion(*argumentos)
+    except Exception as error:  # noqa: BLE001 — se muestra en la página
+        return redirect(url_for("ver_programados", error=f"No se ha podido: {error}"))
+    despertar_programados()
+    return redirect(url_for("ver_programados", mensaje=mensaje or "Hecho."))
+
+
+@app.post("/programados/<nombre>/hora")
+def hora_programado(nombre):
+    return _accion_programado(programados.cambiar_hora, nombre, request.form.get("hora", ""))
+
+
+@app.post("/programados/<nombre>/ya")
+def ya_programado(nombre):
+    return _accion_programado(programados.publicar_ya, nombre)
+
+
+@app.post("/programados/<nombre>/quitar")
+def quitar_programado(nombre):
+    return _accion_programado(programados.quitar, nombre)
+
+
+@app.post("/programados/limpiar")
+def limpiar_programados():
+    return _accion_programado(programados.limpiar_historial)
+
+
+@app.post("/programados/revisar")
+def revisar_programados():
+    datos = programados.leer()
+    datos["siguiente_intento"] = None
+    programados.guardar(datos)
+    return _accion_programado(lambda: "Revisando la cola: si toca subir algo, empezará en unos segundos.")
 
 
 @app.post("/youtube/conectar")
@@ -914,6 +1009,7 @@ if __name__ == "__main__":
         sys.exit(0)
     paso3_video.migrar_videos_antiguos()  # vídeos hechos con la versión anterior → carpeta por tema
     musica.asegurar_pistas()
+    vigilar_programados()
     print(f"Menú abierto en {url}  (cierra esta ventana para apagarlo)")
     if "--sin-navegador" not in sys.argv:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()

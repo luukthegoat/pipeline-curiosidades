@@ -71,6 +71,7 @@ flowchart LR
 | [`imagenes_ia.py`](imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
 | [`musica.py`](musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
 | [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
+| [`programados.py`](programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |
 | [`automatico.py`](automatico.py) · [`programador.py`](programador.py) | Piloto automático diario con el Programador de tareas de Windows |
 | [`menu/`](menu/) | Menú (Flask): crear, revisar, elegir imágenes, ajustes, cola de tareas |
 | [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |

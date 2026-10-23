@@ -108,7 +108,8 @@
           {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
           <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
           <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
-          {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+          {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>
+          {% elif g.programado %}<span class="etiqueta prog">programado · {{ g.programado.bonita }}</span>{% endif %}
         </span>
       </a>
     </div>
@@ -135,12 +136,14 @@
     <label><input type="checkbox" name="verificar" value="1" onchange="actualizarOrden()"> Marcar también como revisados los que falten</label>
   </div>
 
+  <div id="vis-lote">
   <label for="privacidad-lote">Visibilidad</label>
   <select id="privacidad-lote" name="privacidad">
     <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
     <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
     <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
   </select>
+  </div>
 
   <label>Cuándo</label>
   <div class="opciones">
@@ -156,6 +159,8 @@
       <label for="cada">Y después, uno cada <span class="ayuda-campo">(horas)</span></label>
       <input type="number" id="cada" name="cada" value="24" min="0" max="168" step="0.5" oninput="actualizarOrden()">
     </div>
+    <p class="ayuda-campo" style="grid-column: 1 / -1;">Quedan en Programados: el programa los sube a YouTube poco a poco
+      antes de su hora y YouTube los publica en público a su hora, aunque el ordenador esté apagado.</p>
   </div>
 
   <div class="acciones">
@@ -203,6 +208,7 @@
     const verificar = document.querySelector('input[name=verificar]').checked;
     const programar = document.querySelector('input[name=cuando]:checked').value === 'programar';
     document.getElementById('programar').hidden = !programar;
+    document.getElementById('vis-lote').hidden = programar;
     const inicio = new Date(document.getElementById('publicar_el').value);
     const cada = parseFloat(document.getElementById('cada').value) || 0;
     const formato = new Intl.DateTimeFormat('es-ES', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
@@ -233,10 +239,11 @@
       lista.appendChild(li);
     }
     document.getElementById('caja-verificar').hidden = faltan === 0 && !verificar;
-    document.getElementById('aviso-cupo').hidden = orden <= 6;
     const boton = document.getElementById('confirmar-publicar');
     boton.disabled = orden === 0;
-    boton.textContent = orden ? `Publicar ${orden} vídeo${orden > 1 ? 's' : ''}` : 'Nada que publicar';
+    boton.textContent = !orden ? 'Nada que publicar'
+      : `${programar ? 'Programar' : 'Publicar'} ${orden} vídeo${orden > 1 ? 's' : ''}`;
+    document.getElementById('aviso-cupo').hidden = programar || orden <= 6;  // programados: se reparten solos
   }
 
   marcarTodos(false);  // empieza sin nada seleccionado (el navegador a veces recuerda la selección)

@@ -144,25 +144,56 @@
           {% if yt.privacidad == 'private' and not yt.publicar_el %}
             <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
           {% endif %}
+        {% elif info.programado %}
+          <p><span class="etiqueta {{ 'ok' if info.programado.estado == 'en_youtube' else '' }}">programado</span>
+            {{ info.programado.bonita }}</p>
+          <p class="ayuda-campo">Lo sube el programa a YouTube antes de su hora y YouTube lo publica a esa hora.
+            Cámbialo o quítalo en <a href="{{ url_for('ver_programados') }}">Programados</a>.</p>
         {% elif not yt_conectado %}
           <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
         {% elif not info.verificado %}
           <p class="ayuda-campo">Solo se pueden subir guiones verificados. Revisa los datos y márcalo como verificado.</p>
         {% else %}
           <form method="post" action="{{ url_for('subir_a_youtube', nombre=nombre) }}">
-            <label for="privacidad">Visibilidad</label>
-            <select id="privacidad" name="privacidad">
-              <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
-              <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
-              <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
-            </select>
-            <label for="publicar_el">Programar <span class="ayuda-campo">— opcional: se publicará solo a esa hora</span></label>
-            <input type="datetime-local" id="publicar_el" name="publicar_el">
+            <label>Cuándo</label>
+            <div class="opciones">
+              <label><input type="radio" name="cuando_uno" value="ahora" checked onchange="cuandoUno()"> Ahora</label>
+              <label><input type="radio" name="cuando_uno" value="programar" onchange="cuandoUno()"> Programar</label>
+            </div>
+            <div id="uno-ahora">
+              <label for="privacidad">Visibilidad</label>
+              <select id="privacidad" name="privacidad">
+                <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
+                <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+                <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+              </select>
+            </div>
+            <div id="uno-programar" hidden>
+              <label for="publicar_el">Se publica el</label>
+              <input type="datetime-local" id="publicar_el" name="publicar_el" disabled required>
+              <p class="ayuda-campo">Queda en <a href="{{ url_for('ver_programados') }}">Programados</a>. El programa lo
+                sube a YouTube antes de esa hora y YouTube lo publica en público a su hora, aunque el ordenador esté apagado.</p>
+            </div>
             <div class="acciones">
-              <button type="submit">Subir a YouTube</button>
+              <button type="submit" id="boton-uno">Subir a YouTube</button>
             </div>
           </form>
           <p class="ayuda-campo">Se sube con el título, la descripción y las etiquetas del .txt, y marcado como «contenido sintético».</p>
+          <script>
+            function cuandoUno() {
+              const programar = document.querySelector('input[name=cuando_uno]:checked').value === 'programar';
+              document.getElementById('uno-ahora').hidden = programar;
+              document.getElementById('uno-programar').hidden = !programar;
+              const campo = document.getElementById('publicar_el');
+              campo.disabled = !programar;  // desactivado no se envía: así «Ahora» sube al momento
+              if (programar && !campo.value) {
+                const d = new Date(Date.now() + 2 * 3600 * 1000);
+                d.setMinutes(0, 0, 0);
+                campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+              }
+              document.getElementById('boton-uno').textContent = programar ? 'Programar' : 'Subir a YouTube';
+            }
+          </script>
         {% endif %}
       </div>
       {% if descripcion %}

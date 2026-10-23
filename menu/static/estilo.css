@@ -572,3 +572,54 @@ main > * { animation: aparecer .35s ease both; }
 .orden li .ayuda-campo { white-space: nowrap; }
 .orden li.saltado { opacity: .55; counter-increment: none; }
 .orden li.saltado::before { content: "–"; }
+
+/* Programados */
+.resumen-prog { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; padding: 16px 20px; margin-bottom: 8px;
+  border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); box-shadow: var(--sombra); }
+.resumen-prog > div { display: flex; flex-direction: column; line-height: 1.2; }
+.resumen-prog .cifra { font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
+.resumen-prog .cifra small { font-size: 14px; color: var(--tenue); font-weight: 500; }
+.resumen-prog > div span:last-child { font-size: 12px; color: var(--suave); }
+.resumen-prog form { margin-left: auto; }
+
+.programado {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 14px 16px; border: 1px solid var(--borde); border-radius: var(--radio);
+  background: var(--superficie); box-shadow: var(--sombra);
+}
+.programado .fecha {
+  flex: none; width: 54px; padding: 6px 0; border-radius: 12px; text-align: center;
+  background: var(--superficie-2); display: flex; flex-direction: column; line-height: 1.15;
+}
+.programado .dia-semana, .programado .mes { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+.programado .dia { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.programado.estado-en_youtube .fecha { background: var(--ok-fondo); }
+.programado.estado-en_youtube .fecha .dia { color: var(--ok); }
+.programado.estado-error { border-color: color-mix(in srgb, var(--error) 45%, var(--borde)); }
+.programado .mini { width: 38px; height: 66px; }
+.programado .cuerpo { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.programado .titulo { font-weight: 600; color: var(--texto); text-decoration: none; }
+.programado .titulo:hover { text-decoration: underline; }
+.programado .meta { font-size: 13px; color: var(--suave); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.programado .meta strong { color: var(--texto); font-weight: 600; }
+.programado .nota { font-size: 12.5px; }
+.programado.estado-error .nota { color: var(--error); }
+.programado .botones { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.programado .botones form { margin: 0; }
+.programado .botones button { height: 34px; padding: 0 12px; font-size: 13px; }
+.programado.pasado { opacity: .75; box-shadow: none; padding: 10px 16px; align-items: center; }
+.programado.pasado .fecha { width: 46px; }
+.programado.pasado .dia { font-size: 18px; }
+.cambiar-hora summary { display: none; }
+.cambiar-hora form { display: flex; gap: 8px; margin-top: 8px; max-width: 360px; }
+.cambiar-hora input { height: 34px; padding: 4px 10px; }
+.cambiar-hora button { height: 34px; }
+.etiqueta.error { background: color-mix(in srgb, var(--error) 14%, transparent); color: var(--error); }
+button.peligro:hover { color: var(--error); border-color: color-mix(in srgb, var(--error) 50%, var(--borde)); }
+@media (max-width: 700px) {
+  .programado { flex-wrap: wrap; }
+  .programado .botones { width: 100%; justify-content: flex-start; }
+  .programado .mini { display: none; }
+}
+.contador.suave { background: var(--superficie-2); color: var(--suave); }
+.etiqueta.prog { background: var(--acento-suave); color: var(--acento-tinta); }

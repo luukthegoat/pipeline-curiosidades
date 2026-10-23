@@ -96,6 +96,7 @@ def pantalla_de_carga() -> str:
 def arrancar_servidor() -> bool:
     menu.paso3_video.migrar_videos_antiguos()
     menu.musica.asegurar_pistas()
+    menu.vigilar_programados()  # sube los vídeos programados cuando toca
     threading.Thread(
         target=lambda: menu.app.run(host="127.0.0.1", port=PUERTO, debug=False, threaded=True),
         daemon=True,
