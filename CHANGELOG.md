@@ -3,6 +3,12 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.8.1] - 2026-10-23
+
+### Corregido
+- Un corte breve de internet al escribir los guiones hacía fallar todas las partes de golpe («Failed to resolve
+  api.groq.com»). Ahora se reintenta solo durante casi 2 minutos antes de dar el error, con un mensaje claro.
+
 ## [1.8.0] - 2026-10-23
 
 ### Añadido
@@ -167,6 +173,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.8.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
 [1.6.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0

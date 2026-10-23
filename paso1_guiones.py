@@ -302,6 +302,22 @@ def _apuntar_sin_cupo(modelo: str, segundos: float) -> float:
     return cupos[modelo]
 
 
+ESPERAS_RED = (5, 15, 30, 60)  # s entre reintentos si se corta internet (casi 2 minutos en total)
+
+
+def _post_con_reintentos(url: str, cabeceras: dict, carga: dict) -> requests.Response:
+    """POST que aguanta cortes breves de red (DNS que no responde, wifi que se cae, tiempo agotado)."""
+    for espera in (*ESPERAS_RED, None):
+        try:
+            return requests.post(url, headers=cabeceras, json=carga, timeout=120)
+        except (requests.ConnectionError, requests.Timeout) as error:
+            if espera is None:
+                raise RuntimeError("no hay conexión con Groq (¿se ha caído internet?). Vuelve a lanzarlo cuando "
+                                   "vuelva la conexión") from error
+            print(f"    sin conexión con Groq; reintento en {espera} s…", flush=True)
+            time.sleep(espera)
+
+
 def _llamar_modelo(api_key: str, modelo: str, sistema: str, usuario: str) -> str:
     carga = {
         "model": modelo,
@@ -315,7 +331,7 @@ def _llamar_modelo(api_key: str, modelo: str, sistema: str, usuario: str) -> str
         del carga["reasoning_effort"]  # otros modelos no aceptan este parámetro
     cabeceras = {"Authorization": f"Bearer {api_key}"}
     for intento in range(4):
-        respuesta = requests.post(URL_GROQ, headers=cabeceras, json=carga, timeout=120)
+        respuesta = _post_con_reintentos(URL_GROQ, cabeceras, carga)
         if respuesta.status_code == 429:
             try:
                 espera = float(respuesta.headers.get("retry-after", 10))
