@@ -2,7 +2,8 @@
 {% block titulo %}Piloto automático · Mente Inquieta{% endblock %}
 {% block contenido %}
 <h1>Piloto automático</h1>
-<p class="sub">Crea un vídeo al día, lo programa en YouTube a la mejor hora y te avisa para subirlo a TikTok.</p>
+<p class="sub">Crea un vídeo al día, lo deja en <a href="{{ url_for('ver_programados') }}">Programados</a> a la mejor
+  hora para su tipo y te avisa para subirlo a TikTok.</p>
 {% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
 {% if not yt_conectado %}
   <div class="aviso">YouTube no está conectado: los vídeos se crearán, pero no se podrán programar.
@@ -26,14 +27,18 @@
           <input type="text" id="hora_creacion" name="hora_creacion" value="{{ config.hora_creacion }}" pattern="\d{2}:\d{2}">
         </div>
         <div>
-          <label for="hora_youtube">Publicar en YouTube a las</label>
+          <label for="hora_youtube">Hora fija de YouTube <span class="ayuda-campo">— si no usas la recomendada</span></label>
           <input type="text" id="hora_youtube" name="hora_youtube" value="{{ config.hora_youtube }}" pattern="\d{2}:\d{2}">
         </div>
       </div>
       <label for="hora_tiktok">Recordatorio de TikTok a las</label>
       <input type="text" id="hora_tiktok" name="hora_tiktok" value="{{ config.hora_tiktok }}" pattern="\d{2}:\d{2}" style="max-width: 160px;">
-      <p class="ayuda-campo">Para público de España suelen funcionar las 13:00-15:00 y las 20:00-22:00. Cuando tengas
-        datos, mira en YouTube Studio → Estadísticas → «Cuándo están conectados tus espectadores» y ajústalo.</p>
+      <div class="opciones" style="margin-top: 12px;">
+        <label><input type="checkbox" name="hora_recomendada" {{ 'checked' if config.get('hora_recomendada', True) }}>
+          Publicar a la hora recomendada para su tipo (efemérides por la mañana de ese día, humor por la noche…)</label>
+      </div>
+      <p class="ayuda-campo">Las horas recomendadas no pisan lo que ya tienes programado. Cuando tengas datos, compáralas
+        con YouTube Studio → Estadísticas → «Cuándo están conectados tus espectadores».</p>
 
       <label for="personajes">Personajes de los diarios <span class="ayuda-campo">— uno por línea; se turnan y cada uno avanza un día</span></label>
       <textarea id="personajes" name="personajes" rows="5">{{ config.personajes | join('\n') }}</textarea>
@@ -46,7 +51,7 @@
         <label><input type="checkbox" name="imagenes_ia_en_diarios" {{ 'checked' if config.imagenes_ia_en_diarios }}>
           Imágenes generadas con IA en los diarios (Pollinations)</label>
         <label><input type="checkbox" name="solo_publicar_sin_dudas" {{ 'checked' if config.solo_publicar_sin_dudas }}>
-          Si el verificador marca frases dudosas, subir en privado y avisarme (recomendado)</label>
+          Si el verificador marca frases dudosas, no programarlo: dejarlo en Pendientes y avisarme (recomendado)</label>
       </div>
       <div class="acciones"><button type="submit">Guardar</button></div>
     </form>
@@ -81,9 +86,16 @@
     <div class="tarjeta">
       <h2>Estado</h2>
       {% set crear = tareas.crear %}
+      {% if crear.existe and not config.activo %}
+        <div class="aviso">La tarea de Windows existe, pero el piloto está desactivado en la configuración: no creará
+          nada. Pulsa «Desactivar» y luego «Activar» para dejarlo bien.</div>
+      {% endif %}
       {% if crear.existe %}
         <p><span class="etiqueta ok">activado en Windows</span></p>
         <p class="ayuda-campo">Próximo vídeo: {{ crear.proxima or '—' }}<br>Última ejecución: {{ crear.ultima or '—' }}</p>
+        {% if crear.ultima and crear.resultado not in (0, '0') %}
+          <div class="aviso">La última ejecución terminó con error (código {{ crear.resultado }}): mira el registro de abajo.</div>
+        {% endif %}
         <form method="post" action="{{ url_for('desactivar_automatico') }}">
           <button class="secundario" type="submit">Desactivar</button></form>
       {% else %}
@@ -110,9 +122,12 @@
         <li>Mientras Google no audite tu proyecto, YouTube deja <strong>en privado</strong> todo lo que se sube por la
           API, aunque esté programado: tendrás que hacerlos públicos en YouTube Studio. Para que se publiquen solos,
           solicita la auditoría en el formulario «YouTube API Services - Audit and Quota Extension».</li>
-        <li>Los vídeos se publican <strong>sin revisión</strong>. Mira el registro y los vídeos cuando puedas: si ves un
-          error, bórralo o corrígelo en YouTube Studio.</li>
-        <li>El ordenador tiene que estar encendido (o encenderse) a esas horas, con tu sesión iniciada.</li>
+        <li>Los vídeos sin frases dudosas se programan <strong>sin revisión manual</strong> (se marcan como revisados
+          automáticamente). Míralos en <a href="{{ url_for('ver_programados') }}">Programados</a> antes de su hora: desde
+          ahí puedes cambiarles la hora o quitarlos.</li>
+        <li>El ordenador tiene que estar encendido (o encenderse) a la hora de crear el vídeo, con tu sesión iniciada;
+          si estaba apagado, se crea en cuanto lo enciendas. La subida a YouTube la hace la cola de Programados.</li>
+        <li>«Ejecutar ahora» funciona aunque el piloto esté desactivado.</li>
       </ul>
     </div>
 

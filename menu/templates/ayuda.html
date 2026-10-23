@@ -26,6 +26,44 @@
 </div>
 
 <div class="tarjeta">
+  <h2>Borrar un vídeo</h2>
+  <p>Si un vídeo no te gusta, ábrelo y pulsa <strong>Borrar…</strong> (al final de su página), o «Borrar» en
+    <a href="{{ url_for('ver_pendientes') }}">Pendientes</a>. Antes de borrar te enseña la lista exacta de lo que se va:
+    el guion, la voz y los subtítulos, las escenas montadas, las imágenes (las de IA y las que subiste), el vídeo, su
+    miniatura y sus textos. También lo quita de Programados y de los recordatorios de TikTok, y si la carpeta del tema
+    se queda vacía, la borra.</p>
+  <p class="ayuda-campo">Todo va a la <strong>Papelera de reciclaje</strong> de Windows, así que se puede recuperar. Si
+    el vídeo ya está en YouTube, puedes marcar «Borrarlo también de YouTube» (eso no se puede deshacer); si estaba
+    programado allí y aún no se ha publicado, viene marcado, porque si no se publicaría igualmente. No se puede borrar
+    mientras haya tareas en marcha.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>Pendientes y horas recomendadas</h2>
+  <p>En <a href="{{ url_for('ver_pendientes') }}">Pendientes</a> están todos los vídeos que aún no están en YouTube ni
+    programados, en dos pasos:</p>
+  <ol class="pasos">
+    <li><strong>Por revisar:</strong> con su tipo y las frases dudosas que marcó el verificador. «Revisar» abre el guion;
+      «Marcar revisado» lo da por bueno.</li>
+    <li><strong>Listos para programar:</strong> cada uno con su <strong>hora recomendada</strong> y el motivo. Puedes
+      cambiarla y pulsar «Programar», o «Programar todos a su hora recomendada».</li>
+  </ol>
+  <p>Las horas recomendadas dependen del tipo de vídeo:</p>
+  <ul>
+    <li><strong>Efemérides:</strong> el mismo día del aniversario, por la mañana (9:00; 10:30 en fin de semana).</li>
+    <li><strong>Series:</strong> una parte al día, a la misma hora (por la noche), para que quien vio una vuelva a por la siguiente.</li>
+    <li><strong>Humor («Diario de…»):</strong> por la noche (20:30; 20:00 en fin de semana).</li>
+    <li><strong>Temas serios o de misterio:</strong> por la noche.</li>
+    <li><strong>Divulgación general:</strong> a mediodía (13:30; 12:30 en fin de semana) o por la noche.</li>
+    <li><strong>En inglés:</strong> a las 19:00 de España (la hora de comer en EE. UU.).</li>
+  </ul>
+  <p class="ayuda-campo">Nunca más de 2 vídeos al día, separados al menos 3 horas y sin pisar lo ya programado. Son reglas
+    generales para Shorts con público de España: cuando tu canal tenga datos, compáralas con YouTube Studio →
+    Estadísticas → «Cuándo están conectados tus espectadores». También salen al programar un vídeo desde su página y en
+    «Publicar varios» → «A las horas recomendadas».</p>
+</div>
+
+<div class="tarjeta">
   <h2>Programados</h2>
   <p>Al publicar puedes elegir <strong>Programar</strong> (en la página del vídeo) o <strong>Programados y escalonados</strong>
     (al publicar varios desde el inicio). El vídeo queda en <a href="{{ url_for('ver_programados') }}">Programados</a>:</p>
@@ -61,11 +99,14 @@
 <div class="tarjeta">
   <h2>Piloto automático</h2>
   <p>En <a href="{{ url_for('piloto_automatico') }}">Piloto automático</a> lo activas y Windows crea un vídeo cada día
-    (turnando efemérides, diarios y tu lista de temas), lo programa en YouTube a la hora que elijas y te avisa con una
-    notificación para subirlo a TikTok: te copia el texto y abre su carpeta. Allí también marcas los de TikTok como
-    subidos o los añades a tu calendario del móvil.</p>
-  <p class="ayuda-campo">Los vídeos se publican sin revisión, salvo que el verificador marque frases dudosas (entonces
-    quedan en privado y te avisa). Mientras Google no audite tu proyecto, YouTube los deja en privado igualmente.</p>
+    (turnando efemérides, diarios y tu lista de temas), lo deja en <a href="{{ url_for('ver_programados') }}">Programados</a>
+    a la hora recomendada para su tipo (o a una hora fija) y te avisa con una notificación para subirlo a TikTok: te
+    copia el texto y abre su carpeta. Allí también marcas los de TikTok como subidos o los añades a tu calendario del
+    móvil. «Ejecutar ahora» crea uno al momento, aunque el piloto esté desactivado.</p>
+  <p class="ayuda-campo">Los vídeos sin frases dudosas se programan sin revisión manual (míralos en Programados antes de
+    su hora). Si el verificador marca frases dudosas, no se programan: quedan en
+    <a href="{{ url_for('ver_pendientes') }}">Pendientes</a> y te avisa. Las efemérides que ya tenías hechas no se
+    repiten: coge el siguiente hecho del día.</p>
 </div>
 
 <div class="tarjeta">

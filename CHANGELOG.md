@@ -3,6 +3,53 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.7.0] - 2026-10-23
+
+### Corregido
+- **Piloto automático:**
+  - La página tardaba unos 8 s en abrirse (consultaba las tareas de Windows con PowerShell) y parecía colgada; ahora
+    usa `schtasks` y se abre al momento. Lo mismo al guardar la configuración.
+  - «Ejecutar ahora» no hacía nada si el piloto estaba desactivado; ahora crea el vídeo siempre.
+  - Si la efeméride del día ya existía (hecha a mano), la reescribía —perdiendo la revisión— y además daba el día por
+    fallido. Ahora se salta las que ya tienen guion y coge el siguiente hecho del día (`paso1_guiones.py --sin-repetir`).
+  - Subía directamente a YouTube y chocaba con el límite diario de subidas. Ahora deja el vídeo en Programados, que lo
+    sube a su tiempo sin pasarse del límite.
+  - Con frases dudosas subía un borrador privado (gastando una subida); ahora lo deja en Pendientes y avisa.
+  - El estado avisa si la última ejecución falló o si la tarea de Windows y la configuración no coinciden.
+
+### Añadido
+- Piloto automático: opción de publicar a la hora recomendada para el tipo de vídeo (activada por defecto).
+
+## [1.6.0] - 2026-10-23
+
+### Añadido
+- **Borrar un vídeo y todo lo suyo** ([`borrar.py`](borrar.py)), desde su página («Borrar…») o desde Pendientes:
+  guion, voz y subtítulos, escenas en caché, imágenes de IA y propias, vídeo, miniatura y textos; también lo quita de
+  Programados y de los recordatorios de TikTok, y borra la carpeta del tema si se queda vacía.
+  - Todo va a la Papelera de reciclaje de Windows (se puede recuperar).
+  - Antes de borrar se ve la lista exacta de lo que se va.
+  - Opción de borrarlo también de YouTube; viene marcada si estaba programado allí y aún no se había publicado.
+  - No deja borrar mientras haya tareas en marcha ni mientras se está subiendo a YouTube.
+
+### Corregido
+- Un mensaje con flechas o acentos en una consola que no es UTF-8 ya no impide abrir el menú.
+
+## [1.5.0] - 2026-10-23
+
+### Añadido
+- **Página «Pendientes»** en la barra lateral, con contador: todos los vídeos que aún no están en YouTube ni programados.
+  - **Por revisar:** tipo de vídeo, frases dudosas del verificador, «Revisar» y «Marcar revisado» (pide confirmación
+    si hay dudas).
+  - **Listos para programar:** cada uno con su hora recomendada y el motivo, editable, y «Programar todos a su hora
+    recomendada».
+  - **Revisados sin vídeo:** con un botón para generarlo.
+- **Horas recomendadas según el tipo de vídeo** ([`horarios.py`](horarios.py)): efemérides el mismo día del
+  aniversario por la mañana, series una parte al día a la misma hora, humor y temas serios por la noche, divulgación a
+  mediodía o por la noche y vídeos en inglés a la hora de comer en EE. UU. Como mucho 2 al día, separados 3 h y sin
+  pisar lo ya programado; si la franja ideal está ocupada, lo dice.
+- La hora recomendada sale también al programar desde la página del vídeo y como opción «A las horas recomendadas» al
+  publicar varios desde el inicio (con el motivo de cada una al pasar el ratón).
+
 ## [1.4.0] - 2026-10-23
 
 ### Añadido
@@ -103,6 +150,9 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.7.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
+[1.6.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
+[1.5.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
 [1.4.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.2.0...v1.3.0

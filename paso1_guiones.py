@@ -751,6 +751,8 @@ def main(argv=None) -> int:
     parser.add_argument("--cantidad", type=int, default=3, help="número de eventos (por defecto 3)")
     parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (por defecto hoy)")
     parser.add_argument("--idiomas", default="es,en", help="idiomas separados por comas: es,en")
+    parser.add_argument("--sin-repetir", action="store_true",
+                        help="efemérides: salta los eventos que ya tienen guion (no los reescribe) y coge el siguiente")
     args = parser.parse_args(argv)
 
     api_key = os.getenv("GROQ_API_KEY", "")
@@ -789,9 +791,18 @@ def main(argv=None) -> int:
             eventos = elegir_eventos(
                 descargar_efemerides(args.fecha, "selected"),
                 descargar_efemerides(args.fecha, "events"),
-                args.cantidad,
+                args.cantidad + (20 if args.sin_repetir else 0),
                 date.today().year,
             )
+            if args.sin_repetir:  # los que ya tienen guion (hecho a mano o el día anterior), fuera
+                idiomas = [i.strip() for i in args.idiomas.split(",") if i.strip()]
+                existe = lambda e: any(  # noqa: E731
+                    (CARPETA_SALIDA / f"{args.fecha.isoformat()}_{e['year']}_{slug(e['text'])}_{i}.json").exists()
+                    for i in idiomas)
+                repetidos = [e for e in eventos if existe(e)]
+                for e in repetidos:
+                    print(f"  ya tiene guion, se salta: {e['year']} · {e['text'][:70]}")
+                eventos = [e for e in eventos if not existe(e)][:args.cantidad]
             if not eventos:
                 print("[error] No hay eventos con material suficiente para esa fecha", file=sys.stderr)
                 return 1

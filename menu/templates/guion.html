@@ -170,7 +170,12 @@
             </div>
             <div id="uno-programar" hidden>
               <label for="publicar_el">Se publica el</label>
-              <input type="datetime-local" id="publicar_el" name="publicar_el" disabled required>
+              <input type="datetime-local" id="publicar_el" name="publicar_el" disabled required
+                     data-recomendada="{{ recomendada.hora if recomendada else '' }}">
+              {% if recomendada %}
+                <div class="recomendada"><strong>Recomendada: {{ recomendada.bonita }}</strong><span>{{ recomendada.motivo }}</span>
+                  <button type="button" class="enlace" onclick="const c = document.getElementById('publicar_el'); c.value = c.dataset.recomendada">Usar esta hora</button></div>
+              {% endif %}
               <p class="ayuda-campo">Queda en <a href="{{ url_for('ver_programados') }}">Programados</a>. El programa lo
                 sube a YouTube antes de esa hora y YouTube lo publica en público a su hora, aunque el ordenador esté apagado.</p>
             </div>
@@ -186,6 +191,7 @@
               document.getElementById('uno-programar').hidden = !programar;
               const campo = document.getElementById('publicar_el');
               campo.disabled = !programar;  // desactivado no se envía: así «Ahora» sube al momento
+              if (programar && !campo.value && campo.dataset.recomendada) campo.value = campo.dataset.recomendada;
               if (programar && !campo.value) {
                 const d = new Date(Date.now() + 2 * 3600 * 1000);
                 d.setMinutes(0, 0, 0);
@@ -205,6 +211,47 @@
         </div>
       {% endif %}
     {% endif %}
+
+    <div class="tarjeta borrar">
+      <h2>Borrar este vídeo</h2>
+      <p class="ayuda-campo">Si no te gusta el contenido, bórralo con todo lo que se generó para él (guion, voz,
+        imágenes, vídeo, miniatura y textos). Va a la Papelera de reciclaje de Windows.</p>
+      <button class="secundario peligro" type="button" onclick="document.getElementById('dialogo-borrar').showModal()">Borrar…</button>
+    </div>
   </div>
 </div>
+
+<dialog id="dialogo-borrar" class="dialogo">
+  <form method="post" action="{{ url_for('borrar_guion', nombre=nombre) }}">
+    <h2>¿Borrar «{{ datos.titulo }}»?</h2>
+    <p class="ayuda-campo" style="margin-top: 0;">Se moverá a la <strong>Papelera de reciclaje</strong> de Windows (desde ahí
+      se puede recuperar):</p>
+    <ul class="lista-borrar">
+      {% for a in borrado.archivos %}<li><code>{{ a }}</code></li>{% endfor %}
+    </ul>
+    {% if borrado.programado %}<p class="ayuda-campo">También se quitará de <strong>Programados</strong>.</p>{% endif %}
+    {% if borrado.youtube_id %}
+      <div class="aviso">
+        {% if borrado.pendiente_de_publicar %}
+          Está <strong>programado en YouTube</strong> y aún no se ha publicado: si no lo borras allí, se publicará igualmente.
+        {% else %}
+          Está <strong>publicado en YouTube</strong> (<a href="{{ borrado.youtube_url }}" target="_blank" rel="noopener">verlo</a>).
+        {% endif %}
+      </div>
+      <div class="opciones">
+        <label><input type="checkbox" name="youtube" value="1" {{ 'checked' if borrado.pendiente_de_publicar }}>
+          Borrarlo también de YouTube <span class="ayuda-campo">(no se puede deshacer)</span></label>
+      </div>
+    {% endif %}
+    <div class="acciones">
+      <button class="boton-peligro" type="submit">Borrar</button>
+      <button class="secundario" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  document.getElementById('dialogo-borrar').addEventListener('click', e => {
+    if (e.target.id === 'dialogo-borrar') e.target.close();
+  });
+</script>
 {% endblock %}

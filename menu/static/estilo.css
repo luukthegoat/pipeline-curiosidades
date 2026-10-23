@@ -623,3 +623,40 @@ button.peligro:hover { color: var(--error); border-color: color-mix(in srgb, var
 }
 .contador.suave { background: var(--superficie-2); color: var(--suave); }
 .etiqueta.prog { background: var(--acento-suave); color: var(--acento-tinta); }
+
+/* Pendientes y horas recomendadas */
+.pendiente {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border: 1px solid var(--borde); border-radius: var(--radio);
+  background: var(--superficie); box-shadow: var(--sombra);
+}
+.pendiente .cuerpo { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.pendiente .titulo { font-weight: 600; color: var(--texto); text-decoration: none; }
+.pendiente .titulo:hover { text-decoration: underline; }
+.pendiente .meta { font-size: 13px; color: var(--suave); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pendiente .botones { display: flex; gap: 6px; }
+.pendiente .botones form, .pendiente > form { margin: 0; }
+.pendiente .boton, .pendiente button { height: 34px; padding: 0 14px; font-size: 13px; }
+.programar-uno { display: flex; gap: 6px; align-items: center; }
+.programar-uno input { width: auto; height: 34px; padding: 4px 10px; font-size: 13px; }
+.recomendada {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 6px;
+  padding: 8px 12px; border-radius: var(--radio-sm); background: var(--acento-suave); font-size: 13px;
+}
+.recomendada strong { color: var(--acento-tinta); font-weight: 600; }
+.recomendada span { color: var(--suave); }
+button.enlace { height: auto; padding: 0; background: none; border: 0; color: var(--acento-tinta); font-size: 13px;
+  font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .pendiente { flex-wrap: wrap; }
+  .pendiente .mini { display: none; }
+  .programar-uno, .pendiente .botones { width: 100%; }
+}
+
+/* Borrar un vídeo */
+.tarjeta.borrar { border-style: dashed; box-shadow: none; }
+.lista-borrar { margin: 0 0 14px; padding: 10px 14px 10px 30px; max-height: 200px; overflow: auto;
+  border-radius: var(--radio-sm); background: var(--superficie-2); font-size: 12px; }
+.lista-borrar li { margin: 2px 0; }
+.lista-borrar code { background: none; padding: 0; font-size: 12px; word-break: break-all; }
+.boton-peligro, button.boton-peligro { background: var(--error); color: #fff; }

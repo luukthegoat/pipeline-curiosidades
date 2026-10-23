@@ -4,15 +4,17 @@ Cada ejecución:
   1. Elige qué toca, rotando entre los tipos activos: efemérides del día, el siguiente día de un
      diario (rotando personajes) o el siguiente tema de la lista.
   2. Escribe el guion (paso 1), genera imágenes con IA si es un diario, la voz (paso 2) y el vídeo (paso 3).
-  3. Lo sube a YouTube programado para la hora de publicación. Salvaguarda: si el verificador encontró
-     frases sin respaldo, se sube en PRIVADO sin programar y te avisa para revisarlo (desactivable).
+  3. Lo deja en «Programados» (la cola del programa, que lo sube a YouTube antes de su hora sin pasarse del
+     límite diario) a la hora recomendada para su tipo o a la hora fija de la configuración. Salvaguarda: si el
+     verificador encontró frases sin respaldo, NO se programa: queda en «Pendientes» y te avisa (desactivable).
   4. Apunta el recordatorio para subirlo a mano a TikTok y te avisa con una notificación de Windows.
 
 La configuración está en automatico.json (se edita desde el menú → Piloto automático).
-Lo ejecuta Windows cada día (Programador de tareas) o tú con «Ejecutar ahora».
+Lo ejecuta Windows cada día (Programador de tareas) o tú con «Ejecutar ahora» (funciona aunque esté desactivado).
 
 Uso:
-    python automatico.py                 # crea el vídeo que toca
+    python automatico.py                 # crea el vídeo que toca (si el piloto está activado)
+    python automatico.py --ahora         # lo crea aunque el piloto esté desactivado
     python automatico.py --tipo diario   # fuerza un tipo (efemerides, diario o tema)
 """
 import argparse
@@ -46,6 +48,7 @@ CONFIG_INICIAL = {
     "hora_tiktok": "21:00",
     "imagenes_ia_en_diarios": True,
     "solo_publicar_sin_dudas": True,
+    "hora_recomendada": True,  # publicar a la hora recomendada para su tipo (si no, a «hora_youtube»)
     "personajes": [
         "soldado romano en Vindolanda",
         "médico de la peste en Venecia",
@@ -115,7 +118,8 @@ def elegir_trabajo(config: dict, estado: dict, forzar_tipo: str = "") -> tuple:
         tema = temas[0]
         return tipo, ["--tema", tema, "--idiomas", idioma], f"tema «{tema}»"
     hoy = date.today().isoformat()
-    return "efemerides", ["--fecha", hoy, "--cantidad", "1", "--idiomas", idioma], f"efeméride del {hoy}"
+    return "efemerides", ["--fecha", hoy, "--cantidad", "1", "--idiomas", idioma, "--sin-repetir"], \
+        f"efeméride del {hoy}"
 
 
 def hora_de_publicacion(config: dict) -> datetime:
@@ -167,9 +171,9 @@ def crear_video(config: dict, forzar_tipo: str = "") -> bool:
     tipo, argumentos, descripcion = elegir_trabajo(config, estado, forzar_tipo)
     registrar(f"=== Piloto automático: {descripcion} ===")
 
-    antes = set(paso3_video.CARPETA_GUIONES.glob("*.json"))
+    inicio = datetime.now().timestamp() - 1
     codigo = ejecutar("paso1_guiones.py", *argumentos)
-    nuevos = sorted(set(paso3_video.CARPETA_GUIONES.glob("*.json")) - antes)
+    nuevos = sorted(r for r in paso3_video.CARPETA_GUIONES.glob("*.json") if r.stat().st_mtime >= inicio)
     if codigo == 1 or not nuevos:
         registrar("No se ha podido crear el guion (¿cupo de Groq agotado o Wikipedia en espera?).")
         avisos.notificar("Mente Inquieta · no se ha creado el vídeo de hoy",
@@ -194,35 +198,55 @@ def crear_video(config: dict, forzar_tipo: str = "") -> bool:
 
     guion = json.loads(ruta.read_text(encoding="utf-8"))
     dudas = len(guion.get("sin_respaldo", []))
-    publicacion = hora_de_publicacion(config)
-    import subir_youtube  # aquí: si YouTube no está conectado, lo demás funciona igual
-    try:
-        if dudas and config.get("solo_publicar_sin_dudas", True):
-            subir_youtube.subir(str(ruta), borrador=True)
-            registrar(f"Subido en PRIVADO: el verificador marcó {dudas} frase(s) dudosa(s). Revísalo antes de publicar.")
-            avisos.notificar("Mente Inquieta · revisa el vídeo de hoy",
-                             f"«{guion.get('titulo', '')}» tiene {dudas} frase(s) dudosa(s): está en privado en YouTube.")
-        else:
-            subir_youtube.subir(str(ruta), "private", publicacion.strftime("%Y-%m-%dT%H:%M"), automatico=True)
-            registrar(f"Programado en YouTube para el {publicacion:%d/%m a las %H:%M}.")
-            avisos.notificar("Mente Inquieta · vídeo de hoy listo",
-                             f"«{guion.get('titulo', '')}» se publica en YouTube a las {publicacion:%H:%M}.")
-    except Exception as error:  # el vídeo está hecho aunque falle YouTube: se sube a mano desde el menú
-        registrar(f"No se pudo subir a YouTube: {error}")
-        avisos.notificar("Mente Inquieta · no se pudo subir a YouTube",
-                         "El vídeo está hecho; súbelo desde el menú. Detalle en el registro.")
+    publicacion = programar(nombre, ruta, guion, dudas, config)
 
     apuntar_tiktok(nombre, json.loads(ruta.read_text(encoding="utf-8")), hora_tiktok(config, publicacion))
     registrar(f"Recordatorio de TikTok para las {hora_tiktok(config, publicacion):%H:%M}.")
     return True
 
 
+def programar(nombre: str, ruta: Path, guion: dict, dudas: int, config: dict) -> datetime:
+    """Deja el vídeo en la cola de «Programados» (o en «Pendientes» si tiene dudas). Devuelve la hora prevista."""
+    titulo = guion.get("titulo", nombre)
+    publicacion = hora_de_publicacion(config)
+    if dudas and config.get("solo_publicar_sin_dudas", True):
+        registrar(f"NO se programa: el verificador marcó {dudas} frase(s) dudosa(s). Revísalo en Pendientes.")
+        avisos.notificar("Mente Inquieta · revisa el vídeo de hoy",
+                         f"«{titulo}» tiene {dudas} frase(s) dudosa(s): revísalo y prográmalo desde Pendientes.")
+        return publicacion
+
+    import horarios
+    import programados
+    if config.get("hora_recomendada", True):
+        recomendada = horarios.recomendar([nombre]).get(nombre)
+        if recomendada:
+            publicacion = datetime.fromisoformat(recomendada["hora"])
+            registrar(f"Hora recomendada: {recomendada['bonita']} ({recomendada['motivo']})")
+    # El verificador no encontró nada raro y tú pediste publicar sin revisión manual: se da por revisado.
+    guion["verificado"], guion["verificado_automatico"] = True, True
+    ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        programados.anadir(nombre, publicacion.strftime("%Y-%m-%dT%H:%M"))
+        programados.revisar()  # si ya toca subirlo (falta poco), que se suba ahora
+    except Exception as error:  # noqa: BLE001 — el vídeo está hecho: se programa a mano desde el menú
+        registrar(f"No se pudo programar: {error}")
+        avisos.notificar("Mente Inquieta · no se pudo programar el vídeo",
+                         "El vídeo está hecho; prográmalo desde Pendientes. Detalle en el registro.")
+        return publicacion
+    registrar(f"Programado para el {publicacion:%d/%m a las %H:%M} (en «Programados»: se sube a YouTube antes "
+              "de esa hora y YouTube lo publica a su hora).")
+    avisos.notificar("Mente Inquieta · vídeo de hoy listo",
+                     f"«{titulo}» se publicará el {publicacion:%d/%m a las %H:%M}.")
+    return publicacion
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Piloto automático: un vídeo al día")
     parser.add_argument("--tipo", choices=TIPOS, help="fuerza el tipo de vídeo de esta ejecución")
+    parser.add_argument("--ahora", action="store_true", help="crearlo aunque el piloto esté desactivado")
     args = parser.parse_args(argv)
     config = configuracion()
-    if not config.get("activo") and not args.tipo:
+    if not config.get("activo") and not args.tipo and not args.ahora:
         registrar("Piloto automático desactivado en automatico.json: no hago nada.")
         return 0
     try:

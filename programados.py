@@ -443,10 +443,7 @@ def programar_tarea_windows(cuando) -> None:
 
 def estado_tarea_windows() -> dict:
     import programador
-    try:
-        return json.loads(programador._powershell(programador._ESTADO, T_NOMBRE=TAREA).stdout or "{}")
-    except ValueError:
-        return {"existe": False}
+    return programador.estado_tarea(TAREA)
 
 
 if __name__ == "__main__":

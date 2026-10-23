@@ -33,6 +33,8 @@ import automatico  # noqa: E402  (piloto automático)
 import programador  # noqa: E402  (tareas del Programador de tareas de Windows)
 import recordatorio_tiktok  # noqa: E402  (texto de TikTok de cada vídeo)
 import programados  # noqa: E402  (cola de publicaciones programadas)
+import horarios  # noqa: E402  (horas recomendadas para publicar)
+import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -148,6 +150,19 @@ class Cola:
 cola = Cola()
 
 
+def contar_pendientes() -> int:
+    """Guiones que aún no están en YouTube ni programados."""
+    en_cola = programados.por_guion()
+    total = 0
+    for ruta in GUIONES.glob("*.json") if GUIONES.exists() else []:
+        try:
+            if ruta.stem not in en_cola and not json.loads(ruta.read_text(encoding="utf-8")).get("youtube"):
+                total += 1
+        except (OSError, ValueError):
+            continue
+    return total
+
+
 @app.context_processor
 def contexto_global():
     hasta = wikimedia.en_espera_hasta()
@@ -162,6 +177,7 @@ def contexto_global():
     return {"cola": cola, "espera_wikipedia": time.strftime("%H:%M", time.localtime(hasta)) if hasta else "",
             "cupo_groq": cupo,
             "num_programados": len(programados.por_guion()),
+            "num_pendientes": contar_pendientes(),
             # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
             "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime)}
 
@@ -229,6 +245,7 @@ def resumen(ruta: Path) -> dict:
         "modificado": ruta.stat().st_mtime,
         "serie": datos.get("serie"),
         "programado": programados.por_guion().get(nombre),
+        "tipo": horarios.tipo_de(datos),
     }
 
 
@@ -401,7 +418,28 @@ def ver_guion(nombre):
         mensaje=request.args.get("mensaje", ""),
         yt_conectado=subir_youtube.TOKEN.exists(),
         yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private",
+        recomendada=horarios.recomendar([nombre]).get(nombre) if not datos.get("youtube") else None,
+        borrado=borrar.resumen(nombre),
     )
+
+
+@app.post("/guion/<nombre>/borrar")
+def borrar_guion(nombre):
+    volver = request.form.get("volver")
+    if cola.en_curso():  # una tarea podría estar usando sus archivos
+        aviso = "Hay tareas en marcha: espera a que terminen para borrar el vídeo."
+        return redirect(url_for("ver_pendientes", error=aviso) if volver == "pendientes"
+                        else url_for("ver_guion", nombre=nombre, mensaje=aviso))
+    try:
+        mensaje = borrar.borrar(nombre, de_youtube=request.form.get("youtube") == "1")
+    except Exception as error:  # noqa: BLE001 — se muestra en la página
+        aviso = f"No se ha podido borrar: {error}"
+        return redirect(url_for("ver_pendientes", error=aviso) if volver == "pendientes"
+                        else url_for("ver_guion", nombre=nombre, mensaje=aviso))
+    despertar_programados()
+    if volver == "pendientes":
+        return redirect(url_for("ver_pendientes", mensaje=mensaje))
+    return redirect(url_for("inicio", mensaje=mensaje, _anchor="guiones"))
 
 
 @app.post("/guion/<nombre>/guardar")
@@ -669,6 +707,8 @@ def publicar_lote():
         return redirect(url_for("inicio", error="Ninguno de los seleccionados se puede publicar: tienen que estar "
                                                 "revisados, tener vídeo y no estar ya en YouTube.", _anchor="guiones"))
 
+    if request.form.get("cuando") == "recomendadas":
+        return programar_recomendados([g["nombre"] for g in listos])
     if request.form.get("cuando") == "programar" and request.form.get("publicar_el"):
         try:
             inicio = datetime.fromisoformat(request.form["publicar_el"])
@@ -703,6 +743,77 @@ def publicar_lote():
 
     nuevo = cola.anadir(f"Publicar {len(listos)} vídeo(s) en YouTube", trabajo)
     return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+# --- Pendientes: lo que falta revisar y programar --------------------------------------------
+
+def programar_recomendados(nombres: list):
+    """Programa cada guion a su hora recomendada y lleva a «Programados»."""
+    recomendadas = horarios.recomendar(nombres)
+    hechos, fallos = 0, []
+    for nombre in nombres:
+        r = recomendadas.get(nombre)
+        if not r:
+            fallos.append(f"«{nombre}»: no hay hueco en las próximas semanas")
+            continue
+        try:
+            programados.anadir(nombre, r["hora"])
+            hechos += 1
+        except ValueError as error:
+            fallos.append(f"«{nombre}»: {error}")
+    despertar_programados()
+    mensaje = f"{hechos} vídeo(s) programados a su hora recomendada."
+    if fallos:
+        mensaje += " No se han podido programar: " + "; ".join(fallos)
+    return redirect(url_for("ver_programados", mensaje=mensaje))
+
+
+@app.route("/pendientes")
+def ver_pendientes():
+    guiones = [g for g in todos() if not g["youtube"] and not g["programado"]]
+    listos = [g for g in guiones if g["verificado"] and g["video"]]
+    return render_template(
+        "pendientes.html",
+        por_revisar=[g for g in guiones if not g["verificado"]],
+        listos=listos,
+        sin_video=[g for g in guiones if g["verificado"] and not g["video"]],
+        recomendadas=horarios.recomendar([g["nombre"] for g in listos]), max_al_dia=horarios.MAX_AL_DIA,
+        mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
+        yt_conectado=subir_youtube.TOKEN.exists(),
+    )
+
+
+@app.post("/pendientes/<nombre>/revisado")
+def pendiente_revisado(nombre):
+    datos = leer(nombre)
+    datos["verificado"] = True
+    escribir(nombre, datos)
+    return redirect(url_for("ver_pendientes", mensaje=f"«{datos.get('titulo', nombre)}» marcado como revisado.",
+                            _anchor="listos"))
+
+
+@app.post("/pendientes/<nombre>/programar")
+def pendiente_programar(nombre):
+    datos = leer(nombre)
+    try:
+        programados.anadir(nombre, request.form.get("hora", ""))
+    except ValueError as error:
+        return redirect(url_for("ver_pendientes", error=f"No se ha podido programar: {error}", _anchor="listos"))
+    despertar_programados()
+    return redirect(url_for("ver_pendientes", mensaje=f"«{datos.get('titulo', nombre)}» programado.", _anchor="listos"))
+
+
+@app.post("/pendientes/programar-todos")
+def pendientes_programar_todos():
+    nombres = request.form.getlist("nombres")
+    if not nombres:
+        return redirect(url_for("ver_pendientes", error="No hay vídeos listos para programar."))
+    return programar_recomendados(nombres)
+
+
+@app.post("/api/recomendar")
+def api_recomendar():
+    return jsonify(horarios.recomendar(request.form.getlist("nombres")))
 
 
 # --- Programados: la cola la lleva el programa y YouTube publica a su hora ------------------
@@ -850,13 +961,14 @@ def guardar_automatico():
         "hora_tiktok": hora("hora_tiktok"),
         "imagenes_ia_en_diarios": request.form.get("imagenes_ia_en_diarios") == "on",
         "solo_publicar_sin_dudas": request.form.get("solo_publicar_sin_dudas") == "on",
+        "hora_recomendada": request.form.get("hora_recomendada") == "on",
         "personajes": lista("personajes"),
         "temas": lista("temas"),
     })
     automatico.escribir_json(automatico.CONFIG, config)
-    errores = programador.activar(config) if programador.estado()["crear"].get("existe") else []
-    mensaje = "Configuración guardada." + (" Horas actualizadas en Windows." if not errores and
-                                         programador.estado()["crear"].get("existe") else "")
+    activo_en_windows = programador.estado()["crear"].get("existe")
+    errores = programador.activar(config) if activo_en_windows else []
+    mensaje = "Configuración guardada." + (" Horas actualizadas en Windows." if activo_en_windows and not errores else "")
     return redirect(url_for("piloto_automatico", mensaje=mensaje + (" " + "; ".join(errores) if errores else "")))
 
 
@@ -883,7 +995,7 @@ def desactivar_automatico():
 @app.post("/automatico/ejecutar")
 def ejecutar_automatico():
     tipo = request.form.get("tipo", "")
-    argumentos = ["--tipo", tipo] if tipo in automatico.TIPOS else []
+    argumentos = ["--ahora", *(["--tipo", tipo] if tipo in automatico.TIPOS else [])]
 
     def trabajo(t: Trabajo) -> bool:
         return t.ejecutar("automatico.py", *argumentos) == 0
@@ -1003,6 +1115,9 @@ def puerto_ocupado() -> bool:
 
 
 if __name__ == "__main__":
+    for flujo in (sys.stdout, sys.stderr):  # una flecha o un acento en la consola no debe tumbar el menú
+        if hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(errors="replace")
     url = f"http://127.0.0.1:{PUERTO}"
     if puerto_ocupado():  # ya está abierto: solo abre el navegador
         webbrowser.open(url)

@@ -11,6 +11,8 @@ Uso:
     python programador.py desactivar
     python programador.py estado
 """
+import csv
+import io
 import json
 import os
 import subprocess
@@ -66,18 +68,36 @@ def desactivar() -> None:
         _powershell(_BORRAR, T_NOMBRE=nombre)
 
 
+def estado_tarea(nombre: str) -> dict:
+    """{"existe", "proxima", "ultima", "resultado"} de una tarea de Windows.
+
+    Usa schtasks (unas décimas de segundo) en vez de PowerShell (varios segundos): así la página no se queda colgada.
+    """
+    try:
+        salida = subprocess.run(["schtasks", "/query", "/tn", nombre, "/fo", "csv", "/v", "/nh"],
+                                capture_output=True, timeout=15,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired):
+        return {"existe": False}
+    if salida.returncode != 0:
+        return {"existe": False}
+    texto = salida.stdout.decode("mbcs" if os.name == "nt" else "utf-8", errors="replace")
+    fila = next(csv.reader(io.StringIO(texto.strip())), [])
+    if len(fila) < 7:
+        return {"existe": False}
+    # columnas: equipo, nombre, próxima ejecución, estado, modo, última ejecución, último resultado…
+    proxima, ultima, resultado = fila[2], fila[5], fila[6]
+    return {
+        "existe": True,
+        "proxima": "" if proxima.startswith("N/A") or "/" not in proxima else proxima,
+        "ultima": "" if "1999" in ultima or "/" not in ultima else ultima,  # 1999: «nunca se ha ejecutado»
+        "resultado": int(resultado) if resultado.lstrip("-").isdigit() else resultado,
+    }
+
+
 def estado() -> dict:
     """{clave: {"existe", "proxima", "ultima", "resultado"}} de cada tarea."""
-    datos = {}
-    for clave, (nombre, *_) in TAREAS.items():
-        resultado = _powershell(_ESTADO, T_NOMBRE=nombre)
-        try:
-            datos[clave] = json.loads(resultado.stdout or "{}")
-        except ValueError:
-            datos[clave] = {"existe": False}
-        if "1999" in str(datos[clave].get("ultima", "")):  # así marca Windows «nunca se ha ejecutado»
-            datos[clave]["ultima"] = ""
-    return datos
+    return {clave: estado_tarea(nombre) for clave, (nombre, *_) in TAREAS.items()}
 
 
 if __name__ == "__main__":

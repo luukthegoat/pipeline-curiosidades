@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block titulo %}Pendientes · Mente Inquieta{% endblock %}
+{% block contenido %}
+{% set tipos = {'efemeride': 'Efeméride', 'serie': 'Serie', 'humor': 'Humor', 'serio': 'Serio / misterio',
+                'general': 'Divulgación', 'ingles': 'En inglés'} %}
+{% macro tipo(g) %}<span class="etiqueta">{{ tipos.get(g.tipo, g.tipo) }}{% if g.serie %} · parte {{ g.serie.parte }}/{{ g.serie.total }}{% endif %}</span>{% endmacro %}
+{% macro mini(g) %}
+  {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
+  {% else %}<span class="mini vacia"></span>{% endif %}
+{% endmacro %}
+
+<h1>Pendientes</h1>
+<p class="sub">Vídeos que aún no están en YouTube ni programados. Revísalos, márcalos como revisados y prográmalos:
+  el programa te recomienda una hora para cada uno según su tipo.</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso">{{ error }}</div>{% endif %}
+
+<div class="resumen-prog">
+  <div><span class="cifra">{{ por_revisar | length }}</span><span>por revisar</span></div>
+  <div><span class="cifra">{{ listos | length }}</span><span>listos para programar</span></div>
+  {% if sin_video %}<div><span class="cifra">{{ sin_video | length }}</span><span>sin vídeo</span></div>{% endif %}
+  <a class="boton secundario" href="{{ url_for('ver_programados') }}" style="margin-left: auto;">Ver programados</a>
+</div>
+
+{# ---------------------------------------------------------------- 1. Por revisar #}
+<div class="cabecera-seccion" id="revisar"><h2>1 · Por revisar</h2></div>
+<div class="lista">
+  {% for g in por_revisar %}
+    <div class="pendiente">
+      {{ mini(g) }}
+      <div class="cuerpo">
+        <a class="titulo" href="{{ url_for('ver_guion', nombre=g.nombre) }}">{{ g.titulo }}</a>
+        <div class="meta">
+          {{ tipo(g) }}
+          {% if g.dudas %}<span class="etiqueta mal">{{ g.dudas }} frase{{ 's' if g.dudas > 1 }} dudosa{{ 's' if g.dudas > 1 }}</span>
+          {% else %}<span class="etiqueta ok">sin dudas del verificador</span>{% endif %}
+          {% if not g.video %}<span class="etiqueta">sin vídeo</span>{% endif %}
+          {% if g.duracion %}<span>{{ '%.0f' % g.duracion }} s</span>{% endif %}
+        </div>
+      </div>
+      <div class="botones">
+        <a class="boton" href="{{ url_for('ver_guion', nombre=g.nombre) }}">Revisar</a>
+        <form method="post" action="{{ url_for('pendiente_revisado', nombre=g.nombre) }}"
+              onsubmit="return {{ 'confirm(\'El verificador marcó frases dudosas. ¿Lo has comprobado y lo das por revisado?\')' if g.dudas else 'true' }}">
+          <button class="secundario" type="submit">Marcar revisado</button>
+        </form>
+        <form method="post" action="{{ url_for('borrar_guion', nombre=g.nombre) }}"
+              onsubmit="return confirm('¿Borrar «{{ g.titulo | replace("'", "") }}» y todo lo que se generó para él? Va a la Papelera de reciclaje.')">
+          <input type="hidden" name="volver" value="pendientes">
+          <button class="secundario peligro" type="submit" title="Borrar el vídeo y todo lo suyo">Borrar</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">Nada por revisar.</div>
+  {% endfor %}
+</div>
+
+{# ---------------------------------------------------------------- 2. Listos para programar #}
+<div class="cabecera-seccion" id="listos">
+  <h2>2 · Listos para programar</h2>
+  {% if listos %}
+    <form method="post" action="{{ url_for('pendientes_programar_todos') }}" class="en-linea"
+          onsubmit="return confirm('¿Programar los {{ listos | length }} vídeos, cada uno a su hora recomendada?')">
+      {% for g in listos %}<input type="hidden" name="nombres" value="{{ g.nombre }}">{% endfor %}
+      <button type="submit" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>
+        Programar todos a su hora recomendada</button>
+    </form>
+  {% endif %}
+</div>
+<div class="lista">
+  {% for g in listos %}
+    {% set r = recomendadas.get(g.nombre) %}
+    <div class="pendiente">
+      {{ mini(g) }}
+      <div class="cuerpo">
+        <a class="titulo" href="{{ url_for('ver_guion', nombre=g.nombre) }}">{{ g.titulo }}</a>
+        <div class="meta">{{ tipo(g) }}{% if g.duracion %}<span>{{ '%.0f' % g.duracion }} s</span>{% endif %}</div>
+        {% if r %}
+          <div class="recomendada"><strong>Recomendada: {{ r.bonita }}</strong><span>{{ r.motivo }}</span></div>
+        {% else %}
+          <div class="meta">No hay hueco recomendado en las próximas semanas: elige tú la hora.</div>
+        {% endif %}
+      </div>
+      <form class="programar-uno" method="post" action="{{ url_for('pendiente_programar', nombre=g.nombre) }}">
+        <input type="datetime-local" name="hora" value="{{ r.hora if r else '' }}" required>
+        <button type="submit" {% if not yt_conectado %}disabled{% endif %}>Programar</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">Ninguno listo. Cuando marques un vídeo como revisado (y tenga vídeo), aparecerá aquí.</div>
+  {% endfor %}
+</div>
+
+{# ---------------------------------------------------------------- Revisados sin vídeo #}
+{% if sin_video %}
+  <div class="cabecera-seccion"><h2>Revisados, pero sin vídeo</h2></div>
+  <div class="lista">
+    {% for g in sin_video %}
+      <div class="pendiente">
+        {{ mini(g) }}
+        <div class="cuerpo">
+          <a class="titulo" href="{{ url_for('ver_guion', nombre=g.nombre) }}">{{ g.titulo }}</a>
+          <div class="meta">{{ tipo(g) }} <span>Genera el audio y el vídeo para poder programarlo.</span></div>
+        </div>
+        <form method="post" action="{{ url_for('producir_guion', nombre=g.nombre) }}">
+          <button class="secundario" type="submit">Generar vídeo</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<p class="ayuda-campo" style="margin-top: 28px;">Las horas recomendadas son reglas generales para Shorts con público
+  de España (efemérides el mismo día por la mañana, series una parte al día a la misma hora, humor y temas serios por
+  la noche…), como mucho {{ max_al_dia }} vídeos al día y sin pisar lo ya programado. Cuando el canal tenga datos, compáralas con
+  YouTube Studio → Estadísticas → «Cuándo están conectados tus espectadores».</p>
+{% endblock %}
