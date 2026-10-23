@@ -13,6 +13,27 @@
     <label><input type="radio" name="modo" value="tema" checked onchange="cambiarModo()"><span>Tema libre</span></label>
     <label><input type="radio" name="modo" value="fecha" onchange="cambiarModo()"><span>Efemérides de una fecha</span></label>
     <label><input type="radio" name="modo" value="diario" onchange="cambiarModo()"><span>Diario de…</span></label>
+    <label><input type="radio" name="modo" value="actualidad" onchange="cambiarModo()"><span>Actualidad</span></label>
+  </div>
+
+  <div id="modo-actualidad" hidden>
+    <label for="noticia">¿De qué noticia? <span class="ayuda-campo">— se buscan artículos recientes de varios medios</span></label>
+    <input type="text" id="noticia" name="noticia" placeholder="Ej.: saqueos Francia · elecciones Estados Unidos · DANA Valencia">
+    <div class="fila">
+      <div>
+        <label for="dias">De los últimos</label>
+        <select id="dias" name="dias">
+          <option value="1">1 día</option><option value="2">2 días</option>
+          <option value="3" selected>3 días</option><option value="7">7 días</option>
+        </select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <div class="opciones"><label><input type="checkbox" name="mas_idiomas" value="1"> Incluir medios en inglés y francés</label></div>
+      </div>
+    </div>
+    <p class="ayuda-campo">Primero verás los artículos encontrados para elegir con cuáles se escribe el guion (al menos 2
+      medios distintos). El guion cita las fuentes, lleva fecha y usa imágenes de archivo marcadas como tales.</p>
   </div>
 
   <div id="modo-diario" hidden>
@@ -54,6 +75,7 @@
     </div>
   </div>
 
+  <div class="solo-no-actualidad">
   <label>Idiomas</label>
   <div class="opciones">
     <label><input type="checkbox" name="idiomas" value="es" checked> Español</label>
@@ -66,8 +88,10 @@
     <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón <span class="ayuda-campo">(sale sin verificar)</span></label>
   </div>
 
+  </div>
   <div class="acciones">
-    <button type="submit">{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}</button>
+    <button type="submit" id="boton-crear" data-texto="{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}"
+            onclick="if (document.querySelector('input[name=modo]:checked').value === 'actualidad') { this.textContent = 'Buscando noticias… (unos 20 s)'; this.style.pointerEvents = 'none'; }">{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}</button>
     <span class="ayuda-campo">Tarda ~1 min por guion y ~2-3 min por vídeo.</span>
   </div>
 </form>
@@ -279,6 +303,11 @@
     document.getElementById('modo-tema').hidden = modo !== 'tema';
     document.getElementById('modo-fecha').hidden = modo !== 'fecha';
     document.getElementById('modo-diario').hidden = modo !== 'diario';
+    document.getElementById('modo-actualidad').hidden = modo !== 'actualidad';
+    // En actualidad, idiomas y «qué hago» se eligen después, con los artículos delante.
+    document.querySelectorAll('.solo-no-actualidad').forEach(e => e.hidden = modo === 'actualidad');
+    const boton = document.getElementById('boton-crear');
+    if (boton) boton.textContent = modo === 'actualidad' ? 'Buscar noticias' : boton.dataset.texto;
   }
 </script>
 {% endblock %}

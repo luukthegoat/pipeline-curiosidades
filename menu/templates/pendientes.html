@@ -2,7 +2,7 @@
 {% block titulo %}Pendientes · Mente Inquieta{% endblock %}
 {% block contenido %}
 {% set tipos = {'efemeride': 'Efeméride', 'serie': 'Serie', 'humor': 'Humor', 'serio': 'Serio / misterio',
-                'general': 'Divulgación', 'ingles': 'En inglés'} %}
+                'general': 'Divulgación', 'ingles': 'En inglés', 'actualidad': 'Actualidad'} %}
 {% macro tipo(g) %}<span class="etiqueta">{{ tipos.get(g.tipo, g.tipo) }}{% if g.serie %} · parte {{ g.serie.parte }}/{{ g.serie.total }}{% endif %}</span>{% endmacro %}
 {% macro mini(g) %}
   {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">

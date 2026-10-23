@@ -660,3 +660,19 @@ button.enlace { height: auto; padding: 0; background: none; border: 0; color: va
 .lista-borrar li { margin: 2px 0; }
 .lista-borrar code { background: none; padding: 0; font-size: 12px; word-break: break-all; }
 .boton-peligro, button.boton-peligro { background: var(--error); color: #fff; }
+
+/* Actualidad: elegir artículos */
+.articulo {
+  display: flex; gap: 14px; align-items: flex-start; margin: 0; padding: 14px 16px; cursor: pointer;
+  border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); box-shadow: var(--sombra);
+  font-weight: 400; transition: border-color .15s, background .15s;
+}
+.articulo:hover { border-color: var(--borde-fuerte); }
+.articulo.elegido { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 5%, var(--superficie)); }
+.articulo input { margin-top: 4px; width: 18px; height: 18px; flex: none; }
+.articulo .cuerpo { display: grid; gap: 6px; min-width: 0; }
+.articulo .meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--suave); }
+.articulo .titulo { font-weight: 600; font-size: 15px; color: var(--texto); text-decoration: none; }
+.articulo .titulo:hover { text-decoration: underline; }
+.articulo .extracto { margin: 0; font-size: 13px; color: var(--suave); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

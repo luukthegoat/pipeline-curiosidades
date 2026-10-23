@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titulo %}Actualidad · Mente Inquieta{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">← Crear</a>
+<h1>Actualidad: «{{ tema }}»</h1>
+
+{% if error %}
+  <div class="aviso">{{ error }}</div>
+  <a class="boton secundario" href="{{ url_for('inicio') }}">Volver</a>
+{% else %}
+<p class="sub">Elige los artículos con los que se escribirá el guion: <strong>al menos 2 medios distintos</strong>, para
+  contrastar. El guion solo podrá usar lo que digan estos artículos, citará a cada medio y llevará la fecha de hoy.
+  {{ busqueda.articulos | length }} artículos de {{ busqueda.motor }} (últimos {{ busqueda.dias }} día{{ 's' if busqueda.dias != 1 }}){% if busqueda.descartados %};
+  {{ busqueda.descartados }} descartados porque no se pudo leer su texto (muro de pago, solo vídeo…){% endif %}.</p>
+
+<p class="ayuda-campo" style="margin-top: -14px;">Consejo: elige medios de distintas líneas editoriales y que cuenten
+  la noticia principal (no solo un detalle). Si la noticia es de otro país, prueba a buscarla en inglés o en su idioma
+  (p. ej. «France riots») con «Incluir medios en inglés y francés»: suelen salir agencias y medios de allí.</p>
+
+{% if busqueda.articulos | length < 2 %}
+  <div class="aviso">Hacen falta al menos 2 artículos con texto. Prueba con otras palabras, más días o incluyendo medios
+    en inglés y francés.{% if not tavily %} Con una clave de Tavily (Ajustes → Noticias de actualidad) suelen salir más.{% endif %}</div>
+  <a class="boton secundario" href="{{ url_for('inicio') }}">Buscar de nuevo</a>
+{% else %}
+<form method="post" action="{{ url_for('crear_actualidad', id_busqueda=busqueda.id) }}" id="form-actualidad">
+  <div class="lista">
+    {% set marcados = namespace(n=0) %}
+    {% for a in busqueda.articulos %}
+      {% set marcar = a.reconocido and marcados.n < 4 %}
+      {% if marcar %}{% set marcados.n = marcados.n + 1 %}{% endif %}
+      <label class="articulo">
+        <input type="checkbox" name="articulos" value="{{ loop.index0 }}" {{ 'checked' if marcar }} onchange="contar()">
+        <div class="cuerpo">
+          <div class="meta">
+            <span class="etiqueta {{ 'ok' if a.reconocido }}">{{ a.medio }}</span>
+            {% if a.fecha %}<span>{{ a.fecha[:10] }} {{ a.fecha[11:16] }}</span>{% endif %}
+            <span>{{ (a.caracteres / 1000) | round(1) }} mil caracteres</span>
+          </div>
+          <a class="titulo" href="{{ a.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">{{ a.titulo }}</a>
+          <p class="extracto">{{ a.texto[:320] }}…</p>
+        </div>
+      </label>
+    {% endfor %}
+  </div>
+
+  <div class="tarjeta" style="margin-top: 18px;">
+    <div class="aviso" style="margin-bottom: 14px;">Es una noticia en curso: <strong>revisa el guion con los artículos antes
+      de publicarlo</strong>. Las cifras cambian de un día para otro y un error en un tema así puede traerte problemas
+      (y YouTube limita los vídeos con violencia). Las imágenes serán de archivo (lugares e instituciones), marcadas como
+      tales: las fotos de prensa tienen derechos de autor.</div>
+    <label>Idiomas</label>
+    <div class="opciones">
+      <label><input type="checkbox" name="idiomas" value="es" checked> Español</label>
+      <label><input type="checkbox" name="idiomas" value="en"> Inglés</label>
+    </div>
+    <label>¿Qué hago?</label>
+    <div class="opciones">
+      <label><input type="radio" name="completo" value="off" checked> Solo el guion, para revisarlo antes <span class="ayuda-campo">(recomendado)</span></label>
+      <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón</label>
+    </div>
+    <div class="acciones">
+      <button type="submit" id="boton-guion">Escribir el guion</button>
+      <a class="boton secundario" href="{{ url_for('inicio') }}">Buscar otra noticia</a>
+      <span class="ayuda-campo" id="nota-articulos"></span>
+    </div>
+  </div>
+</form>
+<script>
+  function contar() {
+    const n = document.querySelectorAll('input[name=articulos]:checked').length;
+    const boton = document.getElementById('boton-guion');
+    boton.disabled = n < 2;
+    boton.textContent = n < 2 ? 'Elige al menos 2 artículos' : `Escribir el guion con ${n} artículos`;
+    document.getElementById('nota-articulos').textContent = n > 5 ? 'Con más de 5, cada artículo entra más recortado.' : '';
+    document.querySelectorAll('.articulo').forEach(a => a.classList.toggle('elegido', a.querySelector('input').checked));
+  }
+  contar();
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}

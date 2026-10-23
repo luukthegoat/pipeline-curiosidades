@@ -3,6 +3,23 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.8.0] - 2026-10-23
+
+### Añadido
+- **Vídeos de actualidad** (Crear → Actualidad), para noticias que aún no están en Wikipedia:
+  - [`actualidad.py`](actualidad.py) busca artículos recientes con Bing Noticias (gratis, sin clave) o con Tavily (si
+    hay `TAVILY_API_KEY`), descarga su texto con `trafilatura`, se queda con uno por medio y marca los medios
+    reconocidos.
+  - Página para elegir los artículos (mínimo 2 medios) antes de escribir el guion.
+  - Guion propio de noticias (`paso1_guiones.py --actualidad`): solo hechos de los artículos, cifras atribuidas
+    («según…»), fechas, tono neutro, sin nombrar a particulares y con la fecha de los datos; todo traducido si los
+    artículos están en otro idioma. El verificador lo compara con los artículos.
+  - Imágenes de archivo de Wikimedia Commons (lugares e instituciones, nunca fotos de prensa) con el rótulo
+    «IMAGEN DE ARCHIVO», o «FOTO: WIKIMEDIA COMMONS» si son de este año.
+  - Descripción y texto de TikTok con los medios, la fecha de los datos y el aviso sobre las imágenes.
+  - Hora recomendada para actualidad: la primera franja libre.
+- Ajustes → Noticias de actualidad: clave opcional de Tavily.
+
 ## [1.7.0] - 2026-10-23
 
 ### Corregido
@@ -150,6 +167,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.8.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
 [1.6.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0
 [1.5.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0

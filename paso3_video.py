@@ -35,6 +35,7 @@ import sys
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -265,6 +266,14 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
         guardadas = json.loads(ruta.read_text(encoding="utf-8"))
         if isinstance(guardadas, dict) and guardadas.get("version") == VERSION_CANDIDATAS:
             return guardadas["imagenes"]
+    if datos.get("actualidad"):
+        imagenes = imagenes_de_archivo(datos)
+        imagenes = list({i["archivo"]: i for i in reversed(imagenes)}.values())[::-1]
+        if imagenes:
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_text(json.dumps({"version": VERSION_CANDIDATAS, "imagenes": imagenes}, ensure_ascii=False,
+                                       indent=2), encoding="utf-8")
+        return imagenes
     imagenes = []
     for fuente in datos.get("fuentes", []):
         try:
@@ -295,6 +304,23 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
         ruta.parent.mkdir(parents=True, exist_ok=True)
         ruta.write_text(json.dumps({"version": VERSION_CANDIDATAS, "imagenes": imagenes}, ensure_ascii=False, indent=2),
                         encoding="utf-8")
+    return imagenes
+
+
+def imagenes_de_archivo(datos: dict) -> list:
+    """Noticias: fotos de ARCHIVO de los lugares e instituciones (nunca fotos de prensa del suceso, que tienen
+    derechos). Se buscan en Wikimedia Commons con las búsquedas que propuso el guion."""
+    busquedas = (datos.get("actualidad") or {}).get("busquedas_imagenes") or [nombre_corto(datos)]
+    imagenes = []
+    for busqueda in busquedas[:5]:
+        try:
+            encontradas = imagenes_de_commons(busqueda)
+            print(f"  Commons (archivo): {len(encontradas)} imágenes para «{busqueda}»")
+            imagenes += encontradas
+        except wikimedia.WikimediaEnEspera:
+            raise
+        except requests.RequestException:
+            print(f"  aviso: no se pudo buscar «{busqueda}» en Wikimedia Commons")
     return imagenes
 
 
@@ -413,8 +439,10 @@ def descargar(imagen: dict) -> Path:
     return wikimedia.archivo(imagen["url"], ruta_en_cache(imagen))
 
 
-def componer_fotograma(ruta_imagen, destino: Path) -> Path:
-    """Imagen completa centrada sobre un fondo de la misma imagen desenfocada (formato vertical)."""
+def componer_fotograma(ruta_imagen, destino: Path, etiqueta: str = "") -> Path:
+    """Imagen completa centrada sobre un fondo de la misma imagen desenfocada (formato vertical).
+
+    `etiqueta` (p. ej. «IMAGEN DE ARCHIVO») se pinta en la esquina de la imagen."""
     if ruta_imagen is None:  # sin imagen: degradado oscuro
         fondo = Image.linear_gradient("L").resize((ANCHO, ALTO)).convert("RGB")
         ImageEnhance.Brightness(ImageOps.colorize(fondo.convert("L"), "#0b1a2e", "#3a2a14")).enhance(0.9).save(destino)
@@ -433,8 +461,25 @@ def componer_fotograma(ruta_imagen, destino: Path) -> Path:
     x = (ANCHO - frente.width) // 2
     y = int(ALTO * CENTRO_IMAGEN) - frente.height // 2
     fondo.paste(frente, (x, y))
+    if etiqueta:
+        poner_etiqueta(fondo, etiqueta, x + 24, y + 24)
     fondo.save(destino)
     return destino
+
+
+def poner_etiqueta(imagen, texto: str, x: int, y: int) -> None:
+    """Rótulo pequeño y legible sobre cualquier foto: texto blanco en una pastilla oscura."""
+    try:
+        fuente = ImageFont.truetype("arialbd.ttf", 30)
+    except OSError:
+        fuente = ImageFont.load_default()
+    capa = Image.new("RGBA", imagen.size, (0, 0, 0, 0))
+    dibujo = ImageDraw.Draw(capa)
+    caja = dibujo.textbbox((0, 0), texto, font=fuente)
+    ancho, alto = caja[2] - caja[0], caja[3] - caja[1]
+    dibujo.rounded_rectangle((x, y, x + ancho + 32, y + alto + 22), radius=12, fill=(0, 0, 0, 170))
+    dibujo.text((x + 16, y + 11 - caja[1]), texto, font=fuente, fill=(255, 255, 255, 235))
+    imagen.paste(Image.alpha_composite(imagen.convert("RGBA"), capa).convert("RGB"))
 
 
 # --- Subtítulos (ASS) -----------------------------------------------------------
@@ -550,16 +595,16 @@ def info_archivo(ruta) -> list:
 
 
 def segmento_escena(trabajo: Path, numero: int, ruta_imagen, audio: Path, util: float, total: float,
-                    subtitulos: str) -> Path:
+                    subtitulos: str, etiqueta: str = "") -> Path:
     """Vídeo de una escena (imagen con zoom lento + su audio + subtítulos ya grabados), con caché."""
     salida = trabajo / f"seg_{numero:02d}.mp4"
     clave = trabajo / f"seg_{numero:02d}.clave"
     firma = huella(VERSION_ESCENA, info_archivo(ruta_imagen), info_archivo(audio), round(util, 3),
-                   round(total, 3), subtitulos)
+                   round(total, 3), subtitulos, etiqueta)
     if salida.exists() and clave.exists() and clave.read_text() == firma:
         return salida  # nada ha cambiado en esta escena
 
-    fotograma = componer_fotograma(ruta_imagen, trabajo / f"frame_{numero:02d}.png")
+    fotograma = componer_fotograma(ruta_imagen, trabajo / f"frame_{numero:02d}.png", etiqueta)
     (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
     fotogramas = max(1, round(total * FPS))
     zoom = f"min(1+{ZOOM_FINAL - 1:.3f}*on/{fotogramas},{ZOOM_FINAL})"
@@ -874,8 +919,16 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         subtitulos = texto_ass(relativas, total, gancho if indice == 0 else "",
                                datos.get("titulo", "") if indice == 0 else "", datos.get("palabras_clave", []))
         eleccion = elegidas[escena["numero"]]
+        etiqueta = ""
+        if datos.get("actualidad") and eleccion["ruta"] and not (eleccion["imagen"] or {}).get("ruta"):
+            # Foto de este año (puede ser del propio suceso, con licencia libre): se dice de dónde es.
+            # Si es anterior, se avisa de que es de archivo y no muestra los hechos.
+            if (eleccion["imagen"] or {}).get("anio") == datetime.now().year:
+                etiqueta = "FOTO: WIKIMEDIA COMMONS"
+            else:
+                etiqueta = "ARCHIVE IMAGE" if datos.get("idioma") == "en" else "IMAGEN DE ARCHIVO"
         trabajos.append((trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
-                         util, total, subtitulos))
+                         util, total, subtitulos, etiqueta))
         imagen = eleccion["imagen"]
         marca = (" (generada con IA)" if (imagen or {}).get("ia") else " (elegida a mano)") if eleccion["a_mano"] else ""
         print(f"  escena {escena['numero']}: {total:.2f} s · {imagen['archivo'][:55] if imagen else 'sin imagen'}{marca}")
@@ -970,7 +1023,15 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
         tiktok += ["", linea_serie]
     tiktok += ["", "💬 Did you know? Tell me in the comments." if ingles else "💬 ¿Lo sabías? Te leo en comentarios.", ""]
     nombres_fuentes = ", ".join(f["titulo"] for f in datos.get("fuentes", []))
-    tiktok.append(f"{'Source' if ingles else 'Fuente'}: Wikipedia ({nombres_fuentes})" if nombres_fuentes else "")
+    if datos.get("actualidad"):
+        medios = ", ".join(dict.fromkeys(f.get("medio") or f["titulo"] for f in datos.get("fuentes", [])))
+        fecha_datos = datos["actualidad"].get("fecha_datos", "")
+        tiktok.append(f"{'Sources' if ingles else 'Fuentes'}: {medios}"
+                      + (f" ({'as of' if ingles else 'datos a'} {fecha_datos})" if fecha_datos else ""))
+        tiktok.append("Images from Wikimedia Commons; those marked as archive do not show the events." if ingles
+                      else "Imágenes de Wikimedia Commons; las marcadas como de archivo no muestran los hechos.")
+    else:
+        tiktok.append(f"{'Source' if ingles else 'Fuente'}: Wikipedia ({nombres_fuentes})" if nombres_fuentes else "")
     autores = set()
     for c in creditos:
         if isinstance(c, str):  # «archivo — autor — licencia — página»
@@ -1024,6 +1085,12 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
     if datos.get("diario"):
         lineas += ["", _linea_diario(datos, "en mi canal", "on my channel")]
     lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos.get("fuentes", [])]]
+    if datos.get("actualidad"):
+        fecha_datos = datos["actualidad"].get("fecha_datos", "")
+        lineas += ["", (f"Information as of {fecha_datos}: the situation may change. Images from Wikimedia Commons; "
+                        "those marked as archive do not show the events." if ingles else
+                        f"Información a {fecha_datos}: la situación puede cambiar. Imágenes de Wikimedia Commons; las "
+                        "marcadas como de archivo no muestran los hechos.")]
     lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos], ""]
     if pista in musica.TONOS:
         lineas.append("Music: generated, royalty-free." if ingles else "Música: generada, sin derechos de autor.")

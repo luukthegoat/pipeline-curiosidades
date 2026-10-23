@@ -9,6 +9,7 @@ estadísticas, conviene ajustarlas con YouTube Studio → Estadísticas → «Cu
 - Tema serio o de misterio: por la noche, con más calma para verlo entero.
 - Divulgación general: a mediodía o por la noche, los dos picos de uso del móvil.
 - En inglés: a la hora de comer en EE. UU. (tarde en España).
+- Actualidad: en la primera franja libre, porque la noticia caduca en uno o dos días.
 
 Además: como mucho MAX_AL_DIA vídeos al día, separados al menos SEPARACION_H horas, sin pisar los ya
 programados, y nunca antes de dentro de una hora.
@@ -41,6 +42,7 @@ MOTIVOS = {
     "serio": "Tema serio o de misterio: mejor por la noche, con más calma para verlo entero.",
     "general": "Divulgación: a mediodía o por la noche, los dos picos de uso del móvil en España.",
     "ingles": "En inglés: a la hora de comer en EE. UU. (tarde en España).",
+    "actualidad": "Actualidad: cuanto antes, mientras la noticia sigue viva (en un par de días ya no interesa).",
 }
 
 
@@ -49,6 +51,8 @@ def _leer(nombre: str) -> dict:
 
 
 def tipo_de(guion: dict) -> str:
+    if guion.get("actualidad"):
+        return "actualidad"
     if guion.get("idioma") == "en":
         return "ingles"
     if guion.get("anio_evento"):
@@ -69,6 +73,7 @@ PREFERENCIAS = {
     "serio": ["noche", "tarde"],
     "general": ["mediodía", "noche"],
     "ingles": ["EE. UU."],
+    "actualidad": ["mediodía", "tarde", "noche", "mañana"],  # la primera franja libre: la noticia caduca
 }
 
 DIAS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")

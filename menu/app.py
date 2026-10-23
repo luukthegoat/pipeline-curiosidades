@@ -35,6 +35,7 @@ import recordatorio_tiktok  # noqa: E402  (texto de TikTok de cada vídeo)
 import programados  # noqa: E402  (cola de publicaciones programadas)
 import horarios  # noqa: E402  (horas recomendadas para publicar)
 import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
+import actualidad  # noqa: E402  (noticias recientes para los vídeos de actualidad)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -340,6 +341,12 @@ def crear():
     personaje = request.form.get("personaje", "").strip()
     problema = request.form.get("problema", "").strip()
     dia = request.form.get("dia", "").strip()
+    if modo == "actualidad":
+        noticia = request.form.get("noticia", "").strip()
+        if not noticia:
+            return redirect(url_for("inicio", error="Escribe de qué noticia quieres el vídeo."))
+        return redirect(url_for("ver_actualidad", tema=noticia, dias=request.form.get("dias", "3"),
+                                mas=request.form.get("mas_idiomas", "")))
     if modo == "tema" and not tema:
         return redirect(url_for("inicio", error="Escribe un tema para el vídeo."))
     if modo == "diario" and not personaje:
@@ -358,6 +365,11 @@ def crear():
         titulo = f"Efemérides del {fecha}"
     argumentos += ["--idiomas", idiomas]
 
+    return lanzar_guiones(titulo, argumentos, completo)
+
+
+def lanzar_guiones(titulo: str, argumentos: list, completo: bool):
+    """Pone en la cola paso1_guiones.py con esos argumentos (y, si se pide, el audio y el vídeo)."""
     def trabajo(t: Trabajo) -> bool:
         antes = set(GUIONES.glob("*.json")) if GUIONES.exists() else set()
         codigo = t.ejecutar("paso1_guiones.py", *argumentos)
@@ -373,6 +385,48 @@ def crear():
 
     nuevo = cola.anadir(titulo + (" · guion, audio y vídeo" if completo else " · solo guion"), trabajo)
     return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+# --- Actualidad: noticias recientes en vez de Wikipedia ---------------------------------------
+
+@app.route("/actualidad")
+def ver_actualidad():
+    tema = request.args.get("tema", "").strip()
+    if tema:  # búsqueda nueva: se hace y se redirige a su página (así recargar no vuelve a buscar)
+        dias = request.args.get("dias", "3")
+        try:
+            resultado = actualidad.buscar(tema, int(dias) if dias.isdigit() else 3, bool(request.args.get("mas")))
+        except Exception as error:  # noqa: BLE001 — se muestra en la página
+            return render_template("actualidad.html", busqueda=None, tema=tema,
+                                   error=f"No se ha podido buscar: {error}")
+        return redirect(url_for("ver_actualidad", id=resultado["id"]))
+    try:
+        busqueda = actualidad.leer(request.args.get("id", ""))
+    except (OSError, ValueError):
+        return redirect(url_for("inicio", error="Esa búsqueda ya no existe: vuelve a buscar la noticia."))
+    return render_template("actualidad.html", busqueda=busqueda, tema=busqueda["tema"], error="",
+                           tavily=bool(os.getenv("TAVILY_API_KEY")))
+
+
+@app.post("/actualidad/<id_busqueda>/crear")
+def crear_actualidad(id_busqueda):
+    try:
+        busqueda = actualidad.leer(id_busqueda)
+    except (OSError, ValueError):
+        return redirect(url_for("inicio", error="Esa búsqueda ya no existe: vuelve a buscar la noticia."))
+    elegidos = [n for n in request.form.getlist("articulos") if n.isdigit()]
+    if len(elegidos) < 2:
+        return redirect(url_for("ver_actualidad", id=id_busqueda))
+    idiomas = ",".join(request.form.getlist("idiomas")) or "es"
+    argumentos = ["--actualidad", id_busqueda, "--articulos", ",".join(elegidos), "--idiomas", idiomas]
+    return lanzar_guiones(f"Actualidad: «{busqueda['tema']}»", argumentos, request.form.get("completo") == "on")
+
+
+@app.post("/ajustes/tavily")
+def guardar_tavily():
+    guardar_env({"TAVILY_API_KEY": request.form.get("clave", "").strip()})
+    return redirect(url_for("ajustes", mensaje="Clave de Tavily guardada." if request.form.get("clave", "").strip()
+                            else "Clave de Tavily quitada: se usará Bing Noticias.", _anchor="actualidad"))
 
 
 @app.route("/tarea")
@@ -1066,6 +1120,7 @@ def ajustes():
         yt_canal=canal_youtube(),
         yt_token=subir_youtube.TOKEN.exists(),
         yt_privacidad=env.get("YT_PRIVACIDAD") or "private",
+        tavily=bool(os.getenv("TAVILY_API_KEY")),
     )
 
 

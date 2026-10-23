@@ -20,7 +20,8 @@ música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo
 | **4 · Publicar** | Sube a YouTube por la API oficial (título, descripción, etiquetas, aviso de contenido sintético, publicación programada) y prepara el texto de TikTok. |
 
 **Formatos:** tema libre, **series** de varias partes con índice previo (para que no se repitan ni destripen el final),
-**efemérides** («tal día como hoy») y **«Diario de…»**: humor histórico en primera persona con imágenes generadas por IA.
+**efemérides** («tal día como hoy»), **«Diario de…»** (humor histórico en primera persona con imágenes generadas por IA)
+y **actualidad**: noticias recientes contrastadas en varios medios, con las fuentes citadas y la fecha de los datos.
 
 ## Decisiones técnicas
 
@@ -71,6 +72,7 @@ flowchart LR
 | [`imagenes_ia.py`](imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
 | [`musica.py`](musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
 | [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
+| [`actualidad.py`](actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
 | [`borrar.py`](borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
 | [`horarios.py`](horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
 | [`programados.py`](programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |

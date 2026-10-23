@@ -65,6 +65,22 @@
   </form>
 </div>
 
+<div class="tarjeta" id="actualidad">
+  <h2>Noticias de actualidad</h2>
+  {% if tavily %}
+    <p><span class="etiqueta ok">Tavily conectado</span> Las búsquedas de actualidad usan Tavily.</p>
+  {% else %}
+    <p><span class="etiqueta">Bing Noticias</span> Las búsquedas usan Bing Noticias (gratis, sin clave). Funciona bien,
+      pero algunos medios no dejan descargar el texto y se descartan.</p>
+  {% endif %}
+  <p class="ayuda-campo">Opcional: con una clave gratuita de <a href="https://tavily.com" target="_blank" rel="noopener">Tavily</a>
+    (buscador para IA; crea una cuenta y copia tu «API key») se obtiene el texto de más artículos.</p>
+  <form method="post" action="{{ url_for('guardar_tavily') }}" class="programar-uno" style="max-width: 560px;">
+    <input type="password" name="clave" placeholder="{{ 'Clave guardada (escribe otra para cambiarla, o vacío para quitarla)' if tavily else 'tvly-…' }}" autocomplete="off" style="flex: 1;">
+    <button class="secundario" type="submit">Guardar</button>
+  </form>
+</div>
+
 <div class="tarjeta" id="youtube">
   <h2>YouTube Shorts</h2>
   {% if yt_canal and yt_canal.id %}

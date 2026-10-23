@@ -43,6 +43,8 @@ MAX_PAGINAS_POR_EVENTO = 3
 MAX_CARACTERES_PRINCIPAL = 6000   # artículo principal del evento
 MAX_CARACTERES_PAGINA = 2500      # artículos secundarios
 
+MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+            "noviembre", "diciembre")
 IDIOMAS = {"es": "español", "en": "inglés"}
 
 PROMPT_SISTEMA = """Eres guionista de vídeos cortos de historia (YouTube Shorts, TikTok, Reels).
@@ -117,7 +119,46 @@ Los VALORES de "titulo", "nombre_corto", "gancho", "narracion", "palabras_clave"
 
 PALABRAS_DIARIO = (95, 150, 120)  # mínimo, máximo y objetivo: unos 45-55 s
 
-PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL de Wikipedia y las escenas numeradas de un guion.
+PROMPT_ACTUALIDAD = """Eres guionista de vídeos cortos de ACTUALIDAD (YouTube Shorts, TikTok) para un canal de divulgación.
+Recibirás un MATERIAL con varios artículos de prensa recientes, cada uno con su medio y su fecha. Hoy es {hoy}.
+
+Reglas de veracidad, obligatorias (es una noticia en curso: un error aquí es grave):
+- Usa SOLO hechos que aparezcan en el MATERIAL. No añadas cifras, fechas, nombres, causas ni consecuencias que no estén.
+- Atribuye las cifras y las afirmaciones discutibles a quien las da: «según la policía», «según Le Monde»,
+  «según el Gobierno francés». Si los medios dan cifras distintas, dilo («entre 800 y 1.200 detenidos, según la fuente»).
+- Sitúa los hechos en el tiempo con las fechas del MATERIAL («el sábado 17», «esta semana»). La última escena dice que
+  la información es «a {hoy_corto}» y que la situación puede cambiar.
+- Tono neutro e informativo: sin opiniones, sin adjetivos alarmistas, sin culpar a colectivos por su origen, religión
+  o ideología, sin detalles morbosos de violencia. No nombres a personas particulares (víctimas, detenidos, menores);
+  sí a cargos públicos y a instituciones.
+- Si el MATERIAL no deja claro por qué pasa algo, no lo expliques: cuenta solo lo que se sabe.
+- Los artículos pueden estar en otros idiomas: tradúcelo TODO al {idioma} (también el título y el gancho), y los términos («curfew» → «toque de
+  queda»). Solo se dejan en el original los nombres propios y las citas textuales, entre comillas y atribuidas.
+
+Estilo:
+- La PRIMERA FRASE engancha con un hecho cierto y concreto del MATERIAL (una cifra, una imagen, una contradicción).
+  Nunca empieces con «Hoy te voy a contar» ni con un saludo. Sin titulares engañosos.
+- Frases cortas, fáciles de narrar. Cuenta: qué ha pasado, dónde y cuándo, cifras, reacciones y qué puede pasar ahora
+  (solo si el MATERIAL lo dice).
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
+- Entre 6 y 8 escenas, de 20 a 30 palabras de narración cada una.
+
+Responde SOLO con un objeto JSON con esta forma:
+{{
+  "titulo": "título informativo y atractivo, sin exagerar",
+  "nombre_corto": "2 a 4 palabras que nombren la noticia (p. ej. «Disturbios Francia»)",
+  "gancho": "1 a 4 palabras ciertas que se verán en grande al empezar (p. ej. «1.200 detenidos»)",
+  "tono": "uno de: neutro, misterio, triste (para la música de fondo; nunca epico ni comico en noticias)",
+  "escenas": [
+    {{"narracion": "texto que dice la voz en off", "visual": "descripción de una imagen de ARCHIVO neutra para esa escena: lugar, edificio, institución, bandera o mapa (nunca el suceso en sí)"}}
+  ],
+  "busquedas_imagenes": ["3 a 5 búsquedas en inglés para encontrar fotos de archivo en Wikimedia Commons de los LUGARES e INSTITUCIONES de la noticia: ciudades, calles conocidas, monumentos, edificios oficiales, banderas (p. ej. «Paris Champs-Élysées», «Palais de l'Élysée», «Hôtel de Matignon», «Flag of France»). NUNCA disturbios, protestas, incendios, policía en acción, víctimas ni capturas de apps o webs: esas fotos serían de otros sucesos o tendrían derechos"],
+  "hashtags": ["#actualidad", "..."]
+}}
+Los NOMBRES de las claves son siempre exactamente estos, sin traducir. Los VALORES de "narracion", "titulo", "nombre_corto",
+"gancho" y "hashtags" van en {idioma}. Los de "visual" y "busquedas_imagenes" van SIEMPRE en inglés."""
+
+PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL (las fuentes) y las escenas numeradas de un guion.
 Revisa cada afirmación factual de la narración (fechas, cifras, lugares, personas, cómo ocurrió algo, causas y consecuencias).
 Señala SOLO las que no estén respaldadas por el MATERIAL o lo contradigan. Ignora las frases de opinión, preguntas retóricas y llamadas a comentar.
 
@@ -128,7 +169,7 @@ Si todo está respaldado, devuelve {"sin_respaldo": []}. Escribe "motivo" en esp
 # Por si el modelo traduce las claves al escribir en inglés.
 CLAVES_ALTERNATIVAS = {
     "title": "titulo", "scenes": "escenas", "narration": "narracion", "narración": "narracion",
-    "short_name": "nombre_corto", "hook": "gancho", "tone": "tono",
+    "short_name": "nombre_corto", "hook": "gancho", "tone": "tono", "image_searches": "busquedas_imagenes",
 }
 TONOS = ("epico", "misterio", "triste", "neutro", "comico")
 
@@ -367,6 +408,12 @@ def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicac
     raise ValueError(f"no se obtuvo un guion válido: {ultimo_error}")
 
 
+AVISO_ACTUALIDAD = """
+ATENCIÓN: es una noticia de actualidad. La mención a la fecha de hoy en la última escena («a 23 de octubre», «la
+situación puede cambiar») la exige el formato: no la señales. Sí señala cifras, nombres, fechas de los hechos o
+atribuciones («según X») que el MATERIAL no respalde."""
+
+
 AVISO_HUMOR = """
 ATENCIÓN: este guion es de HUMOR en primera persona («Día X como…»). Ignora las exageraciones evidentes, las
 quejas, las opiniones, las comparaciones absurdas, la jerga moderna y los chistes que nadie tomaría como un dato.
@@ -374,13 +421,14 @@ Señala SOLO las afirmaciones que un espectador creería como hechos históricos
 cargos, lugares, fechas) y que el MATERIAL no respalda."""
 
 
-def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, humor: bool = False) -> list:
+def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, humor: bool = False,
+                    noticia: bool = False) -> list:
     """Segunda pasada: lista las frases del guion que el material no respalda.
 
     Con `humor` (formato diario) no cuenta los chistes como datos: solo las afirmaciones históricas.
     """
     numeradas = "\n".join(f"{i}. {e['narracion']}" for i, e in enumerate(escenas, start=1))
-    sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "")
+    sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "") + (AVISO_ACTUALIDAD if noticia else "")
     respuesta = llamar_groq(api_key, MODELO_VERIFICADOR, sistema, f"MATERIAL:\n{material}\n\nGUION:\n{numeradas}")
     try:
         datos = json.loads(respuesta)
@@ -448,6 +496,13 @@ def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, 
         documento["serie"] = {"tema": evento["text"], "parte": parte, "total": total}
         sufijo = f"_parte{parte}de{total}"
     prefijo = evento["year"] if evento.get("year") else "tema"
+    if evento.get("actualidad"):  # noticia: medios, fecha de los datos y búsquedas para las imágenes de archivo
+        prefijo = "actualidad"
+        documento["actualidad"] = {
+            **evento["actualidad"],
+            "fecha_datos": date.today().isoformat(),
+            "busquedas_imagenes": [str(b) for b in guion.get("busquedas_imagenes", []) if isinstance(b, str)][:5],
+        }
     if evento.get("diario"):  # formato «Día X como…»: prompts para el generador de IA y el número de día
         diario = evento["diario"]
         documento["diario"] = diario
@@ -751,6 +806,9 @@ def main(argv=None) -> int:
     parser.add_argument("--cantidad", type=int, default=3, help="número de eventos (por defecto 3)")
     parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (por defecto hoy)")
     parser.add_argument("--idiomas", default="es,en", help="idiomas separados por comas: es,en")
+    parser.add_argument("--actualidad", metavar="ID",
+                        help="vídeo de actualidad con los artículos de una búsqueda de actualidad.py (ver --articulos)")
+    parser.add_argument("--articulos", default="", help="con --actualidad: números de los artículos a usar, p. ej. 0,2,3")
     parser.add_argument("--sin-repetir", action="store_true",
                         help="efemérides: salta los eventos que ya tienen guion (no los reescribe) y coge el siguiente")
     args = parser.parse_args(argv)
@@ -766,7 +824,26 @@ def main(argv=None) -> int:
         print(f"[error] Idiomas no soportados: {desconocidos}. Usa: {list(IDIOMAS)}", file=sys.stderr)
         return 1
 
-    if args.diario:
+    if args.actualidad:
+        import actualidad
+        try:
+            busqueda = actualidad.leer(args.actualidad)
+        except (OSError, ValueError) as error:
+            print(f"[error] no encuentro esa búsqueda de actualidad ({error}): vuelve a buscar", file=sys.stderr)
+            return 1
+        elegidos = [int(n) for n in args.articulos.split(",") if n.strip().isdigit()] or list(range(len(busqueda["articulos"])))
+        articulos = [busqueda["articulos"][n] for n in elegidos if n < len(busqueda["articulos"])]
+        if len(articulos) < 2:
+            print("[error] hacen falta al menos 2 artículos de medios distintos para contrastar", file=sys.stderr)
+            return 1
+        print(f"Actualidad: «{busqueda['tema']}» con {len(articulos)} artículos: "
+              + ", ".join(a["medio"] for a in articulos))
+        evento = {"year": None, "text": busqueda["tema"],
+                  "actualidad": {"tema": busqueda["tema"], "medios": [a["medio"] for a in articulos]}}
+        fuentes = [{"titulo": f"{a['medio']}: {a['titulo']}", "url": a["url"], "medio": a["medio"],
+                    "fecha": a.get("fecha", "")} for a in articulos]
+        trabajos = [(evento, actualidad.material(articulos), fuentes)]
+    elif args.diario:
         dia = args.dia if args.dia > 0 else siguiente_dia(args.diario)
         print(f"Diario de «{args.diario}» · día {dia}" + (f" · tema: {args.problema}" if args.problema else ""))
         try:
@@ -828,6 +905,13 @@ def main(argv=None) -> int:
                     nombre = nombre_diario(diario["personaje"], idioma) or acortar_nombre(guion.get("nombre_corto"))
                     apuntar_nombre_diario(diario["personaje"], idioma, nombre)
                     evento = {**evento, "diario": {**diario, "nombre_corto": nombre}}
+                elif evento.get("actualidad"):
+                    hoy = date.today()
+                    sistema = PROMPT_ACTUALIDAD.format(
+                        hoy=hoy.isoformat(), hoy_corto=f"{hoy.day} de {MESES_ES[hoy.month - 1]}" if idioma == "es"
+                        else hoy.strftime("%B %d"), min_palabras=PALABRAS_MIN, max_palabras=PALABRAS_MAX,
+                        idioma=IDIOMAS[idioma])
+                    guion = generar_guion(api_key, modelo, material, idioma, "", sistema)
                 else:
                     indicaciones = indicaciones_serie(evento, titulos_previos[idioma])
                     guion = generar_guion(api_key, modelo, material, idioma, indicaciones)
@@ -835,7 +919,8 @@ def main(argv=None) -> int:
                 titulos_previos[idioma].append(guion["titulo"])
                 if evento.get("total"):  # todas las partes de una serie comparten el nombre de la primera
                     guion["nombre_corto"] = nombres_serie.setdefault(idioma, guion.get("nombre_corto") or "")
-                dudas = verificar_guion(api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")))
+                dudas = verificar_guion(api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")),
+                                        noticia=bool(evento.get("actualidad")))
                 ruta = guardar(guion, evento, fuentes, dudas, args.fecha, idioma, modelo_usado)
                 aviso = f" · {len(dudas)} frase(s) sin respaldo, revísalas" if dudas else " · verificado contra el material"
                 print(f"  [{idioma}] {ruta}{aviso} · escrito con {modelo_usado}")
