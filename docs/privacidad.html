@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de privacidad · Mente Inquieta</title>
+  <meta name="description" content="Política de privacidad de Mente Inquieta, herramienta de escritorio para crear y publicar vídeos cortos en YouTube.">
+  <link rel="icon" href="favicon.png">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><div class="barra">
+  <a class="marca" href="./"><img src="logo.png" alt="">Mente Inquieta</a>
+  <nav><a href="./">Inicio</a><a href="privacidad.html" aria-current="page">Privacidad</a><a href="condiciones.html">Condiciones</a></nav>
+</div></header>
+
+<main>
+  <h1>Política de privacidad</h1>
+  <p class="fecha">Última actualización: 23 de octubre de 2026</p>
+
+  <p>Mente Inquieta («la aplicación») es una herramienta de escritorio de código abierto que crea vídeos cortos y los
+    publica en el canal de YouTube de quien la usa. Se ejecuta en el ordenador de su usuario: no hay un servidor de la
+    aplicación ni cuentas de usuario, y su autor no recibe ningún dato de quien la use.</p>
+
+  <h2>Qué datos de Google usa y para qué</h2>
+  <p>Cuando conectas tu canal, la aplicación te pide permiso, mediante el sistema oficial de Google (OAuth), para usar la
+    API de datos de YouTube con estos permisos:</p>
+  <ul>
+    <li><code>youtube.upload</code>: subir los vídeos que creas con la aplicación y sus miniaturas.</li>
+    <li><code>youtube.readonly</code>: leer el nombre de tu canal (para mostrarte a qué canal estás conectado) y el estado
+      de los vídeos subidos.</li>
+    <li><code>youtube</code>: cambiar la fecha de publicación o la visibilidad de los vídeos que subió la aplicación,
+      borrar un vídeo cuando tú lo pides y actualizar la descripción y las palabras clave del canal cuando tú lo pides.</li>
+  </ul>
+  <p>La aplicación solo hace estas acciones cuando tú las pides o las programas. No lee tus correos, contactos, historial
+    ni ningún otro dato de tu cuenta de Google.</p>
+
+  <h2>Dónde se guardan</h2>
+  <p>La autorización de Google (el «token») se guarda únicamente en tu ordenador, en la carpeta <code>credenciales</code>
+    de la aplicación. Nunca se envía a ningún servidor que no sea de Google, ni al autor de la aplicación ni a terceros.</p>
+
+  <h2>Con quién se comparten</h2>
+  <p>Con nadie. Los datos de tu cuenta de Google no se venden, no se ceden, no se usan para publicidad ni para entrenar
+    modelos de inteligencia artificial.</p>
+  <p>Para crear los vídeos, la aplicación se comunica con otros servicios, pero sin enviarles ningún dato de tu cuenta de
+    Google: Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago (información e imágenes), Bing Noticias o
+    Tavily (noticias), Groq (escritura de guiones a partir de esa información) y el servicio de voz de Microsoft Edge
+    (narración). Lo que se les envía es el tema del vídeo y el texto del guion.</p>
+  <p>El uso y la transferencia a cualquier otra aplicación de la información recibida de las API de Google se ajustan a la
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de datos de usuario de los
+    servicios de API de Google</a>, incluidos los requisitos de uso limitado.</p>
+
+  <h2>YouTube y Google</h2>
+  <p>La aplicación usa los servicios de API de YouTube. Al usarla aceptas también las
+    <a href="https://www.youtube.com/t/terms">Condiciones de servicio de YouTube</a>, y tus datos en YouTube y Google se
+    rigen por la <a href="https://policies.google.com/privacy">Política de privacidad de Google</a>.</p>
+
+  <h2>Cómo retirar el acceso y borrar los datos</h2>
+  <ul>
+    <li>Desde la aplicación: Ajustes → YouTube → Desconectar (borra la autorización guardada en tu ordenador).</li>
+    <li>Desde Google, en cualquier momento: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>
+      → Mente Inquieta → Quitar acceso.</li>
+    <li>Borrando la carpeta <code>credenciales</code> de la aplicación.</li>
+  </ul>
+  <p>Los vídeos, guiones y demás archivos que crea la aplicación se guardan en tu ordenador (carpeta <code>salida</code>)
+    y puedes borrarlos cuando quieras, también desde la propia aplicación.</p>
+
+  <h2>Menores</h2>
+  <p>La aplicación no está dirigida a menores de 13 años y no recoge datos de nadie.</p>
+
+  <h2>Cambios y contacto</h2>
+  <p>Si esta política cambia, se actualizará en esta página con su fecha. Para cualquier duda, abre una consulta en
+    <a href="https://github.com/luukthegoat/pipeline-curiosidades/issues">github.com/luukthegoat/pipeline-curiosidades/issues</a>.</p>
+</main>
+
+<footer><div class="barra">
+  <span>Mente Inquieta · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones</a></span>
+  <span style="margin-left: auto;">Contacto: <a href="https://github.com/luukthegoat/pipeline-curiosidades/issues">GitHub</a></span>
+</div></footer>
+</body>
+</html>
