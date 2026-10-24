@@ -192,7 +192,15 @@ def producir(t: Trabajo, nombres: list) -> bool:
     if t.ejecutar("paso2_audio.py", *[str(GUIONES / f"{n}.json") for n in nombres]) == 1:
         return False
     con_audio = [str(AUDIO / n) for n in nombres if (AUDIO / n / "escenas.json").exists()]
-    return t.ejecutar("paso3_video.py", *con_audio, "--forzar") == 0
+    if t.ejecutar("paso3_video.py", *con_audio, "--forzar") != 0:
+        return False
+    # Los que no tienen nada que revisar se dan por revisados y se programan solos (Ajustes → Programar solos).
+    hechos = programados.programar_sin_avisos(nombres)
+    for titulo, hora in hechos:
+        t.escribir(f"✔ Sin avisos del verificador: «{titulo}» queda revisado y programado para el {hora}.")
+    if hechos:
+        despertar_programados()
+    return True
 
 
 # --- Datos de los guiones -----------------------------------------------------
@@ -434,6 +442,20 @@ def crear_actualidad(id_busqueda):
     idiomas = ",".join(request.form.getlist("idiomas")) or "es"
     argumentos = ["--actualidad", id_busqueda, "--articulos", ",".join(elegidos), "--idiomas", idiomas]
     return lanzar_guiones(f"Actualidad: «{busqueda['tema']}»", argumentos, request.form.get("completo") == "on")
+
+
+@app.post("/ajustes/autoprogramar")
+def guardar_autoprogramar():
+    activo = request.form.get("activo") == "1"
+    guardar_env({"AUTO_PROGRAMAR": "1" if activo else "0"})
+    mensaje = ("Activado: los vídeos sin avisos se revisan y se programan solos." if activo
+               else "Desactivado: los vídeos esperarán en Pendientes a que los programes tú.")
+    if activo:
+        hechos = programados.programar_sin_avisos()
+        despertar_programados()
+        if hechos:
+            mensaje += f" Programados ahora: {len(hechos)}."
+    return redirect(url_for("ajustes", mensaje=mensaje, _anchor="autoprogramar"))
 
 
 @app.post("/ajustes/tavily")
@@ -972,6 +994,18 @@ def _accion_programado(funcion, *argumentos):
     return redirect(url_for("ver_programados", mensaje=mensaje or "Hecho."))
 
 
+@app.route("/calendario")
+def ver_calendario():
+    hoy = date.today()
+    try:
+        anio, mes = (int(x) for x in request.args.get("mes", f"{hoy.year}-{hoy.month}").split("-"))
+        date(anio, mes, 1)
+    except ValueError:
+        anio, mes = hoy.year, hoy.month
+    return render_template("calendario.html", cal=programados.calendario(anio, mes),
+                           este_mes=f"{hoy.year}-{hoy.month:02d}")
+
+
 @app.post("/programados/<nombre>/hora")
 def hora_programado(nombre):
     return _accion_programado(programados.cambiar_hora, nombre, request.form.get("hora", ""))
@@ -1183,6 +1217,7 @@ def ajustes():
         yt_token=subir_youtube.TOKEN.exists(),
         yt_privacidad=env.get("YT_PRIVACIDAD") or "private",
         tavily=bool(os.getenv("TAVILY_API_KEY")),
+        autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
     )
 
 

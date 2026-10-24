@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.10.0] - 2026-10-24
+
+### Añadido
+- **Programar solos los vídeos sin avisos.** Al terminar de generar un vídeo, si el verificador no ha marcado ninguna
+  frase, se da por revisado y se programa a su hora recomendada. No se aplica a los de actualidad (siempre a mano) ni a
+  los que tienen frases dudosas. Se activa o desactiva en Ajustes (`AUTO_PROGRAMAR`).
+- **Calendario** (Programados → Calendario): el mes con los vídeos de cada día y su hora, por colores (en cola, en
+  YouTube programado, publicado, con error), navegable por meses; en el móvil, lista por días.
+
+### Cambiado
+- **Los programados se suben a YouTube en cuanto hay hueco** (hasta 30 días antes de su hora, antes 48 h), ya
+  programados: así casi todo queda en YouTube y se publica aunque el ordenador esté apagado. Se sigue respetando el
+  máximo de subidas en 24 h.
+
 ## [1.9.0] - 2026-10-23
 
 ### Añadido
@@ -202,6 +216,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.10.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.7.0...v1.8.0

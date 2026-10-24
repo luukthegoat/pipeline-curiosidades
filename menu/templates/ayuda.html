@@ -106,10 +106,14 @@
     (al publicar varios desde el inicio). El vídeo queda en <a href="{{ url_for('ver_programados') }}">Programados</a>:</p>
   <ol class="pasos">
     <li>El programa lo guarda en la cola, en tu ordenador.</li>
-    <li>Entre 48 h y unos minutos antes de su hora, lo sube a YouTube ya programado. Nunca sube más de 3 vídeos en 24 h,
+    <li>En cuanto hay hueco, lo sube a YouTube ya programado para su hora. Nunca sube más de 3 vídeos en 24 h,
       para no chocar con el límite de subidas de YouTube.</li>
     <li>YouTube lo publica a su hora, aunque tengas el ordenador apagado.</li>
   </ol>
+  <p>Al terminar de generar un vídeo, si el verificador no ha marcado nada que revisar, <strong>se da por revisado y se
+    programa solo</strong> a su hora recomendada (se puede desactivar en Ajustes; los de actualidad y los que tienen frases
+    dudosas nunca se programan solos). En <a href="{{ url_for('ver_calendario') }}">Programados → Calendario</a> ves el
+    mes entero con los vídeos de cada día y su hora.</p>
   <p>En Programados ves todos con su día y hora, y en qué punto está cada uno (en cola, en YouTube o con error). Puedes
     publicar uno ya, cambiarle la hora o quitarlo (si ya estaba en YouTube, queda en privado).</p>
   <p class="ayuda-campo">El ordenador tiene que encenderse, con tu sesión iniciada, al menos una vez antes de la hora de

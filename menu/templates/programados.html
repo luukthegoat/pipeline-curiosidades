@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block titulo %}Programados · Mente Inquieta{% endblock %}
 {% block contenido %}
-<h1>Programados</h1>
+<div class="cabecera-pagina">
+  <h1>Programados</h1>
+  <div class="vistas"><a class="actual" href="{{ url_for('ver_programados') }}">Lista</a><a href="{{ url_for('ver_calendario') }}">Calendario</a></div>
+</div>
 <p class="sub">El programa sube cada vídeo a YouTube hasta {{ antelacion }} h antes de su hora (como mucho {{ max_dia }} al día,
   para no chocar con el límite de subidas) y lo deja programado: YouTube lo publica a su hora aunque tengas el
   ordenador apagado.</p>

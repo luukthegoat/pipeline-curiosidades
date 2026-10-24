@@ -15,7 +15,7 @@
   </script>
 </head>
 <body>
-  {% set seccion = {'ver_guion': 'inicio', 'imagenes_guion': 'inicio'}.get(request.endpoint, request.endpoint) %}
+  {% set seccion = {'ver_guion': 'inicio', 'imagenes_guion': 'inicio', 'ver_calendario': 'ver_programados'}.get(request.endpoint, request.endpoint) %}
   {% set activos = cola.activos() | length %}
   {% macro enlace(endpoint, texto, icono) %}
     <a href="{{ url_for(endpoint) }}" class="{{ 'actual' if seccion == endpoint }}" {% if endpoint == 'ver_tarea' %}id="nav-tarea"{% endif %}>

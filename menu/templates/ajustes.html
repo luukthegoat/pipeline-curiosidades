@@ -65,6 +65,22 @@
   </form>
 </div>
 
+<div class="tarjeta" id="autoprogramar">
+  <h2>Programar solos los vídeos sin avisos</h2>
+  {% if autoprogramar %}
+    <p><span class="etiqueta ok">activado</span> Al terminar de generar un vídeo, si el verificador no ha marcado nada que
+      revisar, se da por revisado y se programa solo a su hora recomendada (lo ves en Programados y en el Calendario).</p>
+  {% else %}
+    <p><span class="etiqueta">desactivado</span> Los vídeos esperan en Pendientes a que los revises y los programes tú.</p>
+  {% endif %}
+  <p class="ayuda-campo">Los de actualidad nunca se programan solos: las noticias se revisan siempre a mano. Los que tienen
+    frases dudosas tampoco.</p>
+  <form method="post" action="{{ url_for('guardar_autoprogramar') }}">
+    <input type="hidden" name="activo" value="{{ '0' if autoprogramar else '1' }}">
+    <button class="{{ 'secundario' if autoprogramar else '' }}" type="submit">{{ 'Desactivar' if autoprogramar else 'Activar' }}</button>
+  </form>
+</div>
+
 <div class="tarjeta" id="actualidad">
   <h2>Noticias de actualidad</h2>
   {% if tavily %}

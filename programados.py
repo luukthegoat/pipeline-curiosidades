@@ -2,8 +2,8 @@
 
 Modo mixto:
   - Programar un vídeo solo lo apunta en la cola (salida/_trabajo/programados.json).
-  - Entre ANTELACION_H y unos minutos antes de su hora, el programa lo sube a YouTube ya programado
-    (privado + publishAt). Desde ese momento YouTube lo publica a su hora aunque el ordenador esté apagado.
+  - En cuanto hay hueco (hasta ANTELACION_H antes de su hora; por defecto, 30 días), el programa lo sube a YouTube
+    ya programado (privado + publishAt). Desde ese momento YouTube lo publica a su hora aunque el ordenador esté apagado.
   - Nunca sube más de MAX_SUBIDAS_DIA vídeos en 24 h (contando también los subidos a mano), para no chocar
     con el límite de subidas de YouTube; lo que no cabe, espera a la siguiente oportunidad.
   - Si a la hora de subirlo ya ha pasado su hora (ordenador apagado muchos días), se publica al subirlo.
@@ -40,7 +40,9 @@ CERROJO = RAIZ / "salida" / "_trabajo" / "programados.lock"
 REGISTRO = RAIZ / "salida" / "_trabajo" / "programados.log"
 GUIONES = RAIZ / "salida" / "guiones"
 TAREA = "Mente Inquieta - publicar programados"
-ANTELACION_H = float(os.getenv("PROGRAMADOS_ANTELACION_H") or 48)  # cuánto antes de su hora se sube
+# Cuánto antes de su hora puede subirse: por defecto 30 días, es decir, en cuanto haya hueco en el límite diario.
+# Así casi todo queda programado en YouTube (se publica aunque el ordenador esté apagado).
+ANTELACION_H = float(os.getenv("PROGRAMADOS_ANTELACION_H") or 720)
 MAX_SUBIDAS_DIA = int(os.getenv("PROGRAMADOS_MAX_DIA") or 3)        # subidas como mucho en 24 h
 MARGEN_MIN = 15  # YouTube necesita que la hora de publicación sea futura: por debajo de esto, se publica ya
 FORMATO = "%Y-%m-%dT%H:%M"
@@ -214,6 +216,42 @@ def publicar_ya(nombre: str) -> str:
     return mensaje
 
 
+def programar_sin_avisos(nombres=None) -> list:
+    """Da por revisados y programa a su hora recomendada los vídeos que no tienen nada que revisar.
+
+    Cuenta un vídeo si: tiene vídeo, el verificador no marcó ninguna frase, no está en YouTube ni en la cola y no es
+    de actualidad (las noticias se revisan siempre a mano). Devuelve [(titulo, hora bonita)].
+    """
+    import horarios
+    if os.getenv("AUTO_PROGRAMAR", "1") != "1":
+        return []
+    en_cola = {v["nombre"] for v in leer()["videos"]}
+    candidatos = []
+    for ruta in sorted(GUIONES.glob("*.json")) if nombres is None else [GUIONES / f"{n}.json" for n in nombres]:
+        try:
+            guion = json.loads(ruta.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        video = guion.get("video") and (RAIZ / guion["video"]).exists()
+        if (video and not guion.get("sin_respaldo") and not guion.get("youtube") and not guion.get("actualidad")
+                and ruta.stem not in en_cola):
+            candidatos.append((ruta, guion))
+    if not candidatos:
+        return []
+    recomendadas = horarios.recomendar([r.stem for r, _ in candidatos])
+    hechos = []
+    for ruta, guion in candidatos:
+        r = recomendadas.get(ruta.stem)
+        if not r:
+            continue
+        if not guion.get("verificado"):
+            guion["verificado"], guion["verificado_automatico"] = True, True
+            ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+        anadir(ruta.stem, r["hora"])
+        hechos.append((guion.get("titulo", ruta.stem), r["bonita"]))
+    return hechos
+
+
 def reintentar(nombre: str) -> str:
     """Un vídeo con error vuelve a la cola con su misma hora (no lo publica ya, como «Publicar ya»)."""
     datos = leer()
@@ -285,6 +323,64 @@ def para_mostrar() -> dict:
     proximos.sort(key=lambda v: v["hora"])
     historial.sort(key=lambda v: v["hora"], reverse=True)
     return {"proximos": proximos, "historial": historial[:30]}
+
+
+MESES_LARGOS = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+                "noviembre", "diciembre")
+
+
+def calendario(anio: int, mes: int) -> dict:
+    """Las semanas de un mes (de lunes a domingo) con los vídeos de cada día y su hora.
+
+    Entran la cola de Programados y lo que ya está en YouTube (programado o publicado), sin repetir.
+    Estados: «cola» (aún en el ordenador), «programado» (en YouTube, esperando su hora), «publicado» y «error».
+    """
+    import calendar as cal
+    ahora = datetime.now()
+    eventos, vistos = [], set()
+    for v in leer()["videos"]:
+        hora = _hora(v["hora"])
+        estado = {"en_cola": "cola", "subiendo": "cola", "error": "error"}.get(v["estado"])
+        if v["estado"] == "en_youtube":
+            estado = "programado" if hora > ahora else "publicado"
+        eventos.append({"nombre": v["nombre"], "titulo": v["titulo"], "hora": hora, "estado": estado,
+                        "url": v.get("url", "")})
+        vistos.add(v["nombre"])
+    for ruta in GUIONES.glob("*.json"):  # subidos sin pasar por la cola (a mano, «Ahora», piloto antiguo…)
+        if ruta.stem in vistos:
+            continue
+        try:
+            guion = json.loads(ruta.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        yt = guion.get("youtube") or {}
+        cuando = yt.get("publicar_el") or yt.get("subido")
+        if not cuando:
+            continue
+        hora = _hora(cuando)
+        estado = "programado" if hora > ahora else ("publicado" if yt.get("privacidad") != "private" or
+                                                      yt.get("publicar_el") else "privado")
+        eventos.append({"nombre": ruta.stem, "titulo": guion.get("titulo", ruta.stem), "hora": hora, "estado": estado,
+                        "url": yt.get("url", "")})
+
+    semanas = []
+    for semana in cal.Calendar(firstweekday=0).monthdatescalendar(anio, mes):
+        dias = []
+        for dia in semana:
+            del_dia = sorted((e for e in eventos if e["hora"].date() == dia), key=lambda e: e["hora"])
+            dias.append({"fecha": dia, "numero": dia.day, "de_otro_mes": dia.month != mes,
+                         "hoy": dia == ahora.date(), "pasado": dia < ahora.date(),
+                         "videos": [{**e, "hhmm": f"{e['hora']:%H:%M}"} for e in del_dia]})
+        semanas.append(dias)
+    del_mes = [e for e in eventos if e["hora"].year == anio and e["hora"].month == mes]
+    anterior = (anio - 1, 12) if mes == 1 else (anio, mes - 1)
+    siguiente = (anio + 1, 1) if mes == 12 else (anio, mes + 1)
+    return {
+        "titulo": f"{MESES_LARGOS[mes - 1].capitalize()} {anio}", "semanas": semanas,
+        "anterior": f"{anterior[0]}-{anterior[1]:02d}", "siguiente": f"{siguiente[0]}-{siguiente[1]:02d}",
+        "total": len(del_mes), "por_estado": {k: sum(1 for e in del_mes if e["estado"] == k)
+                                             for k in ("cola", "programado", "publicado", "error")},
+    }
 
 
 def por_guion() -> dict:

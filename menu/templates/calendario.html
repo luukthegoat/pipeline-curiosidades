@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Calendario · Mente Inquieta{% endblock %}
+{% block contenido %}
+<div class="cabecera-pagina">
+  <h1>Programados</h1>
+  <div class="vistas"><a href="{{ url_for('ver_programados') }}">Lista</a><a class="actual" href="{{ url_for('ver_calendario') }}">Calendario</a></div>
+</div>
+<p class="sub">Qué se publica cada día y a qué hora. Pincha un vídeo para abrirlo.</p>
+
+<div class="cal-barra">
+  <a class="boton secundario" href="{{ url_for('ver_calendario', mes=cal.anterior) }}" aria-label="Mes anterior">←</a>
+  <h2>{{ cal.titulo }}</h2>
+  <a class="boton secundario" href="{{ url_for('ver_calendario', mes=cal.siguiente) }}" aria-label="Mes siguiente">→</a>
+  <a class="boton secundario" href="{{ url_for('ver_calendario', mes=este_mes) }}">Hoy</a>
+  <div class="cal-leyenda">
+    <span class="punto e-programado"></span>En YouTube, programado <b>{{ cal.por_estado.programado }}</b>
+    <span class="punto e-cola"></span>En cola <b>{{ cal.por_estado.cola }}</b>
+    <span class="punto e-publicado"></span>Publicado <b>{{ cal.por_estado.publicado }}</b>
+    {% if cal.por_estado.error %}<span class="punto e-error"></span>Con error <b>{{ cal.por_estado.error }}</b>{% endif %}
+  </div>
+</div>
+
+<div class="calendario">
+  {% for nombre in ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}<div class="cal-cabecera">{{ nombre }}</div>{% endfor %}
+  {% for semana in cal.semanas %}
+    {% for d in semana %}
+      <div class="cal-dia {{ 'otro-mes' if d.de_otro_mes }} {{ 'hoy' if d.hoy }} {{ 'pasado' if d.pasado }} {{ 'vacio' if not d.videos }}">
+        <div class="cal-numero"><i class="solo-movil">{{ ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][d.fecha.weekday()] }}</i>{{ d.numero }}{% if d.hoy %}<span>hoy</span>{% endif %}</div>
+        {% for v in d.videos %}
+          <a class="cal-video e-{{ v.estado }}" href="{{ url_for('ver_guion', nombre=v.nombre) }}" title="{{ v.hhmm }} · {{ v.titulo }}">
+            <b>{{ v.hhmm }}</b> {{ v.titulo }}
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+</div>
+
+{% if not cal.total %}
+  <p class="ayuda-campo" style="margin-top: 16px;">No hay nada programado este mes.</p>
+{% endif %}
+<p class="ayuda-campo" style="margin-top: 16px;">«En cola»: aún en tu ordenador; se sube a YouTube en cuanto haya hueco en
+  el límite diario. «En YouTube, programado»: ya subido; YouTube lo publica solo a su hora, aunque el ordenador esté
+  apagado. Para cambiar una hora o quitar un vídeo, usa la vista de <a href="{{ url_for('ver_programados') }}">Lista</a>.</p>
+{% endblock %}

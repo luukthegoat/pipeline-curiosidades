@@ -715,3 +715,49 @@ button.enlace { height: auto; padding: 0; background: none; border: 0; color: va
   place-items: center; color: var(--tenue); font-size: 12px; text-align: center; padding: 8px; }
 .clip .lado .boton, .clip .lado button { height: 34px; font-size: 13px; padding: 0 10px; width: 100%; }
 @media (max-width: 640px) { .clip { grid-template-columns: 1fr; } .clip video, .clip .hueco { max-width: 140px; } }
+
+/* Calendario de programados */
+.cabecera-pagina { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.vistas { display: inline-flex; padding: 4px; gap: 2px; border-radius: 12px; background: var(--superficie-2); }
+.vistas a { padding: 6px 14px; border-radius: 9px; font-size: 14px; font-weight: 500; color: var(--suave); text-decoration: none; }
+.vistas a:hover { color: var(--texto); }
+.vistas a.actual { background: var(--superficie); color: var(--texto); box-shadow: 0 1px 3px rgba(0, 0, 0, .08), inset 0 0 0 1px var(--borde); }
+.cal-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.cal-barra h2 { margin: 0 8px; min-width: 150px; text-align: center; font-size: 18px; }
+.cal-barra .boton { height: 34px; padding: 0 12px; }
+.cal-leyenda { margin-left: auto; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--suave); }
+.cal-leyenda b { color: var(--texto); margin-right: 8px; }
+.punto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.punto.e-programado { background: var(--acento); }
+.punto.e-cola { background: var(--tenue); }
+.punto.e-publicado { background: var(--ok); }
+.punto.e-error { background: var(--error); }
+.calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--borde);
+  border-radius: var(--radio); overflow: hidden; background: var(--borde); gap: 1px; }
+.cal-cabecera { background: var(--superficie-2); padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--suave);
+  text-transform: uppercase; letter-spacing: .05em; }
+.cal-dia { background: var(--superficie); min-height: 112px; padding: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cal-dia.otro-mes { background: var(--superficie-2); }
+.cal-dia.otro-mes .cal-numero { color: var(--tenue); }
+.cal-dia.pasado .cal-numero { color: var(--tenue); }
+.cal-dia.hoy { box-shadow: inset 0 0 0 2px var(--acento); }
+.cal-numero { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.cal-numero span { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--acento-sobre);
+  background: var(--acento); padding: 0 6px; border-radius: 999px; }
+.cal-video { display: block; padding: 4px 7px; border-radius: 7px; font-size: 12px; line-height: 1.35; text-decoration: none;
+  color: var(--texto); background: var(--superficie-2); border-left: 3px solid var(--tenue);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-video b { font-weight: 700; margin-right: 2px; }
+.cal-video:hover { filter: brightness(1.05); text-decoration: underline; }
+.cal-video.e-programado { border-left-color: var(--acento); background: var(--acento-suave); }
+.cal-video.e-publicado { border-left-color: var(--ok); background: var(--ok-fondo); }
+.cal-video.e-error { border-left-color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+.cal-video.e-privado { border-left-color: var(--tenue); opacity: .8; }
+@media (max-width: 760px) {
+  .calendario { grid-template-columns: 1fr; }
+  .cal-cabecera, .cal-dia.vacio, .cal-dia.otro-mes { display: none; }
+  .cal-dia { min-height: 0; }
+  .cal-video { white-space: normal; }
+}
+.solo-movil { display: none; font-style: normal; }
+@media (max-width: 760px) { .solo-movil { display: inline; color: var(--suave); font-weight: 500; } }
