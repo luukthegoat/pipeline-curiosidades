@@ -3,6 +3,16 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.10.1] - 2026-10-24
+
+### Arreglado
+- **La cola de Programados se pone al día con YouTube.** Lo que se cambia en YouTube Studio (adelantar la publicación,
+  cambiar la hora, borrar un vídeo) ya no deja la app desfasada: se comprueba cada 15 minutos, antes de cada subida y al
+  pulsar «Revisar». Si un vídeo se ha borrado en YouTube, pasa a «error» y «Reintentar» lo vuelve a subir.
+- **«Publicar ya» no hacía nada si se había llegado al máximo de subidas en 24 h del programa**: el vídeo se quedaba
+  esperando sin avisar. Ahora se sube al momento (el límite de YouTube se sigue respetando) y no bloquea a los demás.
+- El mensaje tras «Publicar ya» ya no dice que «el ordenador estaba apagado».
+
 ## [1.10.0] - 2026-10-24
 
 ### Añadido
@@ -216,6 +226,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.10.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.0...v1.8.1

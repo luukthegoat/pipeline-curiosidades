@@ -961,7 +961,14 @@ def despertar_programados() -> None:
 def vigilar_programados() -> None:
     """Mientras el menú está abierto, mira cada minuto si hay que subir algún vídeo programado."""
     def bucle():
+        ultima_comprobacion = 0.0
         while True:
+            try:
+                if time.time() - ultima_comprobacion > 15 * 60 and subir_youtube.TOKEN.exists():
+                    ultima_comprobacion = time.time()  # cada 15 min: ¿se ha cambiado algo en YouTube Studio?
+                    programados.sincronizar()
+            except Exception as error:  # noqa: BLE001 — sin conexión no pasa nada: se mira la próxima vez
+                print(f"[programados] {error}", file=sys.stderr)
             try:
                 if programados.toca_revisar():
                     subprocess.run([sys.executable, str(RAIZ / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
@@ -1033,10 +1040,16 @@ def limpiar_programados():
 
 @app.post("/programados/revisar")
 def revisar_programados():
-    datos = programados.leer()
-    datos["siguiente_intento"] = None
-    programados.guardar(datos)
-    return _accion_programado(lambda: "Revisando la cola: si toca subir algo, empezará en unos segundos.")
+    def accion():
+        cambios = programados.sincronizar()  # primero, poner la cola al día con YouTube
+        datos = programados.leer()
+        datos["siguiente_intento"] = None
+        programados.guardar(datos)
+        texto = "Revisando la cola: si toca subir algo, empezará en unos segundos."
+        if cambios:
+            return f"Comprobado con YouTube: {'; '.join(cambios)}. {texto}"
+        return f"Comprobado con YouTube: todo coincide. {texto}"
+    return _accion_programado(accion)
 
 
 @app.post("/youtube/conectar")

@@ -189,6 +189,7 @@ def cambiar_hora(nombre: str, hora: str) -> str:
         import subir_youtube
         subir_youtube.cambiar_publicacion(video["youtube_id"], publicar_el=hora)
         _apuntar_en_guion(nombre, privacidad="private", publicar_el=hora)
+        video.update(mensaje="", cambiado=datetime.now().isoformat(timespec="seconds"))
     elif video["estado"] == "error":
         video["estado"], video["mensaje"] = "en_cola", ""
     video["hora"] = hora
@@ -207,9 +208,11 @@ def publicar_ya(nombre: str) -> str:
         import subir_youtube
         subir_youtube.cambiar_publicacion(video["youtube_id"], privacidad="public")
         _apuntar_en_guion(nombre, privacidad="public", publicar_el=None)
+        video["cambiado"] = datetime.now().isoformat(timespec="seconds")
         mensaje = "Publicado en YouTube."
     else:
-        video["estado"], video["mensaje"] = "en_cola", ""
+        # Lo pides tú: no espera al máximo de subidas en 24 h del programa (el límite de YouTube sí manda).
+        video.update(estado="en_cola", mensaje="", forzar=True)
         mensaje = "Se sube y se publica en cuanto se pueda (en menos de un minuto si el menú está abierto)."
     video["hora"] = ahora
     _guardar_y_reprogramar(datos)
@@ -267,6 +270,73 @@ def reintentar(nombre: str) -> str:
     video.update(estado="en_cola", mensaje="")
     _guardar_y_reprogramar(datos)
     return f"Vuelve a la cola para el {formato_bonito(video['hora'])}."
+
+
+def _local(utc: str) -> str:
+    """«2026-10-26T11:30:00Z» → «2026-10-26T12:30» (hora del ordenador)."""
+    return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone().strftime(FORMATO)
+
+
+def sincronizar() -> list:
+    """Pone la cola al día con lo que hay de verdad en YouTube (lo cambiado en YouTube Studio manda).
+
+    Para cada vídeo «en YouTube» de la cola:
+      - si ya no está en el canal (borrado en Studio), pasa a «error» y se olvida el enlace, para que
+        «Reintentar» lo suba de nuevo;
+      - si se publicó antes de su hora, o se le cambió la hora en Studio, se apunta la hora real;
+      - si está privado sin hora de publicación (no va a salir nunca), se avisa.
+    Devuelve la lista de cambios en texto.
+    """
+    import subir_youtube
+    datos = leer()
+    # Lo cambiado desde la app hace menos de 10 min no se toca: YouTube tarda un poco en devolver el dato nuevo.
+    reciente = (datetime.now() - timedelta(minutes=10)).isoformat(timespec="seconds")
+    videos = [v for v in datos["videos"] if v["estado"] == "en_youtube" and v.get("youtube_id")
+              and v.get("cambiado", "") < reciente]
+    if not videos:
+        return []
+    youtube = subir_youtube.build("youtube", "v3", credentials=subir_youtube.credenciales(), cache_discovery=False)
+    reales = {}
+    ids = [v["youtube_id"] for v in videos]
+    for i in range(0, len(ids), 50):
+        respuesta = youtube.videos().list(part="status,snippet", id=",".join(ids[i:i + 50])).execute()
+        reales.update({x["id"]: x for x in respuesta.get("items", [])})
+
+    cambios = []
+    for v in videos:
+        real = reales.get(v["youtube_id"])
+        titulo = v["titulo"]
+        if not real:
+            ruta = GUIONES / f"{v['nombre']}.json"
+            if ruta.exists():
+                guion = json.loads(ruta.read_text(encoding="utf-8"))
+                if (guion.get("youtube") or {}).get("id") == v["youtube_id"]:
+                    guion["youtube_borrado"] = guion.pop("youtube")
+                    ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+            v.update(estado="error", youtube_id="", url="",
+                     mensaje="ya no está en YouTube (¿borrado en YouTube Studio?): pulsa «Reintentar» para subirlo otra vez")
+            cambios.append(f"«{titulo}» ya no está en el canal")
+            continue
+        estado = real["status"]
+        if estado["privacyStatus"] == "public":
+            if _hora(v["hora"]) > datetime.now():
+                publicado = _local(real["snippet"]["publishedAt"])
+                v.update(hora=publicado, mensaje="publicado antes de su hora desde YouTube Studio")
+                _apuntar_en_guion(v["nombre"], privacidad="public", publicar_el=None)
+                cambios.append(f"«{titulo}» ya está público (desde el {formato_bonito(publicado)})")
+        elif estado.get("publishAt"):
+            hora = _local(estado["publishAt"])
+            if hora != v["hora"][:16]:
+                v.update(hora=hora, mensaje="hora cambiada en YouTube Studio")
+                _apuntar_en_guion(v["nombre"], publicar_el=hora)
+                cambios.append(f"«{titulo}»: en YouTube sale el {formato_bonito(hora)}")
+        elif not v.get("mensaje", "").startswith("en YouTube está"):
+            v["mensaje"] = (f"en YouTube está {'privado' if estado['privacyStatus'] == 'private' else 'oculto'} "
+                            "y sin hora: no se publicará solo")
+            cambios.append(f"«{titulo}» está {estado['privacyStatus']} en YouTube y sin hora de publicación")
+    if cambios:
+        guardar(datos)
+    return cambios
 
 
 def limpiar_historial() -> None:
@@ -393,10 +463,9 @@ def por_guion() -> dict:
 def toca_revisar() -> bool:
     """¿Hay algo que subir ya? (lo usa el menú cada minuto para no lanzar el proceso sin motivo)."""
     datos = leer()
-    if datos["siguiente_intento"] and datetime.fromisoformat(datos["siguiente_intento"]) > datetime.now():
-        return False
+    esperando = bool(datos["siguiente_intento"]) and datetime.fromisoformat(datos["siguiente_intento"]) > datetime.now()
     return any(v["estado"] in ("en_cola", "subiendo") and momento_de_subida(v) <= datetime.now()
-               for v in datos["videos"])
+               and (v.get("forzar") or not esperando) for v in datos["videos"])
 
 
 # --- Subida -----------------------------------------------------------------------------
@@ -449,6 +518,12 @@ def _revisar() -> int:
     import subir_youtube
     from googleapiclient.errors import HttpError
 
+    try:
+        for cambio in sincronizar():
+            _log(f"YouTube: {cambio}")
+    except Exception as error:  # noqa: BLE001 — sin conexión se sigue con la cola tal cual
+        _log(f"no he podido comprobar los vídeos en YouTube: {error}")
+
     for v in leer()["videos"]:  # restos de una ejecución que se cortó a medias
         if v["estado"] == "subiendo":
             ruta = GUIONES / f"{v['nombre']}.json"
@@ -463,9 +538,9 @@ def _revisar() -> int:
         v = buscar(leer(), nombre)  # estado actual: puede haberse quitado o cambiado de hora
         if not v or v["estado"] != "en_cola" or momento_de_subida(v) > datetime.now():
             continue
-        if subidas_ultimas_24h() >= MAX_SUBIDAS_DIA:
+        if subidas_ultimas_24h() >= MAX_SUBIDAS_DIA and not v.get("forzar"):
             bloqueado = f"máximo de {MAX_SUBIDAS_DIA} subidas en 24 h alcanzado"
-            break
+            continue  # los de «Publicar ya» que vengan detrás sí se suben
         ruta = GUIONES / f"{nombre}.json"
         if not ruta.exists():
             _actualizar(nombre, estado="error", mensaje="el guion ya no existe")
@@ -500,11 +575,12 @@ def _revisar() -> int:
                 continue
         else:
             subidos += 1
-            mensaje = "" if a_tiempo else "se subió tarde (el ordenador estaba apagado) y se publicó al subirlo"
+            mensaje = "" if a_tiempo else ("publicado al momento («Publicar ya»)" if v.get("forzar") else
+                                           "se subió tarde (el ordenador estaba apagado) y se publicó al subirlo")
             if resultado.get("privacidad") == "private" and not a_tiempo:
                 mensaje = "subido, pero YouTube lo ha dejado en privado: hazlo público en YouTube Studio"
             _actualizar(nombre, estado="en_youtube", youtube_id=resultado["id"], url=resultado["url"],
-                        subido=datetime.now().isoformat(timespec="seconds"), mensaje=mensaje)
+                        subido=datetime.now().isoformat(timespec="seconds"), mensaje=mensaje, forzar=False)
             _log(f"  ✔ {resultado['url']}")
             _avisar("Vídeo programado en YouTube" if a_tiempo else "Vídeo publicado en YouTube",
                     f"«{v['titulo']}»" + (f" se publicará el {formato_bonito(v['hora'])}." if a_tiempo else "."))
