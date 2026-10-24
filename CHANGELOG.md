@@ -3,6 +3,35 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.9.0] - 2026-10-23
+
+### Añadido
+- **Formato «Vídeo con IA»** ([`video_ia.py`](video_ia.py)): la app escribe el guion y un prompt de vídeo por escena;
+  tú generas cada clip en una IA de vídeo y lo subes; la app lo monta.
+  - Desplegable con Google Veo 3, Sora, Runway y Kling, con el enlace a la web de cada una, su consejo y la duración de
+    sus clips.
+  - Voz de la IA (el personaje dice su frase en el clip, para las que generan audio) o narración de la app sobre clips
+    mudos (con el sonido del clip de fondo).
+  - Prompts en inglés con formato vertical, estilo visual, personaje fijo en todas las escenas, acción y plano de cámara.
+  - En la página del guion, cada escena con su prompt («Copiar»), «Subir clip», vista previa y «Quitar».
+  - Montaje con los clips: recorte a 9:16, bucle o recorte para cuadrar con la escena, subtítulos, gancho, música,
+    cierre, miniatura de un fotograma y aviso de «vídeo generado con IA» en la descripción.
+  - Borrar un vídeo borra también sus clips.
+
+### Corregido
+- **Vídeos duplicados en YouTube.** Al subir los programados, un mensaje con «✔» rompía el proceso en algunas consolas
+  justo después de que YouTube aceptara el vídeo: quedaba subido pero apuntado como «error», y al reintentarlo se
+  subía otra vez. Ahora la subida se apunta en el guion en cuanto YouTube la confirma (antes de cualquier mensaje),
+  los mensajes no pueden romper nada y, si algo falla después de subir, la cola lo da por subido.
+- **«Reintentar»** en Programados mantiene la hora del vídeo; antes era «Reintentar ya» y lo publicaba al momento.
+  «Publicar ya» es un botón aparte que pide confirmación.
+- **Un guion nunca pisa a otro que ya existe** (p. ej. al volver a crear las efemérides de un día): el nuevo se guarda
+  con «_2». Antes se perdía el guion anterior, aunque estuviera revisado o tuviera vídeo.
+
+### Cambiado
+- **Selector del tipo de vídeo** en Crear: tarjetas con el nombre completo, un icono y una línea de ayuda (2×2 en el
+  móvil), en vez de pestañas recortadas.
+
 ## [1.8.1] - 2026-10-23
 
 ### Corregido
@@ -173,6 +202,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.9.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.4.0...v1.7.0

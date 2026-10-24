@@ -9,11 +9,70 @@
 {% endif %}
 
 <form class="tarjeta" method="post" action="{{ url_for('crear') }}">
-  <div class="pestanas">
-    <label><input type="radio" name="modo" value="tema" checked onchange="cambiarModo()"><span>Tema libre</span></label>
-    <label><input type="radio" name="modo" value="fecha" onchange="cambiarModo()"><span>Efemérides de una fecha</span></label>
-    <label><input type="radio" name="modo" value="diario" onchange="cambiarModo()"><span>Diario de…</span></label>
-    <label><input type="radio" name="modo" value="actualidad" onchange="cambiarModo()"><span>Actualidad</span></label>
+  <div class="modos" role="radiogroup" aria-label="Tipo de vídeo">
+    <label class="modo">
+      <input type="radio" name="modo" value="tema" checked onchange="cambiarModo()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 22h12v-4"/><path d="M8 7h6M8 11h4"/></svg>
+      <strong>Tema libre</strong>
+      <span>Un hecho, personaje o época. En una o varias partes.</span>
+    </label>
+    <label class="modo">
+      <input type="radio" name="modo" value="fecha" onchange="cambiarModo()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14h3"/></svg>
+      <strong>Efemérides</strong>
+      <span>Lo que pasó tal día como hoy (o la fecha que elijas).</span>
+    </label>
+    <label class="modo">
+      <input type="radio" name="modo" value="diario" onchange="cambiarModo()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg>
+      <strong>Diario de…</strong>
+      <span>Humor en primera persona: «Día 4 como soldado romano».</span>
+    </label>
+    <label class="modo">
+      <input type="radio" name="modo" value="video_ia" onchange="cambiarModo()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="13" height="13" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/><path d="M9.5 9v6M6.5 12h6"/></svg>
+      <strong>Vídeo con IA</strong>
+      <span>Te doy los prompts, generas los clips en una IA de vídeo y yo lo monto.</span>
+    </label>
+    <label class="modo">
+      <input type="radio" name="modo" value="actualidad" onchange="cambiarModo()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 8.5h9M7.5 12h9M7.5 15.5h5"/></svg>
+      <strong>Actualidad</strong>
+      <span>Una noticia reciente, contrastada en varios medios.</span>
+    </label>
+  </div>
+
+  <div id="modo-video_ia" hidden>
+    <label for="tematica">Temática <span class="ayuda-campo">— real, de ficción o una recreación</span></label>
+    <input type="text" id="tematica" name="tematica" placeholder="Ej.: un vikingo llega a América y nadie le cree · un día como gladiador · el perro de Pompeya">
+    <div class="fila">
+      <div>
+        <label for="herramienta">IA de vídeo</label>
+        <select id="herramienta" name="herramienta" onchange="cambiarHerramienta()">
+          {% for clave, h in herramientas.items() %}
+            <option value="{{ clave }}" data-url="{{ h.url }}" data-voz="{{ 1 if h.voz else 0 }}" data-segundos="{{ h.segundos }}"
+                    data-consejo="{{ h.consejo }}">{{ h.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="estilo">Estilo visual</label>
+        <select id="estilo" name="estilo">
+          {% for clave, nombre in estilos.items() %}<option value="{{ clave }}">{{ nombre }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="herramienta-info">
+      <a id="enlace-herramienta" class="boton secundario" href="#" target="_blank" rel="noopener">Abrir</a>
+      <span class="ayuda-campo" id="consejo-herramienta"></span>
+    </div>
+    <label>¿Quién pone la voz?</label>
+    <div class="opciones">
+      <label><input type="radio" name="voz" value="ia" id="voz-ia"> La IA <span class="ayuda-campo">(el personaje habla en el clip)</span></label>
+      <label><input type="radio" name="voz" value="app" id="voz-app"> La app <span class="ayuda-campo">(narración en off sobre clips mudos)</span></label>
+    </div>
+    <p class="ayuda-campo">Primero se escribe el guion con un prompt por escena. Los copias en la IA, generas un clip por escena,
+      los subes en la página del guion y la app monta el vídeo con subtítulos, música y cierre.</p>
   </div>
 
   <div id="modo-actualidad" hidden>
@@ -82,10 +141,12 @@
     <label><input type="checkbox" name="idiomas" value="en"> Inglés</label>
   </div>
 
+  <div class="solo-no-video">
   <label>¿Qué hago?</label>
   <div class="opciones">
     <label><input type="radio" name="completo" value="off" checked> Solo el guion, para revisarlo antes <span class="ayuda-campo">(recomendado)</span></label>
     <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón <span class="ayuda-campo">(sale sin verificar)</span></label>
+  </div>
   </div>
 
   </div>
@@ -298,16 +359,30 @@
 </script>
 
 <script>
+  // «Vídeo con IA»: enlace a la web de la IA elegida, su consejo y quién pone la voz por defecto.
+  function cambiarHerramienta() {
+    const opcion = document.getElementById('herramienta').selectedOptions[0];
+    const enlace = document.getElementById('enlace-herramienta');
+    enlace.href = opcion.dataset.url;
+    enlace.textContent = 'Abrir ' + opcion.textContent.trim() + ' ↗';
+    document.getElementById('consejo-herramienta').textContent = opcion.dataset.consejo;
+    document.getElementById(opcion.dataset.voz === '1' ? 'voz-ia' : 'voz-app').checked = true;
+  }
+  cambiarHerramienta();
+
   function cambiarModo() {
     const modo = document.querySelector('input[name=modo]:checked').value;
     document.getElementById('modo-tema').hidden = modo !== 'tema';
     document.getElementById('modo-fecha').hidden = modo !== 'fecha';
     document.getElementById('modo-diario').hidden = modo !== 'diario';
     document.getElementById('modo-actualidad').hidden = modo !== 'actualidad';
+    document.getElementById('modo-video_ia').hidden = modo !== 'video_ia';
+    document.querySelectorAll('.solo-no-video').forEach(e => e.hidden = modo === 'video_ia');
     // En actualidad, idiomas y «qué hago» se eligen después, con los artículos delante.
     document.querySelectorAll('.solo-no-actualidad').forEach(e => e.hidden = modo === 'actualidad');
     const boton = document.getElementById('boton-crear');
-    if (boton) boton.textContent = modo === 'actualidad' ? 'Buscar noticias' : boton.dataset.texto;
+    if (boton) boton.textContent = modo === 'actualidad' ? 'Buscar noticias'
+      : modo === 'video_ia' ? 'Escribir guion y prompts' : boton.dataset.texto;
   }
 </script>
 {% endblock %}

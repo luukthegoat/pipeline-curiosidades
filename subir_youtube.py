@@ -35,6 +35,9 @@ from googleapiclient.http import MediaFileUpload
 import paso3_video
 
 load_dotenv()
+for _flujo in (sys.stdout, sys.stderr):  # un «✔» en una consola que no es UTF-8 no debe romper nada
+    if hasattr(_flujo, "reconfigure"):
+        _flujo.reconfigure(errors="replace")
 
 CARPETA_CREDENCIALES = Path("credenciales")
 CLIENTE = CARPETA_CREDENCIALES / "client_secret.json"
@@ -237,6 +240,19 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
             print(f"  {progreso.progress():.0%}", flush=True)
     id_video = respuesta["id"]
     privacidad_final = respuesta.get("status", {}).get("privacyStatus", estado["privacyStatus"])
+    # Lo primero, apuntarlo: si algo falla a partir de aquí (miniatura, un mensaje…), el vídeo YA está en YouTube
+    # y no debe volver a subirse.
+    resultado = {
+        "id": id_video,
+        "url": f"https://youtube.com/shorts/{id_video}",
+        "privacidad": privacidad_final,
+        "publicar_el": publicar_el or None,
+        "subido": datetime.now().isoformat(timespec="seconds"),
+        "borrador_sin_verificar": not datos_guion.get("verificado"),
+    }
+    datos_guion = json.loads(ruta.read_text(encoding="utf-8"))  # releer por si cambió mientras subía
+    datos_guion["youtube"] = resultado
+    ruta.write_text(json.dumps(datos_guion, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"  ✔ subido: https://youtube.com/shorts/{id_video} ({privacidad_final})")
     if privacidad_final != estado["privacyStatus"]:
         print("  aviso: YouTube lo ha dejado en privado porque tu proyecto de Google Cloud aún no está verificado. "
@@ -251,17 +267,6 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
             # En los Shorts la portada se elige desde la app; la API solo deja si el canal está verificado.
             print("  aviso: YouTube no ha aceptado la miniatura (normal en Shorts o en canales sin verificar)")
 
-    resultado = {
-        "id": id_video,
-        "url": f"https://youtube.com/shorts/{id_video}",
-        "privacidad": privacidad_final,
-        "publicar_el": publicar_el or None,
-        "subido": datetime.now().isoformat(timespec="seconds"),
-        "borrador_sin_verificar": not datos_guion.get("verificado"),
-    }
-    datos_guion = json.loads(ruta.read_text(encoding="utf-8"))  # releer por si cambió mientras subía
-    datos_guion["youtube"] = resultado
-    ruta.write_text(json.dumps(datos_guion, ensure_ascii=False, indent=2), encoding="utf-8")
     return resultado
 
 

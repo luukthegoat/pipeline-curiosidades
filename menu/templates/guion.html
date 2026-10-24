@@ -13,6 +13,65 @@
 
 <div class="dos-columnas">
   <div>
+    {% if datos.get('video_ia') %}
+      {% set ia = datos.video_ia %}
+      {% set listos = clips.values() | select | list | length %}
+      <div class="tarjeta" id="clips">
+        <h2>Clips para {{ herramienta.nombre }} · {{ listos }}/{{ datos.escenas | length }} subidos</h2>
+        <div class="herramienta-info" style="margin: 0 0 14px;">
+          <a class="boton" href="{{ herramienta.url }}" target="_blank" rel="noopener">Abrir {{ herramienta.nombre }} ↗</a>
+          <span class="ayuda-campo">{{ herramienta.consejo }}</span>
+        </div>
+        <ol class="pasos" style="margin-bottom: 16px;">
+          <li>Copia el prompt de cada escena en {{ herramienta.nombre }} y genera el clip en <strong>vertical (9:16)</strong>,
+            de unos {{ ia.segundos }} s.</li>
+          <li>Descárgalo y súbelo en su escena con «Subir clip».</li>
+          <li>Cuando estén todos, pulsa <strong>Generar audio y vídeo</strong>:
+            {% if ia.voz == 'ia' %}se usa la voz que trae cada clip{% else %}narra la voz de la app sobre los clips{% endif %},
+            con subtítulos, música y cierre.</li>
+        </ol>
+        <p class="ayuda-campo" style="margin-top: 0;">Voz: <strong>{{ 'la IA (el personaje habla en el clip)' if ia.voz == 'ia' else 'la app (clips sin diálogo)' }}</strong>.
+          Si cambias una frase del guion, vuelve a generar ese clip{% if ia.voz == 'ia' %}: la frase va dentro del prompt{% endif %}.</p>
+        <div class="clips">
+          {% for e in datos.escenas %}
+            {% set clip = clips.get(e.numero) %}
+            <div class="clip {{ 'listo' if clip }}">
+              <div>
+                <div class="cabecera"><strong>Escena {{ e.numero }}</strong>
+                  {% if clip %}<span class="etiqueta ok">clip subido</span>{% else %}<span class="etiqueta">falta el clip</span>{% endif %}</div>
+                <p class="narracion">«{{ e.narracion }}»</p>
+                <div class="copiable"><textarea readonly rows="5">{{ e.prompt_video }}</textarea>
+                  <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+              </div>
+              <div class="lado">
+                {% if clip %}
+                  <video src="{{ url_for('ver_clip', nombre=nombre, numero=e.numero) }}?v={{ clip.stat().st_mtime | int }}" controls preload="metadata"></video>
+                {% else %}
+                  <div class="hueco">Sin clip</div>
+                {% endif %}
+                <form method="post" action="{{ url_for('subir_clip', nombre=nombre) }}" enctype="multipart/form-data">
+                  <input type="hidden" name="escena" value="{{ e.numero }}">
+                  <label class="boton {{ 'secundario' if clip }}" style="margin: 0;">{{ 'Cambiar clip' if clip else 'Subir clip' }}
+                    <input type="file" name="clip" accept=".mp4,.mov,.webm,.m4v,video/*" hidden
+                           onchange="this.closest('label').firstChild.textContent = 'Subiendo… '; this.form.submit()">
+                  </label>
+                </form>
+                {% if clip %}
+                  <form method="post" action="{{ url_for('quitar_clip', nombre=nombre, numero=e.numero) }}">
+                    <button class="secundario peligro" type="submit">Quitar</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <label style="margin-top: 16px;">El personaje (va igual en todos los prompts)</label>
+        <div class="copiable"><textarea readonly rows="2">{{ ia.personaje }}</textarea>
+          <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+      </div>
+    {% endif %}
+
+    {% if not datos.get('video_ia') %}
     <div class="tarjeta">
       <h2>1 · Comprueba los datos</h2>
       {% set dudas = datos.get('sin_respaldo', []) %}
@@ -30,6 +89,7 @@
       </ul>
       {% if datos.get('editado_a_mano') %}<p class="ayuda-campo">Has editado este guion a mano: las dudas de arriba son de la versión original.</p>{% endif %}
     </div>
+    {% endif %}
 
     {% if datos.get('diario') %}
       <div class="tarjeta">
@@ -91,7 +151,9 @@
              {% if actual != 'ninguna' %}src="{{ url_for('escuchar_musica', pista=actual) }}"{% endif %}></audio>
       <div class="acciones">
         <button class="secundario" type="submit">Guardar gancho y música</button>
+        {% if not datos.get('video_ia') %}
         <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">Elegir imágenes</a>
+        {% endif %}
       </div>
     </form>
 

@@ -59,9 +59,14 @@
       </div>
       <div class="botones">
         {% if v.estado != 'subiendo' %}
+          {% if v.estado == 'error' %}
+            <form method="post" action="{{ url_for('reintentar_programado', nombre=v.nombre) }}">
+              <button class="secundario" type="submit" title="Vuelve a intentarlo manteniendo su hora">Reintentar</button>
+            </form>
+          {% endif %}
           <form method="post" action="{{ url_for('ya_programado', nombre=v.nombre) }}"
-                onsubmit="return confirm('¿Publicar «{{ v.titulo | replace("'", "") }}» ya mismo?')">
-            <button class="secundario" type="submit">{{ 'Reintentar ya' if v.estado == 'error' else 'Publicar ya' }}</button>
+                onsubmit="return confirm('¿Subir y publicar «{{ v.titulo | replace("'", "") }}» ahora mismo, sin esperar a su hora?')">
+            <button class="secundario" type="submit">Publicar ya</button>
           </form>
           <button class="secundario" type="button" onclick="document.getElementById('hora-{{ loop.index }}').toggleAttribute('open')">Cambiar hora</button>
           <form method="post" action="{{ url_for('quitar_programado', nombre=v.nombre) }}"

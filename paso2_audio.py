@@ -109,8 +109,50 @@ def reutilizables(ruta_salida: Path, voz: str) -> dict:
     }
 
 
+def audio_de_los_clips(ruta_guion: Path, guion: dict) -> Path:
+    """«Vídeo con IA» con la voz de la IA: el audio de cada escena es el del clip que subiste (no se sintetiza).
+
+    Los tiempos de cada palabra no se conocen: se reparten a lo largo del clip para los subtítulos."""
+    import video_ia
+    nombre = ruta_guion.stem
+    faltan = video_ia.faltan(nombre, guion["escenas"])
+    if faltan:
+        raise ValueError(f"faltan los clips de las escenas {', '.join(map(str, faltan))}: súbelos en la página del guion")
+    carpeta = CARPETA_AUDIO / nombre
+    carpeta.mkdir(parents=True, exist_ok=True)
+    cursor, escenas, todas_las_palabras = 0.0, [], []
+    for escena in guion["escenas"]:
+        numero = escena["numero"]
+        clip = video_ia.ruta_clip(nombre, numero)
+        duracion = video_ia.duracion(clip)
+        audio = carpeta / f"escena_{numero:02d}.m4a"
+        video_ia.extraer_audio(clip, audio, duracion)
+        palabras = escena["narracion"].split()
+        inicio, fin = min(0.3, duracion * 0.1), max(duracion - 0.4, duracion * 0.6)
+        paso = (fin - inicio) / max(1, len(palabras))
+        palabras_abs = [{"texto": p, "inicio_s": round(cursor + inicio + i * paso, 3),
+                         "fin_s": round(cursor + inicio + (i + 1) * paso, 3)} for i, p in enumerate(palabras)]
+        escenas.append({**escena, "audio": audio.name, "duracion_s": round(duracion, 3), "inicio_s": round(cursor, 3),
+                        "fin_s": round(cursor + duracion, 3), "palabras_tiempos": palabras_abs})
+        todas_las_palabras += palabras_abs
+        print(f"  escena {numero}: {duracion:.2f} s · voz del clip {clip.name}"
+              + ("" if video_ia.tiene_audio(clip) else "  (¡el clip no tiene sonido!)"))
+        cursor += duracion + PAUSA_ENTRE_ESCENAS
+    duracion_total = round(cursor - PAUSA_ENTRE_ESCENAS, 3)
+    resultado = {**guion, "escenas": escenas, "audio": {
+        "voz": f"ia:{guion['video_ia'].get('herramienta', '')}", "velocidad": "", "pausa_entre_escenas_s": PAUSA_ENTRE_ESCENAS,
+        "duracion_total_s": duracion_total, "subtitulos": "subtitulos.srt", "guion_origen": str(ruta_guion)}}
+    ruta_salida = carpeta / "escenas.json"
+    ruta_salida.write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
+    escribir_srt(carpeta / "subtitulos.srt", bloques_subtitulos(todas_las_palabras))
+    print(f"  total: {duracion_total:.1f} s")
+    return ruta_salida
+
+
 async def procesar_guion(ruta_guion: Path, forzar: bool) -> Path:
     guion = json.loads(ruta_guion.read_text(encoding="utf-8"))
+    if (guion.get("video_ia") or {}).get("voz") == "ia":
+        return audio_de_los_clips(ruta_guion, guion)
     idioma = guion.get("idioma", "es")
     if idioma not in VOCES:
         raise ValueError(f"idioma sin voz configurada: {idioma!r}")

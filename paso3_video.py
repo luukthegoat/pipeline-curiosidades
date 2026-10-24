@@ -879,6 +879,9 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     trabajo = CARPETA_TRABAJO / nombre
     trabajo.mkdir(parents=True, exist_ok=True)
 
+    if datos.get("video_ia"):  # clips generados con una IA de vídeo en vez de imágenes
+        return montar_clips(carpeta_audio, datos, nombre, ruta_video, trabajo)
+
     # 1. Imagen de cada escena: la elegida a mano o la que mejor encaja
     imagenes = candidatas(nombre, datos)
     print(f"  {len(imagenes)} imágenes candidatas")
@@ -962,6 +965,95 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     return ruta_video
 
 
+def segmento_clip(trabajo: Path, numero: int, clip: Path, audio: Path, util: float, total: float,
+                  subtitulos: str, voz_del_clip: bool) -> Path:
+    """Escena hecha con un clip de IA: recortado a vertical, en bucle si es más corto que la escena, con subtítulos.
+
+    Con la voz del clip, el audio es el del propio clip; si narra la app, va su voz con el sonido del clip de fondo."""
+    import video_ia
+    salida = trabajo / f"seg_{numero:02d}.mp4"
+    clave = trabajo / f"seg_{numero:02d}.clave"
+    firma = huella(VERSION_ESCENA, "clip", info_archivo(clip), info_archivo(audio), round(util, 3), round(total, 3),
+                   subtitulos, voz_del_clip)
+    if salida.exists() and clave.exists() and clave.read_text() == firma:
+        return salida
+    (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
+    bucle = ["-stream_loop", "-1"] if video_ia.duracion(clip) < total - 0.05 else []
+    video = (f"[0:v]scale={ANCHO}:{ALTO}:force_original_aspect_ratio=increase,crop={ANCHO}:{ALTO},setsar=1,fps={FPS},"
+             f"ass=sub_{numero:02d}.ass,format=yuv420p[v]")
+    voz = f"[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}"
+    if not voz_del_clip and video_ia.tiene_audio(clip):  # narración de la app con el ambiente del clip bajito
+        sonido = (f"{voz}[voz];[0:a]volume=0.15,apad,atrim=0:{total:.3f}[ambiente];"
+                  f"[voz][ambiente]amix=inputs=2:duration=first:normalize=0[a]")
+    else:
+        sonido = f"{voz}[a]"
+    ffmpeg(
+        [
+            *bucle, "-i", str(clip.resolve()), "-i", str(audio.resolve()),
+            "-filter_complex", f"{video};{sonido}",
+            "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
+            salida.name,
+        ],
+        trabajo,
+    )
+    clave.write_text(firma)
+    return salida
+
+
+def montar_clips(carpeta_audio: Path, datos: dict, nombre: str, ruta_video: Path, trabajo: Path) -> Path:
+    """Monta un «Vídeo con IA»: un clip por escena, subtítulos, gancho, música, cierre, miniatura y textos."""
+    import video_ia
+    faltan = video_ia.faltan(nombre, datos["escenas"])
+    if faltan:
+        raise ValueError(f"faltan los clips de las escenas {', '.join(map(str, faltan))}: súbelos en la página del guion")
+    ia = datos["video_ia"]
+    voz_del_clip = ia.get("voz") == "ia"
+    print(f"  vídeo con IA ({video_ia.herramienta(ia.get('herramienta', ''))['nombre']}) · "
+          f"voz {'de los clips' if voz_del_clip else 'de la app'}")
+    gancho = str(datos.get("gancho") or "").strip()
+    trabajos, cursor = [], 0.0
+    for indice, escena in enumerate(datos["escenas"]):
+        tiempos = escena.get("palabras_tiempos", [])
+        ultima = (tiempos[-1]["fin_s"] - escena["inicio_s"]) if tiempos else escena["duracion_s"]
+        util = min(escena["duracion_s"], ultima + COLA_TRAS_ULTIMA_PALABRA)
+        total = util + PAUSA_ENTRE_ESCENAS
+        relativas = [{"texto": p["texto"], "inicio_s": p["inicio_s"] - escena["inicio_s"],
+                      "fin_s": p["fin_s"] - escena["inicio_s"]} for p in tiempos]
+        subtitulos = texto_ass(relativas, total, gancho if indice == 0 else "",
+                               datos.get("titulo", "") if indice == 0 else "", datos.get("palabras_clave", []))
+        clip = video_ia.ruta_clip(nombre, escena["numero"])
+        trabajos.append((trabajo, escena["numero"], clip, carpeta_audio / escena["audio"], util, total, subtitulos,
+                         voz_del_clip))
+        print(f"  escena {escena['numero']}: {total:.2f} s · clip {clip.name} ({video_ia.duracion(clip):.1f} s)")
+        cursor += total
+
+    inicio = time.time()
+    with ThreadPoolExecutor(max_workers=HILOS) as hilos:
+        segmentos = list(hilos.map(lambda argumentos: segmento_clip(*argumentos), trabajos))
+    print(f"  escenas listas en {time.time() - inicio:.0f} s")
+
+    segmento_cierre, duracion_cierre = cierre.crear(datos, trabajo, huella)
+    segmentos.append(segmento_cierre)
+    cursor += duracion_cierre
+    print(f"  cierre: «{cierre.textos(datos)['voz']}» ({duracion_cierre:.1f} s)")
+
+    pista = musica.ruta_pista(datos.get("musica", "neutro"))
+    unir(trabajo, segmentos, ruta_video, pista, cursor)
+    elegidas_path(nombre).write_text("{}", encoding="utf-8")  # sin imágenes ni créditos de terceros
+    escribir_textos(ruta_video, nombre, datos, [], datos.get("musica", "neutro") if pista else "")
+    # Miniatura: un fotograma del primer clip (a pantalla completa) con el gancho
+    portada = trabajo / "portada_clip.png"
+    ffmpeg(["-ss", "1", "-i", str(video_ia.ruta_clip(nombre, datos["escenas"][0]["numero"]).resolve()),
+            "-frames:v", "1", "-vf", f"scale={ANCHO}:{ALTO}:force_original_aspect_ratio=increase,crop={ANCHO}:{ALTO}",
+            portada.name], trabajo)
+    crear_miniatura(portada, gancho or datos.get("titulo", ""), ruta_miniatura(ruta_video))
+    guardar_ruta_video(nombre, ruta_video)
+    print(f"  duración: {cursor:.1f} s · música: {datos.get('musica', 'neutro') if pista else 'ninguna'}")
+    return ruta_video
+
+
 # --- Textos para publicar ----------------------------------------------------------
 
 LIMITE_TITULO_YT = 100
@@ -1000,6 +1092,16 @@ def _linea_diario(datos: dict, donde_es: str, donde_en: str) -> str:
     return f"📓 Día {dia} · El día {dia + 1}, pronto {donde_es}"
 
 
+def _linea_video_ia(datos: dict) -> str:
+    """Aviso obligatorio en los vídeos hechos con una IA de vídeo."""
+    import video_ia
+    ia = datos["video_ia"]
+    nombre = video_ia.herramienta(ia.get("herramienta", ""))["nombre"]
+    if datos.get("idioma") == "en":
+        return f"🎬 AI-generated video ({nombre})" + (" with AI voices." if ia.get("voz") == "ia" else "; synthetic voice.")
+    return f"🎬 Vídeo generado con IA ({nombre})" + (" con voces de IA." if ia.get("voz") == "ia" else "; voz sintética.")
+
+
 def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
     """Lo que hay que pegar al subir el vídeo: un bloque para TikTok y otro para YouTube Shorts."""
     ingles = datos.get("idioma") == "en"
@@ -1030,6 +1132,8 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
                       + (f" ({'as of' if ingles else 'datos a'} {fecha_datos})" if fecha_datos else ""))
         tiktok.append("Images from Wikimedia Commons; those marked as archive do not show the events." if ingles
                       else "Imágenes de Wikimedia Commons; las marcadas como de archivo no muestran los hechos.")
+    elif datos.get("video_ia"):
+        tiktok.append(_linea_video_ia(datos))
     else:
         tiktok.append(f"{'Source' if ingles else 'Fuente'}: Wikipedia ({nombres_fuentes})" if nombres_fuentes else "")
     autores = set()
@@ -1084,19 +1188,24 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
                                                            else " · Parte final")]
     if datos.get("diario"):
         lineas += ["", _linea_diario(datos, "en mi canal", "on my channel")]
-    lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos.get("fuentes", [])]]
+    if datos.get("fuentes"):
+        lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos["fuentes"]]]
     if datos.get("actualidad"):
         fecha_datos = datos["actualidad"].get("fecha_datos", "")
         lineas += ["", (f"Information as of {fecha_datos}: the situation may change. Images from Wikimedia Commons; "
                         "those marked as archive do not show the events." if ingles else
                         f"Información a {fecha_datos}: la situación puede cambiar. Imágenes de Wikimedia Commons; las "
                         "marcadas como de archivo no muestran los hechos.")]
-    lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos], ""]
+    if creditos:
+        lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos]]
+    lineas.append("")
     if pista in musica.TONOS:
         lineas.append("Music: generated, royalty-free." if ingles else "Música: generada, sin derechos de autor.")
     elif pista:
         lineas.append(f"{'Music' if ingles else 'Música'}: {pista}")
-    lineas += ["Synthetic voice (AI)." if ingles else "Voz sintética (IA).", "", _hashtags(datos, 8)]
+    lineas += [_linea_video_ia(datos) if datos.get("video_ia") else ("Synthetic voice (AI)." if ingles
+                                                                       else "Voz sintética (IA)."),
+               "", _hashtags(datos, 8)]
     # YouTube rechaza «<» y «>» en título y descripción, y corta la descripción a 5.000 caracteres.
     descripcion = "\n".join(lineas).replace("<", "‹").replace(">", "›")[:4900]
     etiquetas, largo = [], 0

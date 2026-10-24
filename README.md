@@ -21,7 +21,9 @@ música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo
 
 **Formatos:** tema libre, **series** de varias partes con índice previo (para que no se repitan ni destripen el final),
 **efemérides** («tal día como hoy»), **«Diario de…»** (humor histórico en primera persona con imágenes generadas por IA)
-y **actualidad**: noticias recientes contrastadas en varios medios, con las fuentes citadas y la fecha de los datos.
+**actualidad** (noticias recientes contrastadas en varios medios, con las fuentes citadas y la fecha de los datos) y
+**vídeo con IA**: la app escribe los prompts de cada escena para una IA de vídeo (Veo, Sora, Runway, Kling) y monta los
+clips que generas con ella.
 
 ## Decisiones técnicas
 
@@ -72,6 +74,7 @@ flowchart LR
 | [`imagenes_ia.py`](imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
 | [`musica.py`](musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
 | [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
+| [`video_ia.py`](video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
 | [`actualidad.py`](actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
 | [`borrar.py`](borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
 | [`horarios.py`](horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |

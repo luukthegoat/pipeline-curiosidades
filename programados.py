@@ -27,6 +27,9 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent
 os.chdir(RAIZ)  # las credenciales y las carpetas de salida van con rutas relativas
+for _flujo in (sys.stdout, sys.stderr):  # un «✔» en una consola que no es UTF-8 no debe romper nada
+    if hasattr(_flujo, "reconfigure"):
+        _flujo.reconfigure(errors="replace")
 
 from dotenv import load_dotenv  # noqa: E402
 
@@ -211,6 +214,23 @@ def publicar_ya(nombre: str) -> str:
     return mensaje
 
 
+def reintentar(nombre: str) -> str:
+    """Un vídeo con error vuelve a la cola con su misma hora (no lo publica ya, como «Publicar ya»)."""
+    datos = leer()
+    video = buscar(datos, nombre)
+    if not video:
+        raise ValueError("ese vídeo no está programado")
+    guion = _guion(nombre) if (GUIONES / f"{nombre}.json").exists() else {}
+    if (guion.get("youtube") or {}).get("id"):  # ya estaba subido (p. ej. el fallo fue después de subirlo)
+        video.update(estado="en_youtube", youtube_id=guion["youtube"]["id"], url=guion["youtube"]["url"],
+                     mensaje="ya estaba en YouTube")
+        guardar(datos)
+        return "Ya estaba subido a YouTube: no se repite."
+    video.update(estado="en_cola", mensaje="")
+    _guardar_y_reprogramar(datos)
+    return f"Vuelve a la cola para el {formato_bonito(video['hora'])}."
+
+
 def limpiar_historial() -> None:
     datos = leer()
     datos["videos"] = [v for v in datos["videos"]
@@ -375,6 +395,13 @@ def _revisar() -> int:
             fallo = motivo
         except Exception as error:  # noqa: BLE001 — se apunta y se sigue con el resto
             fallo = str(error)
+            yt = (json.loads(ruta.read_text(encoding="utf-8")).get("youtube") or {}) if ruta.exists() else {}
+            if yt.get("id"):  # el fallo fue después de subirlo: está en YouTube, no hay que repetirlo
+                _actualizar(nombre, estado="en_youtube", youtube_id=yt["id"], url=yt["url"],
+                            subido=yt.get("subido"), mensaje=f"subido (aviso después de subir: {fallo[:120]})")
+                _log(f"  subido con aviso: {fallo}")
+                subidos += 1
+                continue
         else:
             subidos += 1
             mensaje = "" if a_tiempo else "se subió tarde (el ordenador estaba apagado) y se publicó al subirlo"

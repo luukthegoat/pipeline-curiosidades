@@ -4,7 +4,8 @@ Lo que se borra de un guion:
   - el guion (salida/guiones/<nombre>.json)
   - la voz y los subtítulos (salida/audio/<nombre>/)
   - las escenas montadas, las imágenes candidatas y las elegidas (salida/_trabajo/<nombre>/)
-  - las imágenes generadas con IA (salida/imagenes_ia/<nombre>/) y las que subiste tú (salida/imagenes_propias/)
+  - las imágenes generadas con IA (salida/imagenes_ia/<nombre>/), las que subiste tú (salida/imagenes_propias/)
+    y los clips de vídeo de IA (salida/clips_ia/<nombre>/)
   - el vídeo, su texto para publicar, su miniatura y el texto del guion (salida/videos/<Tema>/…);
     si la carpeta del tema se queda vacía, también la carpeta
   - su entrada en «Programados» y en los recordatorios de TikTok
@@ -42,6 +43,7 @@ def archivos(nombre: str) -> list:
         SALIDA / "audio" / nombre,
         SALIDA / "_trabajo" / nombre,
         SALIDA / "imagenes_ia" / nombre,
+        SALIDA / "clips_ia" / nombre,
         *sorted((SALIDA / "imagenes_propias").glob(f"{nombre}_escena*")),
     ]
     if guion.get("video"):

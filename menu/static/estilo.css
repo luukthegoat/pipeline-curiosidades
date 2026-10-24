@@ -676,3 +676,42 @@ button.enlace { height: auto; padding: 0; background: none; border: 0; color: va
 .articulo .titulo:hover { text-decoration: underline; }
 .articulo .extracto { margin: 0; font-size: 13px; color: var(--suave); line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Selector del tipo de vídeo (Crear): tarjetas con nombre completo y una línea de ayuda */
+.modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 6px; }
+.modo {
+  position: relative; margin: 0; padding: 14px 14px 13px; cursor: pointer;
+  display: grid; grid-template-columns: 22px 1fr; column-gap: 10px; row-gap: 3px; align-items: start;
+  border: 1px solid var(--borde); border-radius: 12px; background: var(--superficie);
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.modo input { position: absolute; opacity: 0; pointer-events: none; }
+.modo svg { grid-row: 1 / span 2; width: 20px; height: 20px; margin-top: 1px; fill: none; stroke: var(--suave);
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.modo strong { font-size: 14px; font-weight: 600; color: var(--texto); line-height: 1.3; }
+.modo span { font-size: 12.5px; font-weight: 400; color: var(--suave); line-height: 1.4; }
+.modo:hover { border-color: var(--borde-fuerte); }
+.modo:has(input:checked) { border-color: var(--acento); background: var(--acento-suave); box-shadow: 0 0 0 1px var(--acento); }
+.modo:has(input:checked) svg { stroke: var(--acento-tinta); }
+.modo:has(input:focus-visible) { box-shadow: 0 0 0 4px var(--acento-suave); }
+@media (max-width: 520px) { .modos { grid-template-columns: 1fr 1fr; } .modo span { display: none; } }
+
+/* Vídeo con IA */
+.herramienta-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px;
+  border-radius: var(--radio-sm); background: var(--superficie-2); }
+.herramienta-info .boton { flex: none; }
+.herramienta-info span { flex: 1; min-width: 220px; margin: 0; }
+.clips { display: grid; gap: 12px; }
+.clip { display: grid; grid-template-columns: 1fr 150px; gap: 14px; padding: 14px; border: 1px solid var(--borde);
+  border-radius: var(--radio); background: var(--superficie-2); }
+.clip.listo { border-color: color-mix(in srgb, var(--ok) 45%, var(--borde)); }
+.clip .cabecera { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.clip .cabecera strong { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+.clip .narracion { font-size: 14px; margin: 0 0 8px; }
+.clip textarea { min-height: 0; font-size: 12.5px; }
+.clip .lado { display: grid; gap: 8px; align-content: start; justify-items: stretch; }
+.clip video { width: 100%; max-width: 150px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 10px; }
+.clip .hueco { aspect-ratio: 9 / 16; border-radius: 10px; border: 1px dashed var(--borde-fuerte); display: grid;
+  place-items: center; color: var(--tenue); font-size: 12px; text-align: center; padding: 8px; }
+.clip .lado .boton, .clip .lado button { height: 34px; font-size: 13px; padding: 0 10px; width: 100%; }
+@media (max-width: 640px) { .clip { grid-template-columns: 1fr; } .clip video, .clip .hueco { max-width: 140px; } }

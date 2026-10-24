@@ -158,6 +158,40 @@ Responde SOLO con un objeto JSON con esta forma:
 Los NOMBRES de las claves son siempre exactamente estos, sin traducir. Los VALORES de "narracion", "titulo", "nombre_corto",
 "gancho" y "hashtags" van en {idioma}. Los de "visual" y "busquedas_imagenes" van SIEMPRE en inglés."""
 
+PROMPT_VIDEO_IA = """Eres guionista de vídeos cortos virales (YouTube Shorts, TikTok) que se generan con una IA de vídeo
+(Veo, Sora, Runway, Kling): cada escena será un clip de unos {segundos} segundos con el mismo personaje.
+Recibirás una TEMÁTICA. Puede ser histórica, de ficción o una recreación: cuéntala de forma entretenida y visual.
+
+Reglas:
+- {escenas} escenas exactamente, una por clip. Cada escena es UNA acción clara y fácil de generar en vídeo (un plano,
+  sin cortes, sin multitudes complicadas, sin texto en pantalla).
+- Un PROTAGONISTA fijo en todas las escenas, descrito con detalle para que la IA lo dibuje siempre igual.
+- La PRIMERA escena engancha en el primer segundo (una situación sorprendente, una pregunta, algo que no encaja).
+- Si es un hecho real, no inventes datos concretos (fechas, cifras, nombres) que no sean de conocimiento general;
+  si es ficción o humor, que se note.
+{reglas_voz}
+
+Responde SOLO con un objeto JSON:
+{{
+  "titulo": "título atractivo",
+  "nombre_corto": "2 a 4 palabras que nombren el vídeo",
+  "gancho": "1 a 4 palabras en grande en el primer segundo",
+  "tono": "uno de: epico, misterio, triste, neutro, comico (para la música)",
+  "personaje": "descripción visual del protagonista EN INGLÉS, muy concreta: edad, rasgos, pelo, ropa, accesorios, colores (1-2 frases)",
+  "escenas": [
+    {{"narracion": "lo que se dice en esta escena", "accion": "qué pasa en el plano EN INGLÉS: acción del personaje, lugar, época, plano de cámara (close-up, medium shot, tracking shot…) y luz"}}
+  ],
+  "hashtags": ["#...", "..."]
+}}
+Los NOMBRES de las claves son siempre exactamente estos. "narracion", "titulo", "nombre_corto", "gancho" y "hashtags" van
+en {idioma}; "personaje" y "accion" van SIEMPRE en inglés."""
+
+REGLAS_VOZ_IA = """- La "narracion" de cada escena la DICE EL PERSONAJE en el clip, mirando a cámara o a otro personaje: como mucho
+  {maximo} palabras por escena (tiene que caber en {segundos} segundos hablando con calma). Frases naturales, en primera
+  persona o como diálogo."""
+REGLAS_VOZ_APP = """- La "narracion" la lee una voz en off sobre los clips: entre {minimo} y {maximo} palabras en total (unos 60 s),
+  repartidas entre las escenas. En los clips nadie habla."""
+
 PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL (las fuentes) y las escenas numeradas de un guion.
 Revisa cada afirmación factual de la narración (fechas, cifras, lugares, personas, cómo ocurrió algo, causas y consecuencias).
 Señala SOLO las que no estén respaldadas por el MATERIAL o lo contradigan. Ignora las frases de opinión, preguntas retóricas y llamadas a comentar.
@@ -170,6 +204,7 @@ Si todo está respaldado, devuelve {"sin_respaldo": []}. Escribe "motivo" en esp
 CLAVES_ALTERNATIVAS = {
     "title": "titulo", "scenes": "escenas", "narration": "narracion", "narración": "narracion",
     "short_name": "nombre_corto", "hook": "gancho", "tone": "tono", "image_searches": "busquedas_imagenes",
+    "action": "accion", "character": "personaje",
 }
 TONOS = ("epico", "misterio", "triste", "neutro", "comico")
 
@@ -382,10 +417,11 @@ def validar_guion(datos: dict) -> list:
     limpias = []
     for escena in escenas:
         narracion = str((escena or {}).get("narracion", "")).strip()
-        visual = str((escena or {}).get("visual", "")).strip()
+        accion = str((escena or {}).get("accion", "")).strip()  # formato «Vídeo con IA»: lo que pasa en el clip
+        visual = str((escena or {}).get("visual", "")).strip() or accion
         if not narracion or not visual:
             raise ValueError("hay una escena sin narración o sin visual")
-        limpias.append({"narracion": narracion, "visual": visual})
+        limpias.append({"narracion": narracion, "visual": visual, **({"accion": accion} if accion else {})})
     return limpias
 
 
@@ -512,6 +548,14 @@ def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, 
         documento["serie"] = {"tema": evento["text"], "parte": parte, "total": total}
         sufijo = f"_parte{parte}de{total}"
     prefijo = evento["year"] if evento.get("year") else "tema"
+    if evento.get("video_ia"):  # clips generados con una IA de vídeo: personaje fijo y prompt por escena
+        import video_ia
+        prefijo = "videoia"
+        datos_ia = {**evento["video_ia"], "personaje": str(guion.get("personaje") or "").strip()}
+        documento["video_ia"] = datos_ia
+        for escena in documento["escenas"]:
+            escena["prompt_video"] = video_ia.prompt_completo(datos_ia, escena, idioma)
+            escena["visual"] = escena.get("accion") or escena.get("visual") or ""
     if evento.get("actualidad"):  # noticia: medios, fecha de los datos y búsquedas para las imágenes de archivo
         prefijo = "actualidad"
         documento["actualidad"] = {
@@ -529,6 +573,10 @@ def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, 
     CARPETA_SALIDA.mkdir(parents=True, exist_ok=True)
     nombre = f"{fecha.isoformat()}_{prefijo}_{slug(evento['text'])}{sufijo}_{idioma}.json"
     ruta = CARPETA_SALIDA / nombre
+    numero = 2
+    while ruta.exists():  # nunca se pisa un guion que ya existe (puede estar revisado, con vídeo o en YouTube)
+        ruta = CARPETA_SALIDA / nombre.replace(f"_{idioma}.json", f"_{numero}_{idioma}.json")
+        numero += 1
     ruta.write_text(json.dumps(documento, ensure_ascii=False, indent=2), encoding="utf-8")
     return ruta
 
@@ -822,6 +870,12 @@ def main(argv=None) -> int:
     parser.add_argument("--cantidad", type=int, default=3, help="número de eventos (por defecto 3)")
     parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (por defecto hoy)")
     parser.add_argument("--idiomas", default="es,en", help="idiomas separados por comas: es,en")
+    parser.add_argument("--video-ia", metavar="TEMATICA",
+                        help="vídeo hecho con clips de una IA de vídeo: la app escribe el guion y un prompt por escena")
+    parser.add_argument("--herramienta", default="veo", help="con --video-ia: veo, sora, runway o kling")
+    parser.add_argument("--estilo", default="cine", help="con --video-ia: cine, documental, animacion, anime o pintura")
+    parser.add_argument("--voz", choices=("ia", "app"), default="",
+                        help="con --video-ia: quién pone la voz (por defecto, la IA si sabe hacerlo)")
     parser.add_argument("--actualidad", metavar="ID",
                         help="vídeo de actualidad con los artículos de una búsqueda de actualidad.py (ver --articulos)")
     parser.add_argument("--articulos", default="", help="con --actualidad: números de los artículos a usar, p. ej. 0,2,3")
@@ -840,7 +894,19 @@ def main(argv=None) -> int:
         print(f"[error] Idiomas no soportados: {desconocidos}. Usa: {list(IDIOMAS)}", file=sys.stderr)
         return 1
 
-    if args.actualidad:
+    if args.video_ia:
+        import video_ia
+        h = video_ia.herramienta(args.herramienta)
+        voz = args.voz or ("ia" if h["voz"] else "app")
+        escenas = max(5, min(8, round(60 / h["segundos"])))
+        print(f"Vídeo con IA: «{args.video_ia}» · {h['nombre']} · {escenas} clips de ~{h['segundos']} s · "
+              f"voz {'de la IA' if voz == 'ia' else 'de la app'}")
+        evento = {"year": None, "text": args.video_ia, "video_ia": {
+            "tematica": args.video_ia, "herramienta": args.herramienta if args.herramienta in video_ia.HERRAMIENTAS
+            else "veo", "voz": voz, "segundos": h["segundos"], "estilo": args.estilo,
+            "estilo_visual": video_ia.ESTILOS.get(args.estilo, video_ia.ESTILOS["cine"]), "escenas": escenas}}
+        trabajos = [(evento, f"TEMÁTICA: {args.video_ia}", [])]
+    elif args.actualidad:
         import actualidad
         try:
             busqueda = actualidad.leer(args.actualidad)
@@ -921,6 +987,19 @@ def main(argv=None) -> int:
                     nombre = nombre_diario(diario["personaje"], idioma) or acortar_nombre(guion.get("nombre_corto"))
                     apuntar_nombre_diario(diario["personaje"], idioma, nombre)
                     evento = {**evento, "diario": {**diario, "nombre_corto": nombre}}
+                elif evento.get("video_ia"):
+                    ia = evento["video_ia"]
+                    maximo_escena = int(ia["segundos"] * 2.3)
+                    if ia["voz"] == "ia":
+                        reglas = REGLAS_VOZ_IA.format(maximo=maximo_escena, segundos=ia["segundos"])
+                        minimo, maximo = ia["escenas"] * 8, ia["escenas"] * maximo_escena
+                    else:
+                        reglas = REGLAS_VOZ_APP.format(minimo=PALABRAS_MIN, maximo=PALABRAS_MAX)
+                        minimo, maximo = PALABRAS_MIN, PALABRAS_MAX
+                    sistema = PROMPT_VIDEO_IA.format(segundos=ia["segundos"], escenas=ia["escenas"],
+                                                     reglas_voz=reglas, idioma=IDIOMAS[idioma])
+                    guion = generar_guion(api_key, modelo, material, idioma, "", sistema, minimo, maximo,
+                                          (minimo + maximo) // 2)
                 elif evento.get("actualidad"):
                     hoy = date.today()
                     sistema = PROMPT_ACTUALIDAD.format(
@@ -935,10 +1014,13 @@ def main(argv=None) -> int:
                 titulos_previos[idioma].append(guion["titulo"])
                 if evento.get("total"):  # todas las partes de una serie comparten el nombre de la primera
                     guion["nombre_corto"] = nombres_serie.setdefault(idioma, guion.get("nombre_corto") or "")
-                dudas = verificar_guion(api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")),
-                                        noticia=bool(evento.get("actualidad")))
+                dudas = [] if evento.get("video_ia") else verificar_guion(  # creativo: no hay fuente que verificar
+                    api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")),
+                    noticia=bool(evento.get("actualidad")))
                 ruta = guardar(guion, evento, fuentes, dudas, args.fecha, idioma, modelo_usado)
                 aviso = f" · {len(dudas)} frase(s) sin respaldo, revísalas" if dudas else " · verificado contra el material"
+                if evento.get("video_ia"):
+                    aviso = " · copia los prompts en su página y sube un clip por escena"
                 print(f"  [{idioma}] {ruta}{aviso} · escrito con {modelo_usado}")
                 generados += 1
             except GroqSinCupo as error:  # no queda cupo en ningún modelo: no tiene sentido seguir

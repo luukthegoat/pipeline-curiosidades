@@ -36,6 +36,7 @@ import programados  # noqa: E402  (cola de publicaciones programadas)
 import horarios  # noqa: E402  (horas recomendadas para publicar)
 import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
 import actualidad  # noqa: E402  (noticias recientes para los vídeos de actualidad)
+import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -48,7 +49,7 @@ PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # imágenes subidas: 25 MB como mucho
+app.config["MAX_CONTENT_LENGTH"] = 400 * 1024 * 1024  # imágenes y clips de vídeo subidos: 400 MB como mucho
 
 
 # --- Cola de tareas: se ejecutan una detrás de otra --------------------------------------
@@ -324,6 +325,7 @@ def voces() -> list:
 @app.route("/")
 def inicio():
     return render_template("inicio.html", guiones=todos(), hoy=date.today().isoformat(),
+                           herramientas=video_ia.HERRAMIENTAS, estilos=video_ia.NOMBRES_ESTILOS,
                            yt_conectado=subir_youtube.TOKEN.exists(),
                            yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private")
 
@@ -347,6 +349,18 @@ def crear():
             return redirect(url_for("inicio", error="Escribe de qué noticia quieres el vídeo."))
         return redirect(url_for("ver_actualidad", tema=noticia, dias=request.form.get("dias", "3"),
                                 mas=request.form.get("mas_idiomas", "")))
+    if modo == "video_ia":
+        tematica = request.form.get("tematica", "").strip()
+        if not tematica:
+            return redirect(url_for("inicio", error="Escribe la temática del vídeo con IA."))
+        herramienta = request.form.get("herramienta", "veo")
+        argumentos = ["--video-ia", tematica, "--herramienta", herramienta,
+                      "--estilo", request.form.get("estilo", "cine"), "--idiomas", idiomas]
+        if request.form.get("voz") in ("ia", "app"):
+            argumentos += ["--voz", request.form["voz"]]
+        # Solo el guion: los clips los generas tú con los prompts y luego se monta el vídeo.
+        return lanzar_guiones(f"Vídeo con IA ({video_ia.herramienta(herramienta)['nombre']}): «{tematica}»",
+                              argumentos, False)
     if modo == "tema" and not tema:
         return redirect(url_for("inicio", error="Escribe un tema para el vídeo."))
     if modo == "diario" and not personaje:
@@ -474,7 +488,49 @@ def ver_guion(nombre):
         yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private",
         recomendada=horarios.recomendar([nombre]).get(nombre) if not datos.get("youtube") else None,
         borrado=borrar.resumen(nombre),
+        clips=video_ia.clips(nombre, datos["escenas"]) if datos.get("video_ia") else {},
+        herramienta=video_ia.herramienta((datos.get("video_ia") or {}).get("herramienta", "")),
     )
+
+
+@app.post("/guion/<nombre>/clip")
+def subir_clip(nombre):
+    datos = leer(nombre)
+    numero = request.form.get("escena", "")
+    archivo = request.files.get("clip")
+    extension = Path(archivo.filename or "").suffix.lower() if archivo else ""
+    if not numero.isdigit() or int(numero) not in [e["numero"] for e in datos["escenas"]]:
+        abort(400)
+    if extension not in video_ia.EXTENSIONES_CLIP:
+        return redirect(url_for("ver_guion", nombre=nombre, mensaje="Sube un vídeo .mp4, .mov o .webm.",
+                                _anchor="clips"))
+    carpeta = video_ia.carpeta_clips(nombre)
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for viejo in carpeta.glob(f"escena_{int(numero):02d}.*"):
+        viejo.unlink()
+    archivo.save(carpeta / f"escena_{int(numero):02d}{extension}")
+    faltan = video_ia.faltan(nombre, datos["escenas"])
+    mensaje = (f"Clip de la escena {numero} guardado. Faltan las escenas: {', '.join(map(str, faltan))}."
+               if faltan else "¡Ya están todos los clips! Pulsa «Generar audio y vídeo».")
+    return redirect(url_for("ver_guion", nombre=nombre, mensaje=mensaje, _anchor="clips"))
+
+
+@app.post("/guion/<nombre>/clip/<int:numero>/quitar")
+def quitar_clip(nombre, numero):
+    leer(nombre)
+    ruta = video_ia.ruta_clip(nombre, numero)
+    if ruta:
+        ruta.unlink()
+    return redirect(url_for("ver_guion", nombre=nombre, mensaje=f"Clip de la escena {numero} quitado.", _anchor="clips"))
+
+
+@app.route("/clip/<nombre>/<int:numero>")
+def ver_clip(nombre, numero):
+    leer(nombre)
+    ruta = video_ia.ruta_clip(nombre, numero)
+    if not ruta:
+        abort(404)
+    return send_file(ruta.resolve(), conditional=True)
 
 
 @app.post("/guion/<nombre>/borrar")
@@ -887,6 +943,7 @@ def vigilar_programados() -> None:
             try:
                 if programados.toca_revisar():
                     subprocess.run([sys.executable, str(RAIZ / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
+                                   env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as error:  # noqa: BLE001 — la vigilancia no debe caerse nunca
@@ -923,6 +980,11 @@ def hora_programado(nombre):
 @app.post("/programados/<nombre>/ya")
 def ya_programado(nombre):
     return _accion_programado(programados.publicar_ya, nombre)
+
+
+@app.post("/programados/<nombre>/reintentar")
+def reintentar_programado(nombre):
+    return _accion_programado(programados.reintentar, nombre)
 
 
 @app.post("/programados/<nombre>/quitar")
