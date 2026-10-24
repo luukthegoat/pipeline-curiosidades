@@ -19,3 +19,6 @@ automatico.json
 
 # Lanzador compilado (se crea con lanzador\crear_exe.bat)
 *.exe
+
+# Material personal (referencias de personajes, etc.)
+Personaje/
