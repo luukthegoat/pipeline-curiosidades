@@ -52,6 +52,7 @@ PALABRAS_CLAVE_CANAL = Path("marca/palabras_clave_youtube.txt")
 CATEGORIA_EDUCACION = "27"
 PRIVACIDADES = ("private", "unlisted", "public")
 TROZO = 8 * 1024 * 1024  # la subida va por partes de 8 MB (se puede reanudar si falla la red)
+ESPERA_RED = 180  # segundos sin respuesta de YouTube antes de dar la conexión por perdida (antes: sin límite)
 
 
 class SinConexion(Exception):
@@ -158,6 +159,38 @@ def _hora_utc(texto: str) -> str:
     return local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _youtube_con_limite():
+    """Cliente de YouTube que no se queda colgado para siempre si la conexión se queda muda."""
+    import httplib2
+    import google_auth_httplib2
+    http = google_auth_httplib2.AuthorizedHttp(credenciales(), http=httplib2.Http(timeout=ESPERA_RED))
+    return build("youtube", "v3", http=http, cache_discovery=False)
+
+
+def _buscar_recien_subido(titulo: str, desde: datetime):
+    """Id del vídeo con ese título subido después de `desde`, o None.
+
+    Sirve cuando la conexión se corta justo al terminar: YouTube puede haber creado el vídeo aunque no nos
+    haya llegado la respuesta, y volver a subirlo dejaría un duplicado.
+    """
+    import time
+    for intento in range(4):  # el vídeo tarda unos segundos en aparecer en la lista del canal
+        if intento:
+            time.sleep(15)
+        try:
+            youtube = _youtube_con_limite()
+            canal = youtube.channels().list(part="contentDetails", mine=True).execute()
+            lista = canal["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            elementos = youtube.playlistItems().list(part="snippet", playlistId=lista, maxResults=10).execute()
+        except Exception:  # noqa: BLE001 — sin conexión todavía: se reintenta
+            continue
+        for e in elementos.get("items", []):
+            subido = datetime.fromisoformat(e["snippet"]["publishedAt"].replace("Z", "+00:00"))
+            if e["snippet"]["title"] == titulo and subido >= desde - timedelta(minutes=2):
+                return e["snippet"]["resourceId"]["videoId"]
+    return None
+
+
 def _explicar(error: HttpError) -> str:
     """Mensajes de error de YouTube en cristiano."""
     motivo = ""
@@ -227,17 +260,27 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
         "status": estado,
     }
 
-    youtube = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
+    youtube = _youtube_con_limite()
     print(f"  subiendo {video.name} ({video.stat().st_size // (1024 * 1024)} MB)…", flush=True)
     peticion = youtube.videos().insert(
         part="snippet,status", body=cuerpo,
         media_body=MediaFileUpload(str(video), mimetype="video/mp4", chunksize=TROZO, resumable=True),
     )
+    inicio = datetime.now(timezone.utc)
     respuesta = None
-    while respuesta is None:
-        progreso, respuesta = peticion.next_chunk()
-        if progreso:
-            print(f"  {progreso.progress():.0%}", flush=True)
+    try:
+        while respuesta is None:
+            progreso, respuesta = peticion.next_chunk()
+            if progreso:
+                print(f"  {progreso.progress():.0%}", flush=True)
+    except HttpError:
+        raise  # YouTube ha contestado que no: no hay vídeo
+    except Exception as error:  # conexión cortada o muda: ¿llegó a crearse?
+        encontrado = _buscar_recien_subido(cuerpo["snippet"]["title"], inicio)
+        if not encontrado:
+            raise
+        print(f"  la conexión se cortó al terminar ({error}), pero el vídeo sí llegó a YouTube", flush=True)
+        respuesta = {"id": encontrado, "status": {"privacyStatus": estado["privacyStatus"]}}
     id_video = respuesta["id"]
     privacidad_final = respuesta.get("status", {}).get("privacyStatus", estado["privacyStatus"])
     # Lo primero, apuntarlo: si algo falla a partir de aquí (miniatura, un mensaje…), el vídeo YA está en YouTube

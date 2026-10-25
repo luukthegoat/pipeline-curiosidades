@@ -3,6 +3,18 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.10.2] - 2026-10-25
+
+### Cambiado
+- **Hasta 5 subidas en 24 h** desde Programados (antes 3), dentro del cupo diario de la API de YouTube.
+  Se cambia con `PROGRAMADOS_MAX_DIA`.
+
+### Arreglado
+- **Subidas colgadas durante horas**: si YouTube deja de responder 3 minutos, la conexión se da por perdida
+  en vez de esperar sin límite.
+- **Duplicados cuando la conexión se corta al terminar una subida**: antes de darla por fallida, se mira en el canal
+  si el vídeo llegó a crearse y, si está, se enlaza en lugar de volver a subirlo.
+
 ## [1.10.1] - 2026-10-24
 
 ### Arreglado
@@ -226,6 +238,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.10.2]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.8.1...v1.9.0
