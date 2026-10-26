@@ -3,6 +3,13 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.12.1] - 2026-10-26
+
+### Añadido
+- **Botón «↻ Actualizar»** en Programados (Lista y Calendario): trae de YouTube lo cambiado en YouTube Studio (la hora,
+  si se publicó antes o si se borró) sin esperar a la comprobación automática, dice qué ha cambiado y vuelve a la
+  misma vista. Sustituye a «Revisar ahora».
+
 ## [1.12.0] - 2026-10-26
 
 ### Añadido
@@ -287,6 +294,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.12.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.1...v1.12.0
 [1.11.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.2...v1.11.0

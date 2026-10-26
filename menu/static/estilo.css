@@ -717,7 +717,7 @@ details.fuentes ul { margin: 8px 0 0; font-size: 14px; }
 /* Calendario */
 .cal-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .cal-barra h2 { margin: 0 8px; min-width: 150px; text-align: center; font-size: 18px; }
-.cal-barra .boton { height: 34px; padding: 0 12px; }
+.cal-barra .boton, .cal-barra button { height: 34px; padding: 0 12px; }
 .cal-leyenda { margin-left: auto; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--suave); }
 .cal-leyenda b { color: var(--texto); margin-right: 8px; }
 .punto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

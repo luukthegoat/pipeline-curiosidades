@@ -974,7 +974,8 @@ def ver_calendario():
     except ValueError:
         anio, mes = hoy.year, hoy.month
     return render_template("calendario.html", cal=programados.calendario(anio, mes),
-                           este_mes=f"{hoy.year}-{hoy.month:02d}")
+                           este_mes=f"{hoy.year}-{hoy.month:02d}", mes_actual=f"{anio}-{mes:02d}",
+                           mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""))
 
 
 @app.post("/programados/<nombre>/hora")
@@ -1004,16 +1005,20 @@ def limpiar_programados():
 
 @app.post("/programados/revisar")
 def revisar_programados():
-    def accion():
-        cambios = programados.sincronizar()  # primero, poner la cola al día con YouTube
-        datos = programados.leer()
-        datos["siguiente_intento"] = None
-        programados.guardar(datos)
-        texto = "Revisando la cola: si toca subir algo, empezará en unos segundos."
-        if cambios:
-            return f"Comprobado con YouTube: {'; '.join(cambios)}. {texto}"
-        return f"Comprobado con YouTube: todo coincide. {texto}"
-    return _accion_programado(accion)
+    """«Actualizar»: trae de YouTube lo cambiado en YouTube Studio (horas, publicados, borrados) y mira si toca subir algo."""
+    destino = "ver_calendario" if request.form.get("volver") == "calendario" else "ver_programados"
+    extra = {"mes": request.form["mes"]} if request.form.get("mes") else {}
+    try:
+        cambios = programados.sincronizar()
+    except Exception as error:  # noqa: BLE001 — sin conexión o sin YouTube conectado
+        return redirect(url_for(destino, error=f"No se ha podido comprobar con YouTube: {error}", **extra))
+    datos = programados.leer()
+    datos["siguiente_intento"] = None  # y que la cola mire ya si toca subir algo
+    programados.guardar(datos)
+    despertar_programados()
+    mensaje = ("Actualizado con YouTube: " + "; ".join(cambios) + "." if cambios
+               else "Actualizado: todo coincide con YouTube.")
+    return redirect(url_for(destino, mensaje=mensaje, **extra))
 
 
 @app.post("/youtube/conectar")

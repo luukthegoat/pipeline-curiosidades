@@ -7,12 +7,19 @@
   <div class="vistas"><a href="{{ url_for('ver_programados') }}">Lista</a><a class="actual" href="{{ url_for('ver_calendario') }}">Calendario</a></div>
 </div>
 <p class="sub">Qué se publica cada día y a qué hora. Pincha un vídeo para abrirlo.</p>
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso">{{ error }}</div>{% endif %}
 
 <div class="cal-barra">
   <a class="boton secundario" href="{{ url_for('ver_calendario', mes=cal.anterior) }}" aria-label="Mes anterior">←</a>
   <h2>{{ cal.titulo }}</h2>
   <a class="boton secundario" href="{{ url_for('ver_calendario', mes=cal.siguiente) }}" aria-label="Mes siguiente">→</a>
   <a class="boton secundario" href="{{ url_for('ver_calendario', mes=este_mes) }}">Hoy</a>
+  <form method="post" action="{{ url_for('revisar_programados') }}" class="en-linea">
+    <input type="hidden" name="volver" value="calendario"><input type="hidden" name="mes" value="{{ mes_actual }}">
+    <button class="boton secundario" type="submit" title="Trae de YouTube lo que hayas cambiado en YouTube Studio"
+            onclick="this.textContent = 'Actualizando…'">↻ Actualizar</button>
+  </form>
   <div class="cal-leyenda">
     <span class="punto e-programado"></span>En YouTube, programado <b>{{ cal.por_estado.programado }}</b>
     <span class="punto e-cola"></span>En cola <b>{{ cal.por_estado.cola }}</b>

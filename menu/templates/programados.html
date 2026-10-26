@@ -24,7 +24,8 @@
   <div><span class="cifra">{{ proximos | selectattr('estado', 'equalto', 'en_youtube') | list | length }}</span><span>ya en YouTube</span></div>
   <div><span class="cifra">{{ subidas_hoy }}<small>/{{ max_dia }}</small></span><span>subidas en 24 h</span></div>
   <form method="post" action="{{ url_for('revisar_programados') }}" class="en-linea">
-    <button class="secundario" type="submit" title="Mira ahora si toca subir algo">Revisar ahora</button>
+    <button class="secundario" type="submit" title="Trae de YouTube lo que hayas cambiado en YouTube Studio (horas, publicados, borrados)"
+            onclick="this.textContent = 'Actualizando…'">↻ Actualizar</button>
   </form>
 </div>
 
