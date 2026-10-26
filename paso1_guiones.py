@@ -127,12 +127,15 @@ Reglas de veracidad, obligatorias (es una noticia en curso: un error aquí es gr
 - Usa SOLO hechos que aparezcan en el MATERIAL. No añadas cifras, fechas, nombres, causas ni consecuencias que no estén.
 - Atribuye las cifras y las afirmaciones discutibles a quien las da: «según la policía», «según Le Monde»,
   «según el Gobierno francés». Si los medios dan cifras distintas, dilo («entre 800 y 1.200 detenidos, según la fuente»).
-- Sitúa los hechos en el tiempo con las fechas del MATERIAL («el sábado 17», «esta semana»). La última escena dice que
+- Sitúa los hechos en el tiempo con las fechas del MATERIAL («el sábado 17», «esta semana»), tal y como las da: si
+  dice «el sábado» sin número, di «el sábado»; nunca calcules el número del día ni el mes. La última escena dice que
   la información es «a {hoy_corto}» y que la situación puede cambiar.
 - Tono neutro e informativo: sin opiniones, sin adjetivos alarmistas, sin culpar a colectivos por su origen, religión
   o ideología, sin detalles morbosos de violencia. No nombres a personas particulares (víctimas, detenidos, menores);
   sí a cargos públicos y a instituciones.
 - Si el MATERIAL no deja claro por qué pasa algo, no lo expliques: cuenta solo lo que se sabe.
+- Si hay polémica, recoge las posturas enfrentadas que aparezcan en el MATERIAL (Gobierno y oposición, vecinos y
+  ayuntamiento…), cada una atribuida a quien la defiende y con un espacio parecido. El vídeo no toma partido.
 - Los artículos pueden estar en otros idiomas: tradúcelo TODO al {idioma} (también el título y el gancho), y los términos («curfew» → «toque de
   queda»). Solo se dejan en el original los nombres propios y las citas textuales, entre comillas y atribuidas.
 
@@ -142,6 +145,8 @@ Estilo:
   engañosos.
 - Frases cortas, fáciles de narrar. Cuenta: qué ha pasado, dónde y cuándo, cifras, reacciones y qué puede pasar ahora
   (solo si el MATERIAL lo dice).
+- La ÚLTIMA escena, después de la fecha, lanza al espectador una pregunta abierta sobre la polémica para que opine
+  en los comentarios («¿Quién crees que tiene razón?», «¿Tú qué harías?»), sin sugerir la respuesta.
 - Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
 - Entre 6 y 8 escenas, de 20 a 30 palabras de narración cada una.
 
@@ -502,9 +507,11 @@ def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicac
 
 
 AVISO_ACTUALIDAD = """
-ATENCIÓN: es una noticia de actualidad. La mención a la fecha de hoy en la última escena («a 23 de octubre», «la
-situación puede cambiar») la exige el formato: no la señales. Sí señala cifras, nombres, fechas de los hechos o
-atribuciones («según X») que el MATERIAL no respalde."""
+ATENCIÓN: es una noticia de actualidad y hoy es {hoy}. Dos cosas las exige el formato y NUNCA se señalan, aunque el
+MATERIAL no las diga: la fecha de hoy en la última escena («a {hoy_corto}», «la situación puede cambiar») y las
+preguntas al espectador («¿tú qué opinas?», «¿qué pasará ahora?»), que no son afirmaciones. Si una frase mezcla eso
+con un dato, juzga solo el dato. Sí señala cifras, nombres, fechas de los hechos o atribuciones («según X») que el
+MATERIAL no respalde."""
 
 
 AVISO_HUMOR = """
@@ -521,7 +528,9 @@ def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, hum
     Con `humor` (formato diario) no cuenta los chistes como datos: solo las afirmaciones históricas.
     """
     numeradas = "\n".join(f"{i}. {e['narracion']}" for i, e in enumerate(escenas, start=1))
-    sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "") + (AVISO_ACTUALIDAD if noticia else "")
+    hoy = date.today()
+    aviso_noticia = AVISO_ACTUALIDAD.format(hoy=hoy.isoformat(), hoy_corto=f"{hoy.day} de {MESES_ES[hoy.month - 1]}")
+    sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "") + (aviso_noticia if noticia else "")
     respuesta = llamar_groq(api_key, MODELO_VERIFICADOR, sistema, f"MATERIAL:\n{material}\n\nGUION:\n{numeradas}")
     try:
         datos = json.loads(respuesta)

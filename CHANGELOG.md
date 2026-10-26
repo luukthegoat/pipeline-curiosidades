@@ -3,6 +3,24 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.14.0] - 2026-10-26
+
+### Añadido
+- **Piloto de actualidad** (Ajustes → Piloto de actualidad, desactivado de entrada): a sus horas (09:30, 13:30, 18:00 y
+  21:00) busca la noticia de la que más se habla en España, hace el vídeo y lo publica en YouTube al momento, como
+  mucho 2 al día. El radar (`radar.py`) junta las tendencias de Google en España y los titulares de Bing Noticias, y
+  el modelo elige polémicas de política, sucesos y sociedad que cuentan varios medios, sin repetir lo de los últimos
+  5 días. Descarta deportes, famosos, encuestas y crímenes con particulares señalados.
+- **Salvaguarda del piloto:** solo publica si la noticia la cuentan al menos 3 medios reconocidos y el verificador no
+  marca ninguna frase. Si no, el vídeo queda en Mis vídeos sin revisar y llega un aviso de Windows. El día antes y el
+  día de las elecciones de la lista (29-N) no hace política.
+
+### Cambiado
+- **Guiones de actualidad con los dos bandos:** si hay polémica, recogen las posturas enfrentadas, cada una atribuida,
+  y acaban con una pregunta al espectador para que opine en los comentarios. Las fechas se dan tal y como vienen en
+  los artículos (nada de calcular «el sábado 19» a partir de «el sábado»).
+- El verificador de noticias sabe la fecha de hoy y ya no marca la fecha del cierre ni la pregunta final.
+
 ## [1.13.0] - 2026-10-26
 
 ### Añadido

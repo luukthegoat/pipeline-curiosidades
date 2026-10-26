@@ -76,6 +76,8 @@ flowchart LR
 | [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
 | [`video_ia.py`](video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
 | [`actualidad.py`](actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
+| [`radar.py`](radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
+| [`piloto_actualidad.py`](piloto_actualidad.py) | Hace y publica solo el vídeo de la noticia del día, con salvaguarda |
 | [`borrar.py`](borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
 | [`horarios.py`](horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
 | [`programados.py`](programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |

@@ -76,12 +76,54 @@
   {% else %}
     <p><span class="etiqueta">desactivado</span> Los vídeos esperan en Mis vídeos a que los revises y los programes tú.</p>
   {% endif %}
-  <p class="ayuda-campo">Los de actualidad nunca se programan solos: las noticias se revisan siempre a mano. Los que tienen
-    frases dudosas tampoco.</p>
+  <p class="ayuda-campo">Los de actualidad que creas tú no se programan solos: las noticias se revisan a mano (las del
+    piloto de actualidad siguen sus propias reglas, más abajo). Los que tienen frases dudosas tampoco.</p>
   <form method="post" action="{{ url_for('guardar_autoprogramar') }}">
     <input type="hidden" name="activo" value="{{ '0' if autoprogramar else '1' }}">
     <button class="{{ 'secundario' if autoprogramar else '' }}" type="submit">{{ 'Desactivar' if autoprogramar else 'Activar' }}</button>
   </form>
+</div>
+
+<div class="tarjeta" id="piloto">
+  <h2>Piloto de actualidad</h2>
+  {% if piloto.activo and piloto_tarea.existe %}
+    <p><span class="etiqueta ok">activado</span> A las {{ piloto.horas | join(', ') }} busca la noticia de la que más se
+      habla, hace el vídeo y lo publica al momento (como mucho {{ piloto.max_dia }} al día).
+      {% if piloto_tarea.proxima %}Próxima vez: {{ piloto_tarea.proxima }}.{% endif %}</p>
+  {% else %}
+    <p><span class="etiqueta">desactivado</span> Las noticias solo se hacen cuando tú las buscas desde Crear.</p>
+  {% endif %}
+  <p class="ayuda-campo">Salvaguarda: solo publica si la noticia la cuentan al menos {{ piloto.min_medios }} medios
+    reconocidos y el verificador no encuentra ninguna frase sin respaldo en los artículos. Si algo no cuadra, el vídeo se
+    queda en Mis vídeos sin revisar y te llega un aviso de Windows. No hace deportes, famosos, encuestas ni crímenes con
+    particulares señalados, y el día antes y el día de unas elecciones ({{ piloto.elecciones | join(', ') }}) no hace política.
+    Las horas, las elecciones y el mínimo de medios se cambian en <code>piloto_actualidad.json</code>.</p>
+  <form method="post" action="{{ url_for('guardar_piloto') }}" class="programar-uno" style="max-width: 560px;">
+    {% if piloto.activo and piloto_tarea.existe %}
+      <input type="hidden" name="activo" value="0">
+      <button class="secundario" type="submit">Desactivar</button>
+    {% else %}
+      <label>Vídeos al día, como mucho
+        <input type="number" name="max_dia" min="1" max="5" value="{{ piloto.max_dia }}" style="width: 5em;"></label>
+      <button type="submit">Activar</button>
+    {% endif %}
+  </form>
+  <form method="post" action="{{ url_for('piloto_ahora') }}" style="margin-top: .6rem;">
+    <button class="secundario" type="submit">Buscar la noticia del día ahora</button>
+  </form>
+  {% if piloto_contados %}
+    <p style="margin-top: 1rem;"><strong>Últimas noticias</strong></p>
+    <ul>
+    {% for c in piloto_contados %}
+      <li>{{ c.fecha }} {{ c.hora }} · {{ c.titular }} ·
+        {% if c.publicado %}<span class="etiqueta ok">publicada</span>{% else %}<span class="etiqueta">a revisar</span>{% endif %}
+        <a href="{{ url_for('ver_guion', nombre=c.nombre) }}">ver</a></li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+  {% if piloto_registro %}
+    <details><summary>Registro</summary><pre class="consola">{{ piloto_registro | join('\n') }}</pre></details>
+  {% endif %}
 </div>
 
 <div class="tarjeta" id="actualidad">

@@ -33,6 +33,7 @@ import horarios  # noqa: E402  (horas recomendadas para publicar)
 import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
 import actualidad  # noqa: E402  (noticias recientes para los vídeos de actualidad)
 import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
+import piloto_actualidad  # noqa: E402  (vídeo de la noticia del día, solo y con salvaguarda)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -535,6 +536,31 @@ def guardar_autoprogramar():
         if hechos:
             mensaje += f" Programados ahora: {len(hechos)}."
     return redirect(url_for("ajustes", mensaje=mensaje, _anchor="autoprogramar"))
+
+
+@app.post("/ajustes/piloto")
+def guardar_piloto():
+    if request.form.get("activo") == "0":
+        piloto_actualidad.desactivar()
+        return redirect(url_for("ajustes", mensaje="Piloto de actualidad desactivado.", _anchor="piloto"))
+    max_dia = request.form.get("max_dia", type=int) or piloto_actualidad.configuracion()["max_dia"]
+    piloto_actualidad.guardar_configuracion({"max_dia": max(1, min(max_dia, 5))})
+    error = piloto_actualidad.activar()
+    mensaje = (f"No se ha podido programar la tarea de Windows: {error}" if error else
+               "Piloto de actualidad activado: mirará la noticia del día a sus horas y publicará lo que pase la salvaguarda.")
+    return redirect(url_for("ajustes", mensaje=mensaje, _anchor="piloto"))
+
+
+@app.post("/ajustes/piloto/ahora")
+def piloto_ahora():
+    def trabajo(t: Trabajo) -> bool:
+        antes = set(GUIONES.glob("*.json")) if GUIONES.exists() else set()
+        codigo = t.ejecutar("piloto_actualidad.py", "--ahora")
+        t.resultado = sorted(p.stem for p in set(GUIONES.glob("*.json")) - antes) if GUIONES.exists() else []
+        return codigo == 0
+
+    nuevo = cola.anadir("Piloto de actualidad: noticia del día", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
 @app.post("/ajustes/tavily")
@@ -1131,6 +1157,10 @@ def ajustes():
         tavily=bool(os.getenv("TAVILY_API_KEY")),
         pexels=bool(os.getenv("PEXELS_API_KEY")),
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
+        piloto=piloto_actualidad.configuracion(),
+        piloto_tarea=piloto_actualidad.estado_tarea(),
+        piloto_contados=list(reversed(piloto_actualidad.contados(2))),
+        piloto_registro=piloto_actualidad.ultimas_lineas(25),
     )
 
 

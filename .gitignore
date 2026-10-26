@@ -14,6 +14,9 @@ salida/
 # Música: la generan los scripts (python musica.py); las pistas propias pueden tener derechos
 musica/
 
+# Configuración personal del piloto de actualidad (se crea sola con valores por defecto)
+piloto_actualidad.json
+
 # Lanzador compilado (se crea con lanzador\crear_exe.bat)
 *.exe
 
