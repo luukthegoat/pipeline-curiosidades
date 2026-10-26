@@ -59,6 +59,22 @@ CARPETA_PROPIAS = Path("salida/imagenes_propias")  # imágenes que subes desde e
 ANCHO_DESCARGA = 1280  # tamaño estándar de Wikimedia: los no estándar tienen límites mucho más estrictos
 PUNTUACION_MINIMA = 0.45  # por debajo, la imagen apenas tiene que ver con la escena: se repite una buena
 MAX_COMMONS = 25       # imágenes extra buscadas en Wikimedia Commons
+MAX_VIDEOS_COMMONS = 20         # vídeos buscados en Wikimedia Commons (en español y en inglés)
+MAX_CLIPS_POR_VIDEO = 3         # escenas con vídeo como mucho: el resto, fotos
+PUNTUACION_MINIMA_VIDEO = 0.8   # un vídeo tiene que encajar mejor que una foto para usarse
+VENTAJA_VIDEO = 0.3             # a igual relevancia, mejor en movimiento
+DURACION_CLIP = 12.0            # s que se descargan de cada vídeo (las escenas duran menos)
+DURACION_MAXIMA_VIDEO = 1200    # s; más largos suelen ser grabaciones enteras de un acto
+TAMANO_MAXIMO_VIDEO = 60        # MB de la versión ligera: se descarga entera para recortarla
+CARPETA_CLIPS = Path("salida/cache_clips")  # trozos de vídeo ya descargados
+# Discursos, telediarios, entrevistas…: una persona hablando a cámara no sirve de imagen de una escena.
+EXCLUIR_VIDEO = re.compile(
+    r"address|remarks|speech|speaks|statement|interview|press conference|briefing|hearing|lecture|podcast|"
+    r"news in|webinar|discurso|entrevista|rueda de prensa|declaraci|conferencia|audio|subtitles|trailer|"
+    r"remember|testimon|oral history|tribute|ceremony|commentary|story|recuerd|homenaje|testimonio|"
+    r"president|presidente|minister|ministro|senator|senador|secretary|secretario|governor|mayor|alcalde|"
+    r"^\d+\.\s",  # «4. Apellido, Nombre (lugar, año)»: series de entrevistas
+    re.I)
 
 ANCHO, ALTO, FPS = 1080, 1920, 30
 ALTO_IMAGEN = 0.54    # fracción de la altura que ocupa la imagen
@@ -164,6 +180,64 @@ def imagenes_de_commons(busqueda: str) -> list:
     return _imagenes(URL_COMMONS_API, parametros, "Wikimedia Commons")
 
 
+def _videos(url_api: str, parametros: dict, origen: str) -> list:
+    """Vídeos (con su versión ligera para descargar) de una consulta a una API de Wikimedia."""
+    parametros = {
+        **parametros,
+        "prop": "videoinfo", "viprop": "url|size|mime|extmetadata|derivatives", "viurlwidth": 640,
+        "viextmetadatafilter": "Artist|LicenseShortName|ImageDescription",
+        "format": "json", "formatversion": 2,
+    }
+    videos = []
+    for pagina in wikimedia.json_api(url_api, parametros).get("query", {}).get("pages", []):
+        info = (pagina.get("videoinfo") or [{}])[0]
+        nombre = pagina.get("title", "")
+        duracion = info.get("duration") or 0
+        # La versión ligera de 480p (o la más cercana) basta para la franja central del vídeo vertical.
+        # Solo versiones convertidas por Commons (no el archivo original, que puede pesar gigas) y en .webm.
+        versiones = sorted((d for d in info.get("derivatives", []) if d.get("transcodekey", "").endswith(".webm")
+                            and d.get("height") and d.get("bandwidth")
+                            and d["bandwidth"] * duracion / 8e6 <= TAMANO_MAXIMO_VIDEO),
+                           key=lambda d: (abs(d["height"] - 480), -d["height"]))
+        if (not info.get("width") or not versiones or not 3 <= duracion <= DURACION_MAXIMA_VIDEO
+                or EXCLUIR_VIDEO.search(nombre)):
+            continue  # sin imagen (solo audio), sin versión ligera, demasiado corto o largo, o alguien hablando
+        meta = info.get("extmetadata")
+        meta = meta if isinstance(meta, dict) else {}
+        descripcion = limpiar_html(meta.get("ImageDescription", {}).get("value", ""))
+        if EXCLUIR_VIDEO.search(descripcion[:200]):
+            continue
+        anios = [int(a) for a in re.findall(r"\b(1[0-9]{3}|20[0-9]{2})\b", f"{nombre} {descripcion[:300]}")]
+        videos.append({
+            "archivo": nombre.split(":", 1)[-1],
+            "url": versiones[0]["src"],
+            "miniatura": info.get("thumburl", ""),
+            "video": True,
+            "duracion": round(duracion, 1),
+            "anio": min(anios) if anios else None,
+            "articulo": origen,
+            "pagina": info.get("descriptionurl", ""),
+            "autor": limpiar_html(meta.get("Artist", {}).get("value", "")) or "Autor desconocido",
+            "licencia": meta.get("LicenseShortName", {}).get("value", "") or "ver página del archivo",
+            "descripcion": descripcion[:200],
+            "claves": sorted(palabras_clave(f"{nombre} {descripcion[:300]}")),
+        })
+    return videos
+
+
+def videos_de_articulo(titulo: str, url_api: str = URL_WIKI_API) -> list:
+    """Vídeos que los editores de Wikipedia han puesto en el artículo: pocos, pero del tema seguro."""
+    parametros = {"action": "query", "generator": "images", "titles": titulo, "gimlimit": 200, "redirects": 1}
+    return [{**v, "del_articulo": True} for v in _videos(url_api, parametros, f"{titulo} (vídeo)")]
+
+
+def videos_de_commons(busqueda: str) -> list:
+    """Búsqueda de vídeos en Wikimedia Commons (noticiarios, archivos públicos…): más, pero menos seguros."""
+    parametros = {"action": "query", "generator": "search", "gsrsearch": f"{busqueda} filetype:video",
+                  "gsrnamespace": 6, "gsrlimit": MAX_VIDEOS_COMMONS}
+    return _videos(URL_COMMONS_API, parametros, "Wikimedia Commons (vídeo)")
+
+
 # --- Museos (imágenes de dominio público, buscan en inglés) ------------------------------
 
 URL_MET = "https://collectionapi.metmuseum.org/public/collection"
@@ -256,7 +330,7 @@ def imagenes_del_art_institute(busqueda: str) -> list:
     return imagenes
 
 
-VERSION_CANDIDATAS = 3  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
+VERSION_CANDIDATAS = 7  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
 
 
 def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
@@ -275,6 +349,7 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
                                        indent=2), encoding="utf-8")
         return imagenes
     imagenes = []
+    articulos = [fuente.get("titulo") or titulo_desde_url(fuente["url"]) for fuente in datos.get("fuentes", [])]
     for fuente in datos.get("fuentes", []):
         try:
             imagenes += imagenes_de_articulo(fuente.get("titulo") or titulo_desde_url(fuente["url"]))
@@ -284,14 +359,42 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
             print(f"  aviso: no se pudieron leer las imágenes de {fuente.get('titulo')}")
     busqueda = ((datos.get("diario") or {}).get("personaje") or (datos.get("serie") or {}).get("tema")
                 or nombre_corto(datos))
+    en_ingles = tema_en_ingles(datos)
+    # Lo que salga de Commons tiene que nombrar el tema (los artículos fuente y su título en inglés): una búsqueda
+    # por «11S» trae también la proteína «11S proteasome».
+    tema = set().union(*(palabras_clave(t) for t in [*articulos, en_ingles, (datos.get("serie") or {}).get("tema", "")]))
+    del_tema = lambda lista: [i for i in lista if datos.get("diario") or set(i["claves"]) & tema]  # noqa: E731
     try:
-        imagenes += imagenes_de_commons(busqueda)
+        encontradas = imagenes_de_commons(busqueda)
+        imagenes += del_tema(encontradas)
+        if len(del_tema(encontradas)) < len(encontradas):
+            print(f"  Commons: {len(encontradas) - len(del_tema(encontradas))} imágenes descartadas por no ser del tema")
     except wikimedia.WikimediaEnEspera:
         raise
     except requests.RequestException:
         print("  aviso: no se pudo buscar en Wikimedia Commons")
+    # Vídeo real de archivo (no en los diarios, que van con imágenes de IA): primero los de los artículos de
+    # Wikipedia (en español y en inglés); después, una búsqueda en Commons, solo con los que nombren bien el tema
+    # (dos palabras suyas: «Francisco Franco» no debe traer vídeos de «Marielle Franco»).
+    if not datos.get("diario"):
+        busquedas = [(videos_de_articulo, (t,), "artículo") for t in articulos[:2]]
+        if en_ingles not in articulos:
+            busquedas.append((videos_de_articulo, (en_ingles, URL_WIKI_API.replace("es.", "en.")), "artículo en inglés"))
+        busquedas.append((videos_de_commons, (en_ingles,), "Commons"))
+        for buscar, argumentos, donde in busquedas:
+            try:
+                encontrados = buscar(*argumentos)
+            except wikimedia.WikimediaEnEspera:
+                raise
+            except requests.RequestException:
+                print(f"  aviso: no se pudieron buscar vídeos en {donde}")
+                continue
+            if buscar is videos_de_commons:
+                encontrados = [v for v in encontrados if len(set(v["claves"]) & tema) >= min(2, len(tema))]
+            imagenes += encontrados
+            print(f"  {donde}: {len(encontrados)} vídeos de «{argumentos[0]}»")
     # Museos: si fallan, se sigue sin ellos (no dependen de Wikimedia).
-    en_ingles = busqueda_museos(tema_en_ingles(datos))
+    en_ingles = busqueda_museos(en_ingles)
     for museo, buscar in (("The Met", imagenes_del_met), ("Art Institute of Chicago", imagenes_del_art_institute)):
         try:
             encontradas = buscar(en_ingles)
@@ -326,6 +429,8 @@ def imagenes_de_archivo(datos: dict) -> list:
 
 def miniatura_url(imagen: dict) -> str:
     """URL pequeña para mostrar la imagen en el menú (330 px en Wikimedia, 400 px en el Art Institute)."""
+    if imagen.get("video"):
+        return imagen.get("miniatura", "")
     url = imagen.get("url", "")
     if "/thumb/" in url:
         return re.sub(r"/\d+px-", "/330px-", url)
@@ -363,10 +468,19 @@ class SelectorImagenes:
         puntos -= 0.1 * self.articulos.index(imagen["articulo"])  # desempate: artículo principal primero
         return puntos
 
+    def _vale(self, indice: int, claves: set) -> bool:
+        """¿Encaja lo bastante con la escena? A los vídeos se les pide más (y hay un máximo por vídeo)."""
+        if self.imagenes[indice].get("video"):
+            clips = sum(1 for i in self.usadas if self.imagenes[i].get("video"))
+            minima = PUNTUACION_MINIMA if self.imagenes[indice].get("del_articulo") else PUNTUACION_MINIMA_VIDEO
+            return clips < MAX_CLIPS_POR_VIDEO and self.puntuacion(indice, claves) >= minima
+        return self.puntuacion(indice, claves) >= PUNTUACION_MINIMA
+
     def ranking(self, escena: dict) -> list:
         """Índices de las imágenes de mejor a peor para la escena."""
         claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
-        return sorted(range(len(self.imagenes)), key=lambda i: self.puntuacion(i, claves), reverse=True)
+        return sorted(range(len(self.imagenes)), reverse=True,
+                      key=lambda i: self.puntuacion(i, claves) + (VENTAJA_VIDEO if self.imagenes[i].get("video") else 0))
 
     def marcar_usada(self, imagen: dict) -> None:
         """Una imagen elegida a mano no se vuelve a proponer para otra escena."""
@@ -399,20 +513,18 @@ class SelectorImagenes:
         """Devuelve (imagen, ruta) de la mejor imagen disponible, o (None, None)."""
         claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
         ranking = self.ranking(escena)
-        nuevas = [
-            i for i in ranking
-            if i not in self.usadas and i not in self.fallidas and self.puntuacion(i, claves) >= PUNTUACION_MINIMA
-        ]
+        nuevas = [i for i in ranking if i not in self.usadas and i not in self.fallidas and self._vale(i, claves)]
         for indice in [i for i in nuevas if not self._bloqueada(i)][:5]:
             if resultado := self._descargar(indice):
                 return resultado
         # Sin imagen nueva relevante: mejor repetir una buena (sin repetir la de la escena anterior).
-        repetibles = [i for i in ranking if i in self.descargadas]
+        repetibles = [i for i in ranking if i in self.descargadas and not self.imagenes[i].get("video")]
         for indice in [i for i in repetibles if i != self.anterior] or repetibles:
             self.anterior = indice
             return self.imagenes[indice], self.descargadas[indice]
         # Aún no hay ninguna descargada (p. ej. primera escena sin coincidencias): la mejor disponible.
-        for indice in [i for i in ranking if i not in self.fallidas and not self._bloqueada(i)][:5]:
+        for indice in [i for i in ranking if i not in self.fallidas and not self._bloqueada(i)
+                       and not self.imagenes[i].get("video")][:5]:
             if resultado := self._descargar(indice):
                 return resultado
         return None, None
@@ -436,6 +548,13 @@ def descargar(imagen: dict) -> Path:
     """Descarga (o reutiliza de la caché) la imagen, al ritmo que permite Wikimedia."""
     if imagen.get("ruta"):  # imagen propia subida desde el menú
         return Path(imagen["ruta"])
+    if imagen.get("video"):
+        # Un trozo desde el 20 % del vídeo (al principio suele haber títulos o carta de ajuste).
+        duracion = float(imagen.get("duracion") or DURACION_CLIP)
+        inicio = max(0.0, min(duracion * 0.2, duracion - DURACION_CLIP))
+        nombre = re.sub(r"[^\w.-]+", "_", normalizar_nombre(imagen["archivo"]))[:100]
+        return wikimedia.fragmento_video(imagen["url"], CARPETA_CLIPS / f"{Path(nombre).stem}_{inicio:.0f}.mp4",
+                                         inicio, DURACION_CLIP)
     return wikimedia.archivo(imagen["url"], ruta_en_cache(imagen))
 
 
@@ -626,6 +745,53 @@ def segmento_escena(trabajo: Path, numero: int, ruta_imagen, audio: Path, util: 
     )
     clave.write_text(firma)
     return salida
+
+
+def _filtro_clip_vertical(entrada: str, salida: str) -> str:
+    """El clip en la franja central, sobre el mismo clip desenfocado y oscurecido (como las fotos)."""
+    alto_maximo = int(ALTO * ALTO_IMAGEN)
+    return (
+        f"[{entrada}]fps={FPS},split[cf][cd];"
+        f"[cf]scale={ANCHO}:{ALTO}:force_original_aspect_ratio=increase,crop={ANCHO}:{ALTO},"
+        f"boxblur=24:2,eq=brightness=-0.3[fondo];"
+        f"[cd]scale={ANCHO}:{alto_maximo}:force_original_aspect_ratio=decrease[frente];"
+        f"[fondo][frente]overlay=(W-w)/2:{int(ALTO * CENTRO_IMAGEN)}-h/2,setsar=1[{salida}]"
+    )
+
+
+def segmento_video(trabajo: Path, numero: int, clip, audio: Path, util: float, total: float,
+                   subtitulos: str, etiqueta: str = "") -> Path:
+    """Escena con un clip de vídeo real: en movimiento, sin su sonido, con la voz y los subtítulos."""
+    salida = trabajo / f"seg_{numero:02d}.mp4"
+    clave = trabajo / f"seg_{numero:02d}.clave"
+    firma = huella(VERSION_ESCENA, "video", info_archivo(clip), info_archivo(audio), round(util, 3),
+                   round(total, 3), subtitulos)
+    if salida.exists() and clave.exists() and clave.read_text() == firma:
+        return salida
+    (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
+    # Si el clip es más corto que la escena, se queda congelado en su último fotograma.
+    video = (f"{_filtro_clip_vertical('0:v', 'vc')};"
+             f"[vc]tpad=stop_mode=clone:stop_duration={total:.3f},ass=sub_{numero:02d}.ass,format=yuv420p[v]")
+    ffmpeg(
+        [
+            "-i", str(Path(clip).resolve()), "-i", str(audio.resolve()),
+            "-filter_complex", f"{video};[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
+            "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
+            salida.name,
+        ],
+        trabajo,
+    )
+    clave.write_text(firma)
+    return salida
+
+
+def fotograma_de_video(clip, destino: Path) -> Path:
+    """Un fotograma del clip ya compuesto en vertical (para la miniatura si la primera escena es un vídeo)."""
+    ffmpeg(["-ss", "0.5", "-i", str(Path(clip).resolve()), "-filter_complex", _filtro_clip_vertical("0:v", "v"),
+            "-map", "[v]", "-frames:v", "1", destino.name], destino.parent)
+    return destino
 
 
 def unir(trabajo: Path, segmentos: list, destino: Path, pista, duracion: float) -> None:
@@ -930,16 +1096,18 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
                 etiqueta = "FOTO: WIKIMEDIA COMMONS"
             else:
                 etiqueta = "ARCHIVE IMAGE" if datos.get("idioma") == "en" else "IMAGEN DE ARCHIVO"
-        trabajos.append((trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
-                         util, total, subtitulos, etiqueta))
         imagen = eleccion["imagen"]
+        hacer = segmento_video if (imagen or {}).get("video") and eleccion["ruta"] else segmento_escena
+        trabajos.append((hacer, trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
+                         util, total, subtitulos, etiqueta))
         marca = (" (generada con IA)" if (imagen or {}).get("ia") else " (elegida a mano)") if eleccion["a_mano"] else ""
+        marca += " [vídeo]" if hacer is segmento_video else ""
         print(f"  escena {escena['numero']}: {total:.2f} s · {imagen['archivo'][:55] if imagen else 'sin imagen'}{marca}")
         cursor += total
 
     inicio = time.time()
     with ThreadPoolExecutor(max_workers=HILOS) as hilos:
-        segmentos = list(hilos.map(lambda argumentos: segmento_escena(*argumentos), trabajos))
+        segmentos = list(hilos.map(lambda t: t[0](*t[1:]), trabajos))
     print(f"  escenas listas en {time.time() - inicio:.0f} s ({HILOS} a la vez; las que no cambiaron, de la caché)")
 
     # Toma final: «¿Quieres la parte 2? Dale a like y suscríbete» (sobria en los vídeos de tono triste)
@@ -957,8 +1125,11 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     if serie.get("total", 1) > 1:
         etiqueta = f"{'PART' if datos.get('idioma') == 'en' else 'PARTE'} {serie['parte']}/{serie['total']}"
     primera = trabajo / f"frame_{datos['escenas'][0]['numero']:02d}.png"
-    if not primera.exists():
-        componer_fotograma(elegidas[datos["escenas"][0]["numero"]]["ruta"], primera)
+    eleccion = elegidas[datos["escenas"][0]["numero"]]
+    if (eleccion["imagen"] or {}).get("video") and eleccion["ruta"]:
+        fotograma_de_video(eleccion["ruta"], primera)  # la primera escena es un vídeo: su fotograma
+    elif not primera.exists():
+        componer_fotograma(eleccion["ruta"], primera)
     crear_miniatura(primera, gancho or datos.get("titulo", ""), ruta_miniatura(ruta_video), etiqueta)
     guardar_ruta_video(nombre, ruta_video)
     print(f"  duración: {cursor:.1f} s · música: {datos.get('musica', 'neutro') if pista else 'ninguna'}")
@@ -1067,7 +1238,8 @@ def _linea_credito(c, ingles: bool) -> str:
         return f"- {c['archivo']} — {'AI-generated image (Pollinations)' if ingles else 'imagen generada con IA (Pollinations)'}"
     if c.get("ruta"):
         return f"- {c['archivo']} — {'own image' if ingles else 'imagen propia'}"
-    return f"- {c['archivo']} — {c['autor']} — {c['licencia']} — {c['pagina']}"
+    tipo = ("(video) " if ingles else "(vídeo) ") if c.get("video") else ""
+    return f"- {tipo}{c['archivo']} — {c['autor']} — {c['licencia']} — {c['pagina']}"
 
 
 def _hashtags(datos: dict, maximo: int) -> str:

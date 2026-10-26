@@ -2,10 +2,10 @@
 {% block titulo %}Imágenes · {{ datos.titulo }}{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('ver_guion', nombre=nombre) }}">← Volver al guion</a>
-<h1>Elige las imágenes</h1>
+<h1>Elige las imágenes y los vídeos</h1>
 <p class="sub">
-  {{ total }} imágenes encontradas en Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago. Pincha la que quieras para cada escena
-  (se marca en dorado) o sube una tuya. Después, vuelve al guion y pulsa «Rehacer audio y vídeo»: solo se
+  {{ total }} opciones encontradas en Wikipedia, Wikimedia Commons (también <strong>vídeos de archivo</strong>, marcados
+  con ▶), The Met y el Art Institute of Chicago. Pincha la que quieras para cada escena (se marca en color) o sube una tuya. Después, vuelve al guion y pulsa «Rehacer audio y vídeo»: solo se
   rehacen las escenas cambiadas.
   <a href="{{ url_for('imagenes_guion', nombre=nombre, renovar=1) }}">Buscar imágenes de nuevo</a>
 </p>
@@ -26,6 +26,7 @@
 
     <p><strong>Ahora:</strong>
       {% if item.actual %}
+        {% if item.actual.video %}<span class="etiqueta prog">▶ vídeo</span>{% endif %}
         {{ item.actual.archivo }}
         {% if item.a_mano %}<span class="etiqueta ok">elegida a mano</span>
         {% else %}<span class="etiqueta">automática</span>{% endif %}
@@ -42,6 +43,7 @@
           <input type="hidden" name="archivo" value="{{ o.archivo }}">
           <button type="submit" class="opcion {{ 'elegida' if elegida }}" title="{{ o.archivo }} — {{ o.autor }} ({{ o.licencia }})">
             <img src="{{ url_for('miniatura_wikimedia', u=miniatura(o)) }}" alt="{{ o.archivo }}" loading="lazy">
+            {% if o.video %}<b class="marca-video">▶ {{ '%d:%02d' % (o.duracion // 60, o.duracion % 60) }}</b>{% endif %}
             <span>{{ o.archivo[:38] }}</span>
           </button>
         </form>

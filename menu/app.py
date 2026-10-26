@@ -699,7 +699,8 @@ def producir_guion(nombre):
 
 def imagen_guardable(imagen: dict) -> dict:
     """Lo que se guarda en el guion de una imagen elegida (sin datos internos de búsqueda)."""
-    return {k: imagen.get(k) for k in ("archivo", "url", "pagina", "autor", "licencia", "anio", "articulo", "ruta")
+    return {k: imagen.get(k) for k in ("archivo", "url", "pagina", "autor", "licencia", "anio", "articulo", "ruta",
+                                       "video", "duracion", "miniatura")
             if imagen.get(k) is not None}
 
 
@@ -713,7 +714,10 @@ def imagenes_guion(nombre):
     escenas = []
     for escena in datos.get("escenas", []):
         actual = escena.get("imagen") or (elegidas.get(str(escena["numero"])) or {}).get("imagen")
-        opciones = [candidatas[i] for i in selector.ranking(escena)[:12]]
+        ranking = selector.ranking(escena)
+        opciones = [candidatas[i] for i in ranking[:12]]
+        # Los vídeos son pocos: se ofrecen siempre (aunque no estén entre los 12 mejores) para elegirlos a mano.
+        opciones += [candidatas[i] for i in ranking[12:] if candidatas[i].get("video")][:6]
         escenas.append({"escena": escena, "actual": actual, "a_mano": bool(escena.get("imagen")), "opciones": opciones})
     return render_template("imagenes.html", nombre=nombre, datos=datos, escenas=escenas,
                            miniatura=paso3_video.miniatura_url, total=len(candidatas),

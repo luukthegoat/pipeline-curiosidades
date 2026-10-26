@@ -16,7 +16,7 @@ música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo
 |---|---|
 | **1 · Guion** | Busca el material en Wikipedia y un LLM (Groq) escribe un guion de 60-75 s en escenas, con gancho, tono musical y nombre corto. Un **segundo LLM verifica cada frase contra la fuente** y marca las que no tienen respaldo. |
 | **2 · Voz** | Cada escena se convierte en voz neuronal (edge-tts) con la duración y el tiempo **de cada palabra**. |
-| **3 · Vídeo** | Imágenes reales de Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago (dominio público), elegidas por relevancia, con zoom lento, subtítulos palabra a palabra, gancho en grande, música que baja sola cuando habla la voz y una toma final animada de «like y suscríbete». |
+| **3 · Vídeo** | Imágenes reales de Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago (dominio público) y clips de vídeo de archivo cuando los hay, elegidos por relevancia, con zoom lento, subtítulos palabra a palabra, gancho en grande, música que baja sola cuando habla la voz y una toma final animada de «like y suscríbete». |
 | **4 · Publicar** | Sube a YouTube por la API oficial (título, descripción, etiquetas, aviso de contenido sintético, publicación programada) y prepara el texto de TikTok. |
 
 **Formatos:** tema libre, **series** de varias partes con índice previo (para que no se repitan ni destripen el final),

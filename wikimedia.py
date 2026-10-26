@@ -175,3 +175,34 @@ def archivo(url: str, destino: Path) -> Path:
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(contenido)
     return destino
+
+
+def fragmento_video(url: str, destino: Path, inicio: float, duracion: float) -> Path:
+    """Trozo de `duracion` segundos de un vídeo desde `inicio` (sin sonido, en .mp4), salvo que ya exista.
+
+    El vídeo (su versión ligera) se descarga entero en una sola petición, con el mismo ritmo que el resto, y se
+    recorta aquí: pedirle a ffmpeg que salte por el archivo en el servidor hace decenas de peticiones y Wikimedia
+    lo bloquea por exceso. Después se borra y solo se guarda el trozo.
+    """
+    if destino.exists() and destino.stat().st_size > 1000:
+        return destino
+    import subprocess
+    import imageio_ffmpeg
+    completo = archivo(url, destino.with_name(destino.stem + ".completo" + Path(urlparse(url).path).suffix))
+    temporal = destino.with_suffix(".parcial.mp4")
+    try:
+        resultado = subprocess.run(
+            [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
+             "-ss", f"{inicio:.2f}", "-i", str(completo), "-t", f"{duracion:.2f}",
+             "-an", "-vf", "scale=-2:'min(720,ih)'", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+             "-pix_fmt", "yuv420p", str(temporal)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if resultado.returncode != 0 or not temporal.exists() or temporal.stat().st_size <= 1000:
+            raise requests.RequestException(f"no se pudo recortar el vídeo: {resultado.stderr.strip()[-200:]}")
+        temporal.replace(destino)
+    finally:
+        temporal.unlink(missing_ok=True)
+        completo.unlink(missing_ok=True)
+    return destino

@@ -3,6 +3,19 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.12.0] - 2026-10-26
+
+### Añadido
+- **Escenas con vídeo real de archivo.** Además de fotos, cada vídeo puede llevar hasta 3 clips en movimiento: primero
+  los que los editores de Wikipedia han puesto en el artículo (en español y en inglés) y, si no, los de Wikimedia
+  Commons que nombren bien el tema. Se descarga solo el trozo que se usa, se coloca como las fotos (en la franja
+  central, sobre un fondo desenfocado) y sin su sonido. Sus créditos van en la descripción marcados como «(vídeo)».
+- En **Elegir imágenes** salen también los clips (con ▶ y su duración), siempre todos, para ponerlos a mano.
+
+### Arreglado
+- **Imágenes que no eran del tema** en la búsqueda de Commons: «11S» traía fotos de la proteína «11S proteasome».
+  Ahora lo que llega de Commons tiene que nombrar el tema del artículo.
+
 ## [1.11.1] - 2026-10-26
 
 ### Arreglado
@@ -274,6 +287,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.12.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.1...v1.12.0
 [1.11.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.1...v1.10.2
