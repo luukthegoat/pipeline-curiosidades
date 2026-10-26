@@ -3,42 +3,34 @@
 {% block contenido %}
 {% if not trabajo %}
   <h1>Tareas</h1>
-  <div class="tarjeta vacio">Todavía no has lanzado ninguna tarea. Crea un vídeo desde el <a href="{{ url_for('inicio') }}">inicio</a>.</div>
+  <div class="tarjeta vacio">Todavía no has lanzado ninguna tarea. <a href="{{ url_for('inicio') }}">Crea un vídeo</a>.</div>
 {% else %}
-<div class="dos-columnas">
-  <div>
-    <h1 id="titulo">{{ trabajo.titulo }}</h1>
-    <p class="sub">Estado: <strong id="estado">{{ trabajo.estado }}</strong>. Esta página se actualiza sola; puedes cerrarla, la tarea sigue.</p>
+  <h1 id="titulo">{{ trabajo.titulo }}</h1>
+  <p class="sub">Estado: <strong id="estado">{{ trabajo.estado }}</strong>. Esta página se actualiza sola; puedes cerrarla, la tarea sigue.</p>
 
-    <div id="resultado" class="tarjeta" hidden>
-      <h2>Listo. Revisa el resultado:</h2>
-      <div class="lista" id="enlaces"></div>
-    </div>
-
-    <pre class="consola" id="consola">{{ trabajo.lineas | join('\n') }}</pre>
-
-    <div class="acciones">
-      <form method="post" action="{{ url_for('cancelar_tarea', id_trabajo=trabajo.id) }}" id="cancelar"
-            {% if trabajo.estado not in ('en curso', 'en cola') %}hidden{% endif %}>
-        <button class="secundario" type="submit">Cancelar esta tarea</button>
-      </form>
-      <a class="boton secundario" href="{{ url_for('inicio') }}">Volver al inicio</a>
-    </div>
+  <div id="resultado" class="tarjeta" hidden>
+    <h2>Listo. Revisa el resultado:</h2>
+    <div class="lista" id="enlaces"></div>
   </div>
 
-  <div class="tarjeta">
-    <h2>Cola</h2>
-    <p class="ayuda-campo">Las tareas se hacen una detrás de otra.</p>
-    <div class="lista" id="cola">
-      {% for t in trabajos %}
-        <a class="guion compacto {{ 'activo' if t.id == trabajo.id }}" href="{{ url_for('ver_tarea', id=t.id) }}">
-          <span class="titulo">{{ t.titulo }}</span>
-          <span class="estados"><span class="etiqueta">{{ t.estado }}</span></span>
-        </a>
-      {% endfor %}
-    </div>
+  <pre class="consola" id="consola">{{ trabajo.lineas | join('\n') }}</pre>
+
+  <div class="acciones">
+    <form method="post" action="{{ url_for('cancelar_tarea', id_trabajo=trabajo.id) }}" id="cancelar"
+          {% if trabajo.estado not in ('en curso', 'en cola') %}hidden{% endif %}>
+      <button class="secundario" type="submit">Cancelar esta tarea</button>
+    </form>
+    <a class="boton secundario" href="{{ url_for('mis_videos') }}">Ir a Mis vídeos</a>
   </div>
-</div>
+
+  <div class="cabecera-seccion"><h2>Cola</h2><span class="ayuda-campo">Las tareas se hacen una detrás de otra.</span></div>
+  <div class="lista" id="cola">
+    {% for t in trabajos %}
+      <a class="tarea-fila {{ 'activo' if t.id == trabajo.id }}" href="{{ url_for('ver_tarea', id=t.id) }}">
+        <span class="titulo">{{ t.titulo }}</span><span class="etiqueta">{{ t.estado }}</span>
+      </a>
+    {% endfor %}
+  </div>
 
 <script>
   const id = {{ trabajo.id }};
@@ -46,9 +38,9 @@
   consola.scrollTop = consola.scrollHeight;
   function enlace(texto, href, activo, estado) {
     const a = document.createElement('a');
-    a.className = 'guion compacto' + (activo ? ' activo' : '');
+    a.className = 'tarea-fila' + (activo ? ' activo' : '');
     a.href = href;
-    a.innerHTML = '<span class="titulo"></span><span class="estados"><span class="etiqueta"></span></span>';
+    a.innerHTML = '<span class="titulo"></span><span class="etiqueta"></span>';
     a.querySelector('.titulo').textContent = texto;
     a.querySelector('.etiqueta').textContent = estado;
     return a;
@@ -66,6 +58,8 @@
     const contador = document.getElementById('nav-contador');
     contador.textContent = activos;
     contador.hidden = !activos;
+    document.getElementById('nav-texto').textContent = activos ? activos + ' en marcha' : 'Tareas';
+    document.getElementById('nav-tarea').classList.toggle('activas', activos > 0);
     const lista = document.getElementById('cola');
     lista.innerHTML = '';
     for (const x of datos.trabajos) lista.appendChild(enlace(x.titulo, '/tarea?id=' + x.id, x.id === id, x.estado));

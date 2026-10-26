@@ -25,7 +25,6 @@ from send2trash import send2trash
 RAIZ = Path(__file__).resolve().parent
 SALIDA = RAIZ / "salida"
 GUIONES = SALIDA / "guiones"
-TIKTOK = SALIDA / "_trabajo" / "tiktok_pendientes.json"
 
 
 def _guion(nombre: str) -> dict:
@@ -96,17 +95,12 @@ def borrar(nombre: str, de_youtube: bool = False) -> str:
             if error.resp.status != 404:  # 404: ya no estaba
                 raise ValueError(f"YouTube no ha dejado borrarlo: {subir_youtube._explicar(error)}") from error
 
-    # Fuera de la cola de programados y de los recordatorios de TikTok
+    # Fuera de la cola de programados
     datos = programados.leer()
     if programados.buscar(datos, nombre):
         datos["videos"] = [v for v in datos["videos"] if v["nombre"] != nombre]
         programados._guardar_y_reprogramar(datos)
         hecho.append("quitado de Programados")
-    if TIKTOK.exists():
-        pendientes = json.loads(TIKTOK.read_text(encoding="utf-8"))
-        quedan = [p for p in pendientes if p.get("nombre") != nombre]
-        if len(quedan) != len(pendientes):
-            TIKTOK.write_text(json.dumps(quedan, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Archivos a la papelera (el guion el último: si algo falla, se puede volver a intentar)
     rutas = archivos(nombre)

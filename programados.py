@@ -20,6 +20,7 @@ Uso:
 import json
 import msvcrt
 import os
+import subprocess
 import sys
 import threading
 from datetime import datetime, timedelta
@@ -617,6 +618,17 @@ def _avisar(titulo: str, texto: str) -> None:
 
 # --- Tarea de Windows -----------------------------------------------------------------------
 
+PYTHONW = RAIZ / ".venv" / "Scripts" / "pythonw.exe"  # sin ventana negra
+_BORRAR = r"Unregister-ScheduledTask -TaskName $env:T_NOMBRE -Confirm:$false -ErrorAction SilentlyContinue"
+
+
+def _powershell(script: str, **variables) -> subprocess.CompletedProcess:
+    entorno = {**os.environ, **{k: str(v) for k, v in variables.items()}}
+    return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+                          env=entorno, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 _REGISTRAR = r"""
 $accion = New-ScheduledTaskAction -Execute $env:T_EXE -Argument ('"' + $env:T_SCRIPT + '"') -WorkingDirectory $env:T_DIR
 $disparadores = @((New-ScheduledTaskTrigger -Once -At ([datetime]$env:T_HORA)), (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME))
@@ -627,22 +639,16 @@ Register-ScheduledTask -TaskName $env:T_NOMBRE -Action $accion -Trigger $dispara
 
 def programar_tarea_windows(cuando) -> None:
     """Deja la tarea de Windows lista para la próxima subida (o la quita si no queda nada en la cola)."""
-    import programador
     if cuando is None:
-        programador._powershell(programador._BORRAR, T_NOMBRE=TAREA)
+        _powershell(_BORRAR, T_NOMBRE=TAREA)
         return
-    ejecutable = programador.PYTHONW if programador.PYTHONW.exists() else Path(sys.executable)
-    resultado = programador._powershell(
+    ejecutable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
+    resultado = _powershell(
         _REGISTRAR, T_EXE=ejecutable, T_SCRIPT=RAIZ / "programados.py", T_DIR=RAIZ,
         T_HORA=cuando.strftime("%Y-%m-%dT%H:%M:%S"), T_NOMBRE=TAREA,
         T_DESC="Sube a YouTube los vídeos programados de Mente Inquieta (se reprograma sola).")
     if resultado.returncode != 0:
         _log(f"no he podido programar la tarea de Windows: {resultado.stderr.strip()[-300:]}")
-
-
-def estado_tarea_windows() -> dict:
-    import programador
-    return programador.estado_tarea(TAREA)
 
 
 if __name__ == "__main__":

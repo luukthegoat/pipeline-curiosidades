@@ -11,12 +11,11 @@ import socket
 import subprocess
 import sys
 import hashlib
-import re
 import threading
 import time
 import webbrowser
 from urllib.parse import urlparse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, url_for
@@ -29,9 +28,6 @@ import paso3_video  # noqa: E402  (nombres, carpetas e imágenes de los vídeos)
 import wikimedia  # noqa: E402  (acceso a Wikimedia con caché y ritmo controlado)
 import paso1_guiones  # noqa: E402  (estado del cupo diario de Groq)
 import subir_youtube  # noqa: E402  (subida a YouTube Shorts)
-import automatico  # noqa: E402  (piloto automático)
-import programador  # noqa: E402  (tareas del Programador de tareas de Windows)
-import recordatorio_tiktok  # noqa: E402  (texto de TikTok de cada vídeo)
 import programados  # noqa: E402  (cola de publicaciones programadas)
 import horarios  # noqa: E402  (horas recomendadas para publicar)
 import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
@@ -180,6 +176,7 @@ def contexto_global():
             "cupo_groq": cupo,
             "num_programados": len(programados.por_guion()),
             "num_pendientes": contar_pendientes(),
+            "errores_programados": [v for v in programados.leer()["videos"] if v["estado"] == "error"],
             # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
             "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime)}
 
@@ -332,10 +329,65 @@ def voces() -> list:
 
 @app.route("/")
 def inicio():
-    return render_template("inicio.html", guiones=todos(), hoy=date.today().isoformat(),
-                           herramientas=video_ia.HERRAMIENTAS, estilos=video_ia.NOMBRES_ESTILOS,
-                           yt_conectado=subir_youtube.TOKEN.exists(),
-                           yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private")
+    return render_template("inicio.html", recientes=todos()[:3], hoy=date.today().isoformat(),
+                           herramientas=video_ia.HERRAMIENTAS, estilos=video_ia.NOMBRES_ESTILOS)
+
+
+FILTROS = {"todos": "Todos", "revisar": "Por revisar", "listos": "Listos", "programados": "Programados",
+           "publicados": "Publicados"}
+
+
+def apartado(g: dict) -> str:
+    """En qué filtro de «Mis vídeos» cae un guion."""
+    if g["programado"]:
+        return "programados"
+    if g["youtube"]:
+        return "publicados"
+    return "listos" if g["verificado"] else "revisar"
+
+
+def resumen_del_dia() -> dict:
+    """Lo que sale hoy, lo siguiente que sale y cuántas subidas quedan (para la cabecera de «Mis vídeos»)."""
+    ahora = datetime.now()
+    hoy = ahora.date().isoformat()
+    videos = sorted(programados.leer()["videos"], key=lambda v: v["hora"])
+    de_hoy = [{**v, "hhmm": v["hora"][11:16], "pasada": v["hora"][:16] <= ahora.strftime("%Y-%m-%dT%H:%M")}
+              for v in videos if v["hora"][:10] == hoy]
+    siguiente = next((v for v in videos if v["hora"][:10] > hoy), None)
+    return {
+        "hoy": de_hoy,
+        "siguiente": {**siguiente, "bonita": programados.formato_bonito(siguiente["hora"])} if siguiente else None,
+        "subidas": programados.subidas_ultimas_24h(),
+        "max": programados.MAX_SUBIDAS_DIA,
+    }
+
+
+@app.route("/videos")
+def mis_videos():
+    guiones = todos()
+    for g in guiones:
+        g["apartado"] = apartado(g)
+    cuantos = {clave: sum(1 for g in guiones if clave == "todos" or g["apartado"] == clave) for clave in FILTROS}
+    ver = request.args.get("ver") or ("revisar" if cuantos["revisar"] else "todos")
+    if ver not in FILTROS:
+        ver = "todos"
+    lista = [g for g in guiones if ver == "todos" or g["apartado"] == ver]
+    sin_youtube = [g["nombre"] for g in lista if g["apartado"] in ("revisar", "listos") and g["video"]]
+    return render_template(
+        "videos.html", guiones=lista, ver=ver, filtros=FILTROS, cuantos=cuantos, dia=resumen_del_dia(),
+        recomendadas=horarios.recomendar(sin_youtube) if sin_youtube else {},
+        con_dudas=sum(1 for g in guiones if g["apartado"] == "revisar" and g["dudas"]),
+        mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
+        yt_conectado=subir_youtube.TOKEN.exists(),
+    )
+
+
+def volver_a(nombre: str, mensaje: str = "", error: str = ""):
+    """Tras una acción, vuelve a «Mis vídeos» (con su filtro) si se lanzó desde allí, o a la página del vídeo."""
+    if request.form.get("volver") == "videos":
+        return redirect(url_for("mis_videos", ver=request.form.get("ver") or None,
+                                mensaje=mensaje or None, error=error or None))
+    return redirect(url_for("ver_guion", nombre=nombre, mensaje=error or mensaje))
 
 
 @app.post("/crear")
@@ -557,21 +609,14 @@ def ver_clip(nombre, numero):
 
 @app.post("/guion/<nombre>/borrar")
 def borrar_guion(nombre):
-    volver = request.form.get("volver")
     if cola.en_curso():  # una tarea podría estar usando sus archivos
-        aviso = "Hay tareas en marcha: espera a que terminen para borrar el vídeo."
-        return redirect(url_for("ver_pendientes", error=aviso) if volver == "pendientes"
-                        else url_for("ver_guion", nombre=nombre, mensaje=aviso))
+        return volver_a(nombre, error="Hay tareas en marcha: espera a que terminen para borrar el vídeo.")
     try:
         mensaje = borrar.borrar(nombre, de_youtube=request.form.get("youtube") == "1")
     except Exception as error:  # noqa: BLE001 — se muestra en la página
-        aviso = f"No se ha podido borrar: {error}"
-        return redirect(url_for("ver_pendientes", error=aviso) if volver == "pendientes"
-                        else url_for("ver_guion", nombre=nombre, mensaje=aviso))
+        return volver_a(nombre, error=f"No se ha podido borrar: {error}")
     despertar_programados()
-    if volver == "pendientes":
-        return redirect(url_for("ver_pendientes", mensaje=mensaje))
-    return redirect(url_for("inicio", mensaje=mensaje, _anchor="guiones"))
+    return redirect(url_for("mis_videos", ver=request.form.get("ver") or None, mensaje=mensaje))
 
 
 @app.post("/guion/<nombre>/guardar")
@@ -613,8 +658,29 @@ def verificar_guion(nombre):
     datos = leer(nombre)
     datos["verificado"] = request.form.get("valor") == "1"
     escribir(nombre, datos)
-    mensaje = "Marcado como verificado." if datos["verificado"] else "Marca de verificado quitada."
-    return redirect(url_for("ver_guion", nombre=nombre, mensaje=mensaje))
+    titulo = datos.get("titulo", nombre)
+    return volver_a(nombre, f"«{titulo}» marcado como revisado." if datos["verificado"] else "Marca de revisado quitada.")
+
+
+@app.post("/guion/<nombre>/revisar-y-programar")
+def revisar_y_programar(nombre):
+    """Da el vídeo por revisado y lo programa a su hora recomendada (o a la que se elija) en un solo paso."""
+    datos = leer(nombre)
+    if not ruta_video(datos):
+        return volver_a(nombre, error="Antes de programarlo, genera el vídeo.")
+    hora = request.form.get("hora") or (horarios.recomendar([nombre]).get(nombre) or {}).get("hora")
+    if not hora:
+        return volver_a(nombre, error="No hay hueco recomendado en las próximas semanas: elige tú la hora.")
+    if not datos.get("verificado"):
+        datos["verificado"] = True
+        escribir(nombre, datos)
+    try:
+        programados.anadir(nombre, hora)
+    except ValueError as error:
+        return volver_a(nombre, error=f"No se ha podido programar: {error}")
+    despertar_programados()
+    return volver_a(nombre, f"«{datos.get('titulo', nombre)}» revisado y programado para el "
+                            f"{programados.formato_bonito(hora)}.")
 
 
 @app.post("/guion/<nombre>/producir")
@@ -806,77 +872,6 @@ def subir_a_youtube(nombre):
     return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
-# --- Acciones en lote (varios guiones a la vez, desde el inicio) ----------------------
-
-def seleccionados() -> list:
-    """Guiones marcados en el inicio, en el orden de la lista (las partes de una serie, 1, 2, 3…)."""
-    elegidos = set(request.form.getlist("nombres"))
-    return [g for g in todos() if g["nombre"] in elegidos]
-
-
-@app.post("/lote/verificar")
-def verificar_lote():
-    guiones = seleccionados()
-    for g in guiones:
-        datos = leer(g["nombre"])
-        datos["verificado"] = True
-        escribir(g["nombre"], datos)
-    return redirect(url_for("inicio", mensaje=f"{len(guiones)} guion(es) marcados como revisados.", _anchor="guiones"))
-
-
-@app.post("/lote/publicar")
-def publicar_lote():
-    guiones = seleccionados()
-    if request.form.get("verificar") == "1":  # «marcar también como revisados»
-        for g in guiones:
-            if not g["verificado"]:
-                datos = leer(g["nombre"])
-                datos["verificado"] = g["verificado"] = True
-                escribir(g["nombre"], datos)
-    listos = [g for g in guiones if g["verificado"] and g["video"] and not g["youtube"]]
-    saltados = [g for g in guiones if g not in listos]
-    if not listos:
-        return redirect(url_for("inicio", error="Ninguno de los seleccionados se puede publicar: tienen que estar "
-                                                "revisados, tener vídeo y no estar ya en YouTube.", _anchor="guiones"))
-
-    if request.form.get("cuando") == "recomendadas":
-        return programar_recomendados([g["nombre"] for g in listos])
-    if request.form.get("cuando") == "programar" and request.form.get("publicar_el"):
-        try:
-            inicio = datetime.fromisoformat(request.form["publicar_el"])
-            cada = max(0.0, float(request.form.get("cada") or 0))
-        except ValueError:
-            return redirect(url_for("inicio", error="La fecha o el intervalo no son válidos.", _anchor="guiones"))
-        fallos = []
-        for orden, g in enumerate(listos):
-            try:
-                programados.anadir(g["nombre"], (inicio + timedelta(hours=cada * orden)).strftime("%Y-%m-%dT%H:%M"))
-            except ValueError as error:
-                fallos.append(f"«{g['titulo']}»: {error}")
-        despertar_programados()
-        mensaje = f"{len(listos) - len(fallos)} vídeo(s) programados."
-        if fallos:
-            mensaje += " No se han podido programar: " + "; ".join(fallos)
-        return redirect(url_for("ver_programados", mensaje=mensaje))
-
-    privacidad = request.form.get("privacidad", "private")
-    argumentos = ["--privacidad", privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
-
-    def trabajo(t: Trabajo) -> bool:
-        t.resultado = [g["nombre"] for g in listos]
-        for g in saltados:
-            motivo = ("ya está en YouTube" if g["youtube"] else "no tiene vídeo" if not g["video"]
-                      else "no está revisado")
-            t.escribir(f"Se salta «{g['titulo']}»: {motivo}.")
-        t.escribir(f"Se publican {len(listos)} vídeo(s) en este orden:")
-        for i, g in enumerate(listos, 1):
-            t.escribir(f"  {i}. {g['titulo']}")
-        return t.ejecutar("subir_youtube.py", *[g["nombre"] for g in listos], *argumentos) == 0
-
-    nuevo = cola.anadir(f"Publicar {len(listos)} vídeo(s) en YouTube", trabajo)
-    return redirect(url_for("ver_tarea", id=nuevo.id))
-
-
 # --- Pendientes: lo que falta revisar y programar --------------------------------------------
 
 def programar_recomendados(nombres: list):
@@ -901,51 +896,16 @@ def programar_recomendados(nombres: list):
 
 
 @app.route("/pendientes")
-def ver_pendientes():
-    guiones = [g for g in todos() if not g["youtube"] and not g["programado"]]
-    listos = [g for g in guiones if g["verificado"] and g["video"]]
-    return render_template(
-        "pendientes.html",
-        por_revisar=[g for g in guiones if not g["verificado"]],
-        listos=listos,
-        sin_video=[g for g in guiones if g["verificado"] and not g["video"]],
-        recomendadas=horarios.recomendar([g["nombre"] for g in listos]), max_al_dia=horarios.MAX_AL_DIA,
-        mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
-        yt_conectado=subir_youtube.TOKEN.exists(),
-    )
+def ver_pendientes():  # antigua página: ahora es el filtro «Por revisar» de Mis vídeos
+    return redirect(url_for("mis_videos", ver="revisar"))
 
 
-@app.post("/pendientes/<nombre>/revisado")
-def pendiente_revisado(nombre):
-    datos = leer(nombre)
-    datos["verificado"] = True
-    escribir(nombre, datos)
-    return redirect(url_for("ver_pendientes", mensaje=f"«{datos.get('titulo', nombre)}» marcado como revisado.",
-                            _anchor="listos"))
-
-
-@app.post("/pendientes/<nombre>/programar")
-def pendiente_programar(nombre):
-    datos = leer(nombre)
-    try:
-        programados.anadir(nombre, request.form.get("hora", ""))
-    except ValueError as error:
-        return redirect(url_for("ver_pendientes", error=f"No se ha podido programar: {error}", _anchor="listos"))
-    despertar_programados()
-    return redirect(url_for("ver_pendientes", mensaje=f"«{datos.get('titulo', nombre)}» programado.", _anchor="listos"))
-
-
-@app.post("/pendientes/programar-todos")
-def pendientes_programar_todos():
+@app.post("/videos/programar-listos")
+def programar_listos():
     nombres = request.form.getlist("nombres")
     if not nombres:
-        return redirect(url_for("ver_pendientes", error="No hay vídeos listos para programar."))
+        return redirect(url_for("mis_videos", ver="listos", error="No hay vídeos listos para programar."))
     return programar_recomendados(nombres)
-
-
-@app.post("/api/recomendar")
-def api_recomendar():
-    return jsonify(horarios.recomendar(request.form.getlist("nombres")))
 
 
 # --- Programados: la cola la lleva el programa y YouTube publica a su hora ------------------
@@ -1092,123 +1052,6 @@ def privacidad_youtube():
     if privacidad in subir_youtube.PRIVACIDADES:
         guardar_env({"YT_PRIVACIDAD": privacidad})
     return redirect(url_for("ajustes", mensaje="Privacidad por defecto guardada.") + "#youtube")
-
-
-# --- Piloto automático y recordatorios de TikTok ---------------------------------------
-
-def pendientes_tiktok() -> list:
-    pendientes = automatico.leer_json(automatico.PENDIENTES_TIKTOK, [])
-    for p in pendientes:
-        p["texto_tiktok"] = recordatorio_tiktok.texto_tiktok(Path(p["texto"]))
-        p["hora_bonita"] = datetime.fromisoformat(p["hora"]).strftime("%d/%m a las %H:%M")
-    return sorted(pendientes, key=lambda p: (p.get("hecho", False), p["hora"]))
-
-
-@app.route("/automatico")
-def piloto_automatico():
-    registro = automatico.REGISTRO.read_text(encoding="utf-8").splitlines()[-40:] if automatico.REGISTRO.exists() else []
-    return render_template("automatico.html", config=automatico.configuracion(), tareas=programador.estado(),
-                           registro=registro, pendientes=pendientes_tiktok(), mensaje=request.args.get("mensaje", ""),
-                           yt_conectado=subir_youtube.TOKEN.exists())
-
-
-@app.post("/automatico/config")
-def guardar_automatico():
-    config = automatico.configuracion()
-    hora = lambda clave: request.form.get(clave, "") if re.fullmatch(r"\d{2}:\d{2}", request.form.get(clave, "")) else config[clave]  # noqa: E731
-    lista = lambda clave: [l.strip() for l in request.form.get(clave, "").splitlines() if l.strip()]  # noqa: E731
-    config.update({
-        "tipos": [t for t in request.form.getlist("tipos") if t in automatico.TIPOS] or ["efemerides"],
-        "hora_creacion": hora("hora_creacion"),
-        "hora_youtube": hora("hora_youtube"),
-        "hora_tiktok": hora("hora_tiktok"),
-        "imagenes_ia_en_diarios": request.form.get("imagenes_ia_en_diarios") == "on",
-        "solo_publicar_sin_dudas": request.form.get("solo_publicar_sin_dudas") == "on",
-        "hora_recomendada": request.form.get("hora_recomendada") == "on",
-        "personajes": lista("personajes"),
-        "temas": lista("temas"),
-    })
-    automatico.escribir_json(automatico.CONFIG, config)
-    activo_en_windows = programador.estado()["crear"].get("existe")
-    errores = programador.activar(config) if activo_en_windows else []
-    mensaje = "Configuración guardada." + (" Horas actualizadas en Windows." if activo_en_windows and not errores else "")
-    return redirect(url_for("piloto_automatico", mensaje=mensaje + (" " + "; ".join(errores) if errores else "")))
-
-
-@app.post("/automatico/activar")
-def activar_automatico():
-    config = automatico.configuracion()
-    config["activo"] = True
-    automatico.escribir_json(automatico.CONFIG, config)
-    errores = programador.activar(config)
-    mensaje = ("Activado: Windows creará un vídeo cada día a las " + config["hora_creacion"] + " y te avisará para "
-               "TikTok a las " + config["hora_tiktok"] + ".") if not errores else "No se pudo programar: " + "; ".join(errores)
-    return redirect(url_for("piloto_automatico", mensaje=mensaje))
-
-
-@app.post("/automatico/desactivar")
-def desactivar_automatico():
-    config = automatico.configuracion()
-    config["activo"] = False
-    automatico.escribir_json(automatico.CONFIG, config)
-    programador.desactivar()
-    return redirect(url_for("piloto_automatico", mensaje="Desactivado: ya no se crearán vídeos solos."))
-
-
-@app.post("/automatico/ejecutar")
-def ejecutar_automatico():
-    tipo = request.form.get("tipo", "")
-    argumentos = ["--ahora", *(["--tipo", tipo] if tipo in automatico.TIPOS else [])]
-
-    def trabajo(t: Trabajo) -> bool:
-        return t.ejecutar("automatico.py", *argumentos) == 0
-
-    nuevo = cola.anadir("Piloto automático: crear el vídeo de hoy" + (f" ({tipo})" if tipo else ""), trabajo)
-    return redirect(url_for("ver_tarea", id=nuevo.id))
-
-
-def _pendiente(nombre: str) -> dict:
-    p = next((p for p in automatico.leer_json(automatico.PENDIENTES_TIKTOK, []) if p["nombre"] == nombre), None)
-    if not p:
-        abort(404)
-    return p
-
-
-@app.post("/tiktok/<nombre>/hecho")
-def tiktok_hecho(nombre):
-    pendientes = automatico.leer_json(automatico.PENDIENTES_TIKTOK, [])
-    for p in pendientes:
-        if p["nombre"] == nombre:
-            p["hecho"] = request.form.get("valor", "1") == "1"
-    automatico.escribir_json(automatico.PENDIENTES_TIKTOK, pendientes)
-    return redirect(url_for("piloto_automatico") + "#tiktok")
-
-
-@app.post("/tiktok/<nombre>/carpeta")
-def tiktok_carpeta(nombre):
-    carpeta = (RAIZ / _pendiente(nombre)["video"]).parent
-    if carpeta.exists():
-        os.startfile(carpeta)
-    return redirect(url_for("piloto_automatico") + "#tiktok")
-
-
-@app.route("/tiktok/<nombre>.ics")
-def tiktok_calendario(nombre):
-    """Evento de calendario (Google Calendar, el móvil…) con aviso a la hora de subirlo a TikTok."""
-    p = _pendiente(nombre)
-    inicio = datetime.fromisoformat(p["hora"])
-    texto = recordatorio_tiktok.texto_tiktok(Path(p["texto"])).replace("\\", "\\\\").replace(",", "\\,") \
-        .replace(";", "\\;").replace("\n", "\\n")
-    ics = "\r\n".join([
-        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Mente Inquieta//ES", "BEGIN:VEVENT",
-        f"UID:{nombre}@mente-inquieta", f"DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%SZ}",
-        f"DTSTART:{inicio:%Y%m%dT%H%M%S}", f"DTEND:{inicio + timedelta(minutes=15):%Y%m%dT%H%M%S}",
-        f"SUMMARY:Subir a TikTok: {p['titulo'][:60]}", f"DESCRIPTION:Archivo: {p['video']}\\n\\n{texto}",
-        "BEGIN:VALARM", "TRIGGER:PT0M", "ACTION:DISPLAY", "DESCRIPTION:Toca subir el vídeo a TikTok", "END:VALARM",
-        "END:VEVENT", "END:VCALENDAR", "",
-    ])
-    return app.response_class(ics, mimetype="text/calendar",
-                              headers={"Content-Disposition": f'attachment; filename="tiktok_{nombre[:40]}.ics"'})
 
 
 # --- Ajustes -----------------------------------------------------------------------

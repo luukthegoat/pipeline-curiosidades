@@ -210,19 +210,16 @@ def _explicar(error: HttpError) -> str:
 
 
 def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar: bool = False,
-          borrador: bool = False, automatico: bool = False) -> dict:
+          borrador: bool = False) -> dict:
     """Sube el vídeo de un guion verificado y apunta en el guion el enlace. Devuelve {"id", "url", …}.
 
     Con `borrador` se puede subir sin verificar, pero siempre en privado y sin programar:
     queda en YouTube Studio para revisarlo antes de publicarlo.
-    Con `automatico` (lo usa el piloto automático, a petición tuya) se programa aunque no esté verificado.
     """
     ruta = _ruta_guion(guion)
     nombre = ruta.stem
     datos_guion = json.loads(ruta.read_text(encoding="utf-8"))
-    if automatico and not datos_guion.get("verificado"):
-        print("  piloto automático: se programa sin revisión manual")
-    elif borrador and not datos_guion.get("verificado"):
+    if borrador and not datos_guion.get("verificado"):
         privacidad, publicar_el = "private", ""
         print("  borrador: sin verificar, se sube en PRIVADO para revisarlo en YouTube Studio")
     elif not datos_guion.get("verificado"):

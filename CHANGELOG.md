@@ -3,6 +3,35 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.11.0] - 2026-10-26
+
+### Cambiado
+- **Nuevo diseño, más claro y dirigido.** Barra de arriba con solo cuatro secciones (**Crear**, **Mis vídeos**,
+  **Programados** y **Ajustes**) y todo en una columna, de arriba abajo. Las tareas en marcha se ven arriba a la derecha y
+  la Ayuda está dentro de Ajustes.
+- **Tema Índigo** en lugar del dorado, en modo claro y oscuro.
+- **Crear** es solo el formulario, en tres pasos (tipo, detalles y opciones), con lo último creado debajo.
+- **Mis vídeos** junta la lista de vídeos y la antigua página Pendientes, con filtros (*Por revisar · Listos ·
+  Programados · Publicados*) y la acción que toca en cada fila.
+- **La página de cada vídeo va por pasos**: revisa el texto, genera el vídeo y publícalo. Lo que ya está hecho se marca
+  y se pliega; lo secundario (texto para publicar, prompts, borrar) está en «Más opciones».
+
+### Añadido
+- **Resumen del día** en Mis vídeos: qué se publica hoy y a qué hora, cuántos quedan por revisar o listos, y cuántas
+  subidas a YouTube llevas en 24 h.
+- **«Revisado → programar»**: da el vídeo por revisado y lo programa a su hora recomendada con un solo clic, desde la
+  lista o desde su página.
+- **Aviso en todas las páginas** cuando un vídeo programado no se ha podido subir a YouTube.
+
+### Arreglado
+- **«Mente Inquieta.exe» a veces no abría nada**: si había otra ventana llamada «Mente Inquieta» (p. ej. una pestaña
+  del navegador con el menú), creía que la app ya estaba abierta y se cerraba. Ahora lo comprueba con el bloqueo de la
+  propia app. Vuelve a compilarse con `lanzador\crear_exe.bat`.
+
+### Quitado
+- **Piloto automático** (y sus dos tareas de Windows), los **recordatorios de TikTok** y la **selección múltiple** del
+  inicio. Para programar varios a la vez está «Programar todos» en Mis vídeos → Listos.
+
 ## [1.10.2] - 2026-10-25
 
 ### Cambiado
@@ -238,6 +267,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.11.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.9.0...v1.10.0

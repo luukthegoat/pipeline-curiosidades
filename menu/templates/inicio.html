@@ -1,362 +1,179 @@
 {% extends "base.html" %}
+{% block titulo %}Crear · Mente Inquieta{% endblock %}
 {% block contenido %}
 <h1>Crear un vídeo</h1>
-<p class="sub">Escribe de qué quieres el vídeo, o elige una fecha para usar lo que pasó ese día en la historia.</p>
+<p class="sub">Elige el tipo, rellena los detalles y pulsa Crear. Lo encontrarás después en <a href="{{ url_for('mis_videos') }}">Mis vídeos</a>.</p>
 
 {% if request.args.get('error') %}<div class="aviso">{{ request.args.get('error') }}</div>{% endif %}
 {% if cola.en_curso() %}
   <div class="aviso">Hay {{ cola.activos() | length }} tarea(s) en marcha (<a href="{{ url_for('ver_tarea') }}">ver</a>). Lo que crees ahora se pondrá en la cola y empezará cuando terminen.</div>
 {% endif %}
 
-<form class="tarjeta" method="post" action="{{ url_for('crear') }}">
-  <div class="modos" role="radiogroup" aria-label="Tipo de vídeo">
-    <label class="modo">
-      <input type="radio" name="modo" value="tema" checked onchange="cambiarModo()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 22h12v-4"/><path d="M8 7h6M8 11h4"/></svg>
-      <strong>Tema libre</strong>
-      <span>Un hecho, personaje o época. En una o varias partes.</span>
-    </label>
-    <label class="modo">
-      <input type="radio" name="modo" value="fecha" onchange="cambiarModo()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14h3"/></svg>
-      <strong>Efemérides</strong>
-      <span>Lo que pasó tal día como hoy (o la fecha que elijas).</span>
-    </label>
-    <label class="modo">
-      <input type="radio" name="modo" value="diario" onchange="cambiarModo()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg>
-      <strong>Diario de…</strong>
-      <span>Humor en primera persona: «Día 4 como soldado romano».</span>
-    </label>
-    <label class="modo">
-      <input type="radio" name="modo" value="video_ia" onchange="cambiarModo()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="13" height="13" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/><path d="M9.5 9v6M6.5 12h6"/></svg>
-      <strong>Vídeo con IA</strong>
-      <span>Te doy los prompts, generas los clips en una IA de vídeo y yo lo monto.</span>
-    </label>
-    <label class="modo">
-      <input type="radio" name="modo" value="actualidad" onchange="cambiarModo()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 8.5h9M7.5 12h9M7.5 15.5h5"/></svg>
-      <strong>Actualidad</strong>
-      <span>Una noticia reciente, contrastada en varios medios.</span>
-    </label>
-  </div>
+<form method="post" action="{{ url_for('crear') }}">
+  <section class="tarjeta paso-crear">
+    <h2><span class="numero">1</span>¿Qué tipo de vídeo?</h2>
+    <div class="modos" role="radiogroup" aria-label="Tipo de vídeo">
+      <label class="modo">
+        <input type="radio" name="modo" value="tema" checked onchange="cambiarModo()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 22h12v-4"/><path d="M8 7h6M8 11h4"/></svg>
+        <strong>Tema libre</strong>
+        <span>Un hecho, personaje o época, en una o varias partes.</span>
+      </label>
+      <label class="modo">
+        <input type="radio" name="modo" value="fecha" onchange="cambiarModo()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14h3"/></svg>
+        <strong>Efemérides</strong>
+        <span>Lo que pasó tal día como hoy, o en la fecha que elijas.</span>
+      </label>
+      <label class="modo">
+        <input type="radio" name="modo" value="actualidad" onchange="cambiarModo()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 8.5h9M7.5 12h9M7.5 15.5h5"/></svg>
+        <strong>Actualidad</strong>
+        <span>Una noticia reciente, contrastada en varios medios.</span>
+      </label>
+      <label class="modo">
+        <input type="radio" name="modo" value="video_ia" onchange="cambiarModo()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="13" height="13" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/><path d="M9.5 9v6M6.5 12h6"/></svg>
+        <strong>Vídeo con IA</strong>
+        <span>Te doy los prompts, generas los clips y yo lo monto.</span>
+      </label>
+      <label class="modo">
+        <input type="radio" name="modo" value="diario" onchange="cambiarModo()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg>
+        <strong>Diario de…</strong>
+        <span>Humor en primera persona: «Día 4 como soldado romano».</span>
+      </label>
+    </div>
+  </section>
 
-  <div id="modo-video_ia" hidden>
-    <label for="tematica">Temática <span class="ayuda-campo">— real, de ficción o una recreación</span></label>
-    <input type="text" id="tematica" name="tematica" placeholder="Ej.: un vikingo llega a América y nadie le cree · un día como gladiador · el perro de Pompeya">
-    <div class="fila">
-      <div>
-        <label for="herramienta">IA de vídeo</label>
-        <select id="herramienta" name="herramienta" onchange="cambiarHerramienta()">
-          {% for clave, h in herramientas.items() %}
-            <option value="{{ clave }}" data-url="{{ h.url }}" data-voz="{{ 1 if h.voz else 0 }}" data-segundos="{{ h.segundos }}"
-                    data-consejo="{{ h.consejo }}">{{ h.nombre }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="estilo">Estilo visual</label>
-        <select id="estilo" name="estilo">
-          {% for clave, nombre in estilos.items() %}<option value="{{ clave }}">{{ nombre }}</option>{% endfor %}
-        </select>
+  <section class="tarjeta paso-crear">
+    <h2><span class="numero">2</span><span id="titulo-detalles">¿De qué quieres el vídeo?</span></h2>
+
+    <div id="modo-tema">
+      <label for="tema">Tema <span class="ayuda-campo">— se busca en Wikipedia en español</span></label>
+      <input type="text" id="tema" name="tema" placeholder="La caída de Constantinopla · Juana de Arco · El hundimiento del Titanic" autofocus>
+      <label for="partes">¿En cuántas partes? <span class="ayuda-campo">— cada parte es un vídeo de ~1 minuto (Parte 1/3, 2/3…)</span></label>
+      <input type="number" id="partes" name="partes" value="1" min="1" max="10" class="corto">
+    </div>
+
+    <div id="modo-fecha" hidden>
+      <div class="fila">
+        <div>
+          <label for="fecha">Fecha <span class="ayuda-campo">— solo cuentan el día y el mes</span></label>
+          <input type="date" id="fecha" name="fecha" value="{{ hoy }}">
+        </div>
+        <div>
+          <label for="cantidad">¿Cuántos eventos?</label>
+          <input type="number" id="cantidad" name="cantidad" value="1" min="1" max="10">
+        </div>
       </div>
     </div>
-    <div class="herramienta-info">
-      <a id="enlace-herramienta" class="boton secundario" href="#" target="_blank" rel="noopener">Abrir</a>
-      <span class="ayuda-campo" id="consejo-herramienta"></span>
+
+    <div id="modo-actualidad" hidden>
+      <label for="noticia">Noticia <span class="ayuda-campo">— se buscan artículos recientes de varios medios</span></label>
+      <input type="text" id="noticia" name="noticia" placeholder="saqueos Francia · elecciones Estados Unidos · DANA Valencia">
+      <div class="fila">
+        <div>
+          <label for="dias">De los últimos</label>
+          <select id="dias" name="dias">
+            <option value="1">1 día</option><option value="2">2 días</option>
+            <option value="3" selected>3 días</option><option value="7">7 días</option>
+          </select>
+        </div>
+        <div>
+          <label>Medios</label>
+          <div class="opciones"><label><input type="checkbox" name="mas_idiomas" value="1"> Incluir medios en inglés y francés</label></div>
+        </div>
+      </div>
+      <p class="ayuda-campo">Después eliges con qué artículos se escribe el guion (al menos 2 medios distintos).</p>
     </div>
-    <label>¿Quién pone la voz?</label>
+
+    <div id="modo-video_ia" hidden>
+      <label for="tematica">Temática <span class="ayuda-campo">— real, de ficción o una recreación</span></label>
+      <input type="text" id="tematica" name="tematica" placeholder="un vikingo llega a América y nadie le cree · un día como gladiador">
+      <div class="fila">
+        <div>
+          <label for="herramienta">IA de vídeo</label>
+          <select id="herramienta" name="herramienta" onchange="cambiarHerramienta()">
+            {% for clave, h in herramientas.items() %}
+              <option value="{{ clave }}" data-url="{{ h.url }}" data-voz="{{ 1 if h.voz else 0 }}" data-segundos="{{ h.segundos }}"
+                      data-consejo="{{ h.consejo }}">{{ h.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="estilo">Estilo visual</label>
+          <select id="estilo" name="estilo">
+            {% for clave, nombre in estilos.items() %}<option value="{{ clave }}">{{ nombre }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="herramienta-info">
+        <a id="enlace-herramienta" class="boton secundario" href="#" target="_blank" rel="noopener">Abrir</a>
+        <span class="ayuda-campo" id="consejo-herramienta"></span>
+      </div>
+      <label>¿Quién pone la voz?</label>
+      <div class="opciones">
+        <label><input type="radio" name="voz" value="ia" id="voz-ia"> La IA <span class="ayuda-campo">(el personaje habla en el clip)</span></label>
+        <label><input type="radio" name="voz" value="app" id="voz-app"> La app <span class="ayuda-campo">(narración sobre clips mudos)</span></label>
+      </div>
+    </div>
+
+    <div id="modo-diario" hidden>
+      <label for="personaje">Personaje <span class="ayuda-campo">— el protagonista, en su época y lugar</span></label>
+      <input type="text" id="personaje" name="personaje" placeholder="soldado romano en Vindolanda · médico de la peste en Venecia">
+      <div class="fila">
+        <div>
+          <label for="problema">De qué se queja hoy <span class="ayuda-campo">— opcional</span></label>
+          <input type="text" id="problema" name="problema" placeholder="la paga con descuentos · las sanguijuelas">
+        </div>
+        <div>
+          <label for="dia">Día <span class="ayuda-campo">— vacío = el siguiente</span></label>
+          <input type="number" id="dia" name="dia" min="1" max="999" placeholder="siguiente">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tarjeta paso-crear solo-no-actualidad">
+    <h2><span class="numero">3</span>Opciones</h2>
+    <label>Idiomas</label>
     <div class="opciones">
-      <label><input type="radio" name="voz" value="ia" id="voz-ia"> La IA <span class="ayuda-campo">(el personaje habla en el clip)</span></label>
-      <label><input type="radio" name="voz" value="app" id="voz-app"> La app <span class="ayuda-campo">(narración en off sobre clips mudos)</span></label>
+      <label><input type="checkbox" name="idiomas" value="es" checked> Español</label>
+      <label><input type="checkbox" name="idiomas" value="en"> Inglés</label>
     </div>
-    <p class="ayuda-campo">Primero se escribe el guion con un prompt por escena. Los copias en la IA, generas un clip por escena,
-      los subes en la página del guion y la app monta el vídeo con subtítulos, música y cierre.</p>
-  </div>
-
-  <div id="modo-actualidad" hidden>
-    <label for="noticia">¿De qué noticia? <span class="ayuda-campo">— se buscan artículos recientes de varios medios</span></label>
-    <input type="text" id="noticia" name="noticia" placeholder="Ej.: saqueos Francia · elecciones Estados Unidos · DANA Valencia">
-    <div class="fila">
-      <div>
-        <label for="dias">De los últimos</label>
-        <select id="dias" name="dias">
-          <option value="1">1 día</option><option value="2">2 días</option>
-          <option value="3" selected>3 días</option><option value="7">7 días</option>
-        </select>
-      </div>
-      <div>
-        <label>&nbsp;</label>
-        <div class="opciones"><label><input type="checkbox" name="mas_idiomas" value="1"> Incluir medios en inglés y francés</label></div>
+    <div class="solo-no-video">
+      <label>¿Hasta dónde llego?</label>
+      <div class="opciones">
+        <label><input type="radio" name="completo" value="off" checked> Solo el guion, para revisarlo antes <span class="ayuda-campo">(recomendado)</span></label>
+        <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón</label>
       </div>
     </div>
-    <p class="ayuda-campo">Primero verás los artículos encontrados para elegir con cuáles se escribe el guion (al menos 2
-      medios distintos). El guion cita las fuentes, lleva fecha y usa imágenes de archivo marcadas como tales.</p>
-  </div>
+  </section>
 
-  <div id="modo-diario" hidden>
-    <label for="personaje">Personaje <span class="ayuda-campo">— el protagonista del diario, en su época y lugar</span></label>
-    <input type="text" id="personaje" name="personaje" placeholder="Ej.: soldado romano en Vindolanda · médico de la peste en Venecia · escriba del faraón">
-    <div class="fila">
-      <div>
-        <label for="problema">De qué se queja hoy <span class="ayuda-campo">— opcional</span></label>
-        <input type="text" id="problema" name="problema" placeholder="Ej.: la paga con descuentos · las sanguijuelas">
-      </div>
-      <div>
-        <label for="dia">Día <span class="ayuda-campo">— vacío = el siguiente</span></label>
-        <input type="number" id="dia" name="dia" min="1" max="999" placeholder="siguiente">
-      </div>
-    </div>
-    <p class="ayuda-campo">Formato «Día X como…»: humor sarcástico en primera persona, pero con hechos reales de Wikipedia.
-      Te dará los prompts para generar al personaje con IA (Sora, Runway, Midjourney…).</p>
-  </div>
-
-  <div id="modo-tema">
-    <label for="tema">¿De qué quieres el vídeo?
-      <span class="ayuda-campo">— un hecho, un personaje o un tema histórico. Se busca en Wikipedia en español.</span></label>
-    <input type="text" id="tema" name="tema" placeholder="Ej.: La caída de Constantinopla · Juana de Arco · El hundimiento del Titanic" autofocus>
-    <label for="partes">¿En cuántas partes?
-      <span class="ayuda-campo">— cada parte es un vídeo de ~1 minuto; el tema se reparte en orden entre ellas (Parte 1/3, 2/3, 3/3…)</span></label>
-    <input type="number" id="partes" name="partes" value="1" min="1" max="10" style="max-width: 120px;">
-  </div>
-
-  <div id="modo-fecha" hidden>
-    <div class="fila">
-      <div>
-        <label for="fecha">Fecha <span class="ayuda-campo">— solo cuentan el día y el mes</span></label>
-        <input type="date" id="fecha" name="fecha" value="{{ hoy }}">
-      </div>
-      <div>
-        <label for="cantidad">¿Cuántos eventos?</label>
-        <input type="number" id="cantidad" name="cantidad" value="1" min="1" max="10">
-      </div>
-    </div>
-  </div>
-
-  <div class="solo-no-actualidad">
-  <label>Idiomas</label>
-  <div class="opciones">
-    <label><input type="checkbox" name="idiomas" value="es" checked> Español</label>
-    <label><input type="checkbox" name="idiomas" value="en"> Inglés</label>
-  </div>
-
-  <div class="solo-no-video">
-  <label>¿Qué hago?</label>
-  <div class="opciones">
-    <label><input type="radio" name="completo" value="off" checked> Solo el guion, para revisarlo antes <span class="ayuda-campo">(recomendado)</span></label>
-    <label><input type="radio" name="completo" value="on"> Guion, audio y vídeo del tirón <span class="ayuda-campo">(sale sin verificar)</span></label>
-  </div>
-  </div>
-
-  </div>
-  <div class="acciones">
+  <div class="acciones accion-crear">
     <button type="submit" id="boton-crear" data-texto="{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}"
             onclick="if (document.querySelector('input[name=modo]:checked').value === 'actualidad') { this.textContent = 'Buscando noticias… (unos 20 s)'; this.style.pointerEvents = 'none'; }">{{ 'Añadir a la cola' if cola.en_curso() else 'Crear' }}</button>
-    <span class="ayuda-campo">Tarda ~1 min por guion y ~2-3 min por vídeo.</span>
+    <span class="ayuda-campo">~1 min por guion y ~2-3 min por vídeo.</span>
   </div>
 </form>
 
-<div class="cabecera-seccion" id="guiones">
-  <h2>Tus guiones y vídeos</h2>
-  <div class="acciones" style="margin: 0;">
-    {% if guiones %}
-      <label class="marcar-todo"><input type="checkbox" id="todos" onchange="marcarTodos(this.checked)"> Seleccionar todo</label>
-    {% endif %}
-    <form class="en-linea" method="post" action="{{ url_for('abrir_carpeta') }}">
-      <button class="secundario" type="submit">Abrir carpeta de vídeos</button>
-    </form>
+{% if recientes %}
+  <div class="cabecera-seccion">
+    <h2>Lo último que has creado</h2>
+    <a class="enlace-flecha" href="{{ url_for('mis_videos', ver='todos') }}">Ver todos →</a>
   </div>
-</div>
-
-{% if request.args.get('mensaje') %}<div class="mensaje">{{ request.args.get('mensaje') }}</div>{% endif %}
-
-<form id="lote" method="post" autocomplete="off">
-<div class="lista">
-  {% for g in guiones %}
-    <div class="fila-guion">
-      <label class="marcar" title="Seleccionar">
-        <input type="checkbox" name="nombres" value="{{ g.nombre }}" onchange="actualizarLote()"
-               data-titulo="{{ g.titulo }}" data-verificado="{{ 1 if g.verificado else 0 }}"
-               data-video="{{ 1 if g.video else 0 }}" data-youtube="{{ 1 if g.youtube else 0 }}">
-      </label>
-      <a class="guion" href="{{ url_for('ver_guion', nombre=g.nombre) }}">
+  <div class="lista">
+    {% for g in recientes %}
+      <a class="fila-video compacta" href="{{ url_for('ver_guion', nombre=g.nombre) }}">
         {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
         {% else %}<span class="mini vacia"></span>{% endif %}
-        <span class="idioma">{{ g.idioma }}</span>
-        <span>
-          <span class="titulo">{{ g.titulo }}</span><br>
-          <span class="meta">{{ g.anio }} · creado para el {{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span>
-        </span>
-        <span class="estados">
-          {% if g.verificado %}<span class="etiqueta ok">verificado</span>
-          {% else %}<span class="etiqueta mal">sin verificar{% if g.dudas %} · {{ g.dudas }} dudas{% endif %}</span>{% endif %}
-          <span class="etiqueta {{ 'ok' if g.audio }}">audio</span>
-          <span class="etiqueta {{ 'ok' if g.video }}">vídeo</span>
-          {% if g.youtube %}<span class="etiqueta ok">en YouTube</span>
-          {% elif g.programado %}<span class="etiqueta prog">programado · {{ g.programado.bonita }}</span>{% endif %}
-        </span>
+        <span class="cuerpo"><span class="titulo">{{ g.titulo }}</span>
+          <span class="meta">{{ g.fecha }}{% if g.duracion %} · {{ '%.0f' % g.duracion }} s{% endif %}</span></span>
       </a>
-    </div>
-  {% else %}
-    <div class="tarjeta vacio">Aún no hay guiones. Crea el primero con el formulario de arriba.</div>
-  {% endfor %}
-</div>
-
-<div class="barra-lote" id="barra-lote" hidden>
-  <span><strong id="num-lote">0</strong> seleccionados</span>
-  <button class="secundario" type="submit" formaction="{{ url_for('verificar_lote') }}">Marcar como revisados</button>
-  <button type="button" onclick="abrirPublicar()" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>Publicar en YouTube…</button>
-  <button class="quitar" type="button" onclick="marcarTodos(false)" title="Quitar la selección" aria-label="Quitar la selección">✕</button>
-</div>
-
-<dialog id="publicar" class="dialogo">
-  <h2>Publicar en YouTube</h2>
-  <p class="ayuda-campo" style="margin-top: 0;">Se suben uno detrás de otro, en este orden (el de la lista: las partes de una serie, 1, 2, 3…):</p>
-  <ol class="orden" id="orden"></ol>
-  <div id="aviso-cupo" class="aviso" hidden>YouTube deja subir unos 6 vídeos al día por la API: si pasas de ahí, los
-    demás fallarán y tendrás que publicarlos mañana.</div>
-
-  <div class="opciones" id="caja-verificar">
-    <label><input type="checkbox" name="verificar" value="1" onchange="actualizarOrden()"> Marcar también como revisados los que falten</label>
+    {% endfor %}
   </div>
-
-  <div id="vis-lote">
-  <label for="privacidad-lote">Visibilidad</label>
-  <select id="privacidad-lote" name="privacidad">
-    <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
-    <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
-    <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
-  </select>
-  </div>
-
-  <label>Cuándo</label>
-  <div class="opciones">
-    <label><input type="radio" name="cuando" value="ahora" checked onchange="actualizarOrden()"> Ahora, uno tras otro</label>
-    <label><input type="radio" name="cuando" value="recomendadas" onchange="actualizarOrden()"> A las horas recomendadas</label>
-    <label><input type="radio" name="cuando" value="programar" onchange="actualizarOrden()"> Programados y escalonados</label>
-  </div>
-  <p class="ayuda-campo" id="nota-recomendadas" hidden>Cada uno a la hora que mejor le va según su tipo (efemérides el
-    mismo día por la mañana, series una parte al día, humor y temas serios por la noche…). Pasa el ratón por encima de
-    cada vídeo para ver por qué. Quedan en Programados.</p>
-  <div class="fila" id="programar" hidden>
-    <div>
-      <label for="publicar_el">El primero se publica el</label>
-      <input type="datetime-local" id="publicar_el" name="publicar_el" oninput="actualizarOrden()">
-    </div>
-    <div>
-      <label for="cada">Y después, uno cada <span class="ayuda-campo">(horas)</span></label>
-      <input type="number" id="cada" name="cada" value="24" min="0" max="168" step="0.5" oninput="actualizarOrden()">
-    </div>
-    <p class="ayuda-campo" style="grid-column: 1 / -1;">Quedan en Programados: el programa los sube a YouTube poco a poco
-      antes de su hora y YouTube los publica en público a su hora, aunque el ordenador esté apagado.</p>
-  </div>
-
-  <div class="acciones">
-    <button type="submit" formaction="{{ url_for('publicar_lote') }}" id="confirmar-publicar">Publicar</button>
-    <button class="secundario" type="button" onclick="document.getElementById('publicar').close()">Cancelar</button>
-  </div>
-</dialog>
-</form>
-
-<script>
-  const casillas = () => [...document.querySelectorAll('input[name=nombres]')];
-  const elegidas = () => casillas().filter(c => c.checked);
-
-  function marcarTodos(valor) {
-    casillas().forEach(c => c.checked = valor);
-    actualizarLote();
-  }
-
-  function actualizarLote() {
-    const n = elegidas().length;
-    document.getElementById('num-lote').textContent = n;
-    document.getElementById('barra-lote').hidden = n === 0;
-    const todos = document.getElementById('todos');
-    if (todos) {
-      todos.checked = n > 0 && n === casillas().length;
-      todos.indeterminate = n > 0 && n < casillas().length;
-    }
-    document.querySelectorAll('.fila-guion').forEach(f =>
-      f.classList.toggle('elegida', f.querySelector('input').checked));
-  }
-
-  // Horas recomendadas (las calcula el servidor según el tipo de cada vídeo).
-  let recomendacion = {}, pedidas = '';
-  async function pedirRecomendaciones() {
-    const nombres = elegidas().filter(c => c.dataset.youtube !== '1' && c.dataset.video === '1').map(c => c.value);
-    if (nombres.join() === pedidas) return;
-    pedidas = nombres.join();
-    const datos = new URLSearchParams();
-    nombres.forEach(n => datos.append('nombres', n));
-    recomendacion = await (await fetch('{{ url_for("api_recomendar") }}', {method: 'POST', body: datos})).json();
-    actualizarOrden();
-  }
-
-  function abrirPublicar() {
-    const campo = document.getElementById('publicar_el');
-    if (!campo.value) {  // por defecto: la próxima hora en punto, dentro de al menos 1 hora
-      const d = new Date(Date.now() + 60 * 60 * 1000);
-      d.setMinutes(0, 0, 0);
-      d.setHours(d.getHours() + 1);
-      campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    }
-    actualizarOrden();
-    document.getElementById('publicar').showModal();
-  }
-
-  function actualizarOrden() {
-    const verificar = document.querySelector('input[name=verificar]').checked;
-    const cuando = document.querySelector('input[name=cuando]:checked').value;
-    const programar = cuando === 'programar', recomendadas = cuando === 'recomendadas';
-    document.getElementById('programar').hidden = !programar;
-    document.getElementById('vis-lote').hidden = programar || recomendadas;
-    const inicio = new Date(document.getElementById('publicar_el').value);
-    const cada = parseFloat(document.getElementById('cada').value) || 0;
-    const formato = new Intl.DateTimeFormat('es-ES', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
-
-    const lista = document.getElementById('orden');
-    lista.innerHTML = '';
-    let orden = 0, faltan = 0;
-    for (const c of elegidas()) {
-      const li = document.createElement('li');
-      const titulo = document.createElement('span');
-      titulo.textContent = c.dataset.titulo;
-      const detalle = document.createElement('span');
-      detalle.className = 'ayuda-campo';
-      let motivo = '';
-      if (c.dataset.youtube === '1') motivo = 'ya está en YouTube';
-      else if (c.dataset.video !== '1') motivo = 'no tiene vídeo';
-      else if (c.dataset.verificado !== '1' && !verificar) { motivo = 'sin revisar'; faltan++; }
-      if (motivo) {
-        li.className = 'saltado';
-        detalle.textContent = 'se salta: ' + motivo;
-      } else {
-        detalle.textContent = recomendadas ? (recomendacion[c.value] ? recomendacion[c.value].bonita : 'calculando…')
-          : programar && !isNaN(inicio) ? formato.format(new Date(inicio.getTime() + orden * cada * 3600000))
-          : (orden === 0 ? 'primero' : 'después');
-        if (recomendadas && recomendacion[c.value]) li.title = recomendacion[c.value].motivo;
-        orden++;
-      }
-      li.append(titulo, detalle);
-      lista.appendChild(li);
-    }
-    document.getElementById('caja-verificar').hidden = faltan === 0 && !verificar;
-    const boton = document.getElementById('confirmar-publicar');
-    boton.disabled = orden === 0;
-    boton.textContent = !orden ? 'Nada que publicar'
-      : `${programar || recomendadas ? 'Programar' : 'Publicar'} ${orden} vídeo${orden > 1 ? 's' : ''}`;
-    document.getElementById('aviso-cupo').hidden = programar || recomendadas || orden <= 6;  // programados: se reparten solos
-    document.getElementById('nota-recomendadas').hidden = !recomendadas;
-    if (recomendadas) pedirRecomendaciones();
-  }
-
-  marcarTodos(false);  // empieza sin nada seleccionado (el navegador a veces recuerda la selección)
-
-  document.getElementById('publicar').addEventListener('click', e => {  // clic fuera del cuadro: cerrar
-    if (e.target.id === 'publicar') e.target.close();
-  });
-</script>
+{% endif %}
 
 <script>
   // «Vídeo con IA»: enlace a la web de la IA elegida, su consejo y quién pone la voz por defecto.
@@ -370,19 +187,21 @@
   }
   cambiarHerramienta();
 
+  const TITULOS = {tema: '¿De qué quieres el vídeo?', fecha: '¿Qué día?', actualidad: '¿Qué noticia?',
+                   video_ia: '¿Qué historia y con qué IA?', diario: '¿Qué personaje?'};
   function cambiarModo() {
     const modo = document.querySelector('input[name=modo]:checked').value;
-    document.getElementById('modo-tema').hidden = modo !== 'tema';
-    document.getElementById('modo-fecha').hidden = modo !== 'fecha';
-    document.getElementById('modo-diario').hidden = modo !== 'diario';
-    document.getElementById('modo-actualidad').hidden = modo !== 'actualidad';
-    document.getElementById('modo-video_ia').hidden = modo !== 'video_ia';
+    for (const m of Object.keys(TITULOS)) document.getElementById('modo-' + m).hidden = modo !== m;
+    document.getElementById('titulo-detalles').textContent = TITULOS[modo];
     document.querySelectorAll('.solo-no-video').forEach(e => e.hidden = modo === 'video_ia');
-    // En actualidad, idiomas y «qué hago» se eligen después, con los artículos delante.
+    // En actualidad, idiomas y «hasta dónde» se eligen después, con los artículos delante.
     document.querySelectorAll('.solo-no-actualidad').forEach(e => e.hidden = modo === 'actualidad');
     const boton = document.getElementById('boton-crear');
-    if (boton) boton.textContent = modo === 'actualidad' ? 'Buscar noticias'
+    boton.textContent = modo === 'actualidad' ? 'Buscar noticias'
       : modo === 'video_ia' ? 'Escribir guion y prompts' : boton.dataset.texto;
+    const campo = document.querySelector('#modo-' + modo + ' input[type=text]');
+    if (campo) campo.focus();
   }
+  cambiarModo();  // por si el navegador recuerda otro tipo al volver atrás
 </script>
 {% endblock %}

@@ -22,11 +22,18 @@ static class MenteInquieta
     [STAThread]
     static void Main()
     {
-        IntPtr abierta = FindWindow(null, Titulo);
-        if (abierta != IntPtr.Zero)
+        // ¿Ya está abierta? Lo dice el mutex que crea la aplicación (menu\aplicacion.py), no el título de una
+        // ventana: una pestaña del navegador con el menú también se llama «Mente Inquieta».
+        System.Threading.Mutex abierta;
+        if (System.Threading.Mutex.TryOpenExisting("MenteInquieta.Menu", out abierta))
         {
-            ShowWindow(abierta, 9);  // SW_RESTORE: por si está minimizada
-            SetForegroundWindow(abierta);
+            abierta.Dispose();
+            IntPtr ventana = FindWindow(null, Titulo);
+            if (ventana != IntPtr.Zero)
+            {
+                ShowWindow(ventana, 9);  // SW_RESTORE: por si está minimizada
+                SetForegroundWindow(ventana);
+            }
             return;
         }
 

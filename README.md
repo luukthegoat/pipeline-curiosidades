@@ -79,8 +79,7 @@ flowchart LR
 | [`borrar.py`](borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
 | [`horarios.py`](horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
 | [`programados.py`](programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |
-| [`automatico.py`](automatico.py) · [`programador.py`](programador.py) | Piloto automático diario con el Programador de tareas de Windows |
-| [`menu/`](menu/) | Menú (Flask): crear, revisar, elegir imágenes, ajustes, cola de tareas |
+| [`menu/`](menu/) | Menú (Flask): Crear, Mis vídeos (por revisar, listos, programados, publicados), Programados con calendario y Ajustes |
 | [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |
 | [`lanzador/`](lanzador/) | Lanzador `Mente Inquieta.exe` (C#), que abre la aplicación sin consola |
 
@@ -121,7 +120,7 @@ python subir_youtube.py <guion> --privacidad private --publicar-el 2026-10-25T20
 - Las imágenes de IA gratuitas (Pollinations) tienen calidad irregular, marca de agua y límite de 1 imagen / 45 s.
 - edge-tts usa un servicio no oficial de Microsoft: para un canal monetizado convendría una voz con licencia comercial.
 - YouTube deja en privado lo que sube un proyecto de Google Cloud sin auditar, aunque esté programado.
-- El piloto automático usa el Programador de tareas de Windows.
+- La subida de los programados usa el Programador de tareas de Windows (una tarea que se reprograma sola).
 - El verificador reduce mucho los errores, pero no es infalible: los vídeos deben revisarse antes de publicarse.
 
 ## Cómo se ha desarrollado

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Ayuda · Mente Inquieta{% endblock %}
 {% block contenido %}
+<a class="volver" href="{{ url_for('ajustes') }}">← Ajustes</a>
 <h1>Cómo funciona</h1>
 <p class="sub">El programa convierte un tema o una fecha histórica en vídeos verticales para Shorts, TikTok o Reels.</p>
 
@@ -16,12 +17,10 @@
 <div class="tarjeta">
   <h2>Flujo recomendado</h2>
   <ol class="pasos">
-    <li>En <a href="{{ url_for('inicio') }}">Inicio</a>, escribe el tema y elige «Solo el guion». Si el tema da para más, elige varias partes.</li>
-    <li>Abre el guion: comprueba las frases marcadas con las fuentes y corrige lo necesario.</li>
-    <li>Revisa el gancho y la música (puedes escucharla) y, si quieres, pulsa «Elegir imágenes» para escoger la foto de cada escena o subir una tuya.</li>
-    <li>Marca el guion como verificado y pulsa «Generar audio y vídeo».</li>
-    <li>Mira el vídeo entero. Si algo no te gusta, cámbialo y pulsa «Rehacer»: solo se rehacen las escenas cambiadas, en segundos.</li>
-    <li>Publica: en YouTube Shorts, con el botón «Subir a YouTube» de su página (configúralo antes en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>); en TikTok, copiando el texto del .txt que está junto al vídeo (incluye los créditos obligatorios de las imágenes).</li>
+    <li>En <a href="{{ url_for('inicio') }}">Crear</a>, elige el tipo, escribe el tema y deja «Solo el guion». Si el tema da para más, elige varias partes.</li>
+    <li>En <a href="{{ url_for('mis_videos') }}">Mis vídeos → Por revisar</a>, abre el vídeo. Su página va por pasos: revisa el texto (con las frases dudosas y las fuentes), genera el vídeo y publícalo.</li>
+    <li>Si algo no te gusta, cámbialo y pulsa «Rehacer»: solo se rehacen las escenas cambiadas. El gancho, la música y las imágenes están en «Gancho, música e imágenes», dentro del paso del vídeo.</li>
+    <li>Publica con un clic: «Revisado → programar» lo da por bueno y lo programa a su hora recomendada. En TikTok, copia el texto de «Más opciones → Texto para publicar» (incluye los créditos obligatorios de las imágenes).</li>
   </ol>
 </div>
 
@@ -64,11 +63,10 @@
 
 <div class="tarjeta">
   <h2>Borrar un vídeo</h2>
-  <p>Si un vídeo no te gusta, ábrelo y pulsa <strong>Borrar…</strong> (al final de su página), o «Borrar» en
-    <a href="{{ url_for('ver_pendientes') }}">Pendientes</a>. Antes de borrar te enseña la lista exacta de lo que se va:
+  <p>Si un vídeo no te gusta, ábrelo y pulsa <strong>Más opciones → Borrar…</strong>, o la papelera de su fila en
+    <a href="{{ url_for('mis_videos') }}">Mis vídeos</a>. Antes de borrar te enseña la lista exacta de lo que se va:
     el guion, la voz y los subtítulos, las escenas montadas, las imágenes (las de IA y las que subiste), el vídeo, su
-    miniatura y sus textos. También lo quita de Programados y de los recordatorios de TikTok, y si la carpeta del tema
-    se queda vacía, la borra.</p>
+    miniatura y sus textos. También lo quita de Programados, y si la carpeta del tema se queda vacía, la borra.</p>
   <p class="ayuda-campo">Todo va a la <strong>Papelera de reciclaje</strong> de Windows, así que se puede recuperar. Si
     el vídeo ya está en YouTube, puedes marcar «Borrarlo también de YouTube» (eso no se puede deshacer); si estaba
     programado allí y aún no se ha publicado, viene marcado, porque si no se publicaría igualmente. No se puede borrar
@@ -76,14 +74,15 @@
 </div>
 
 <div class="tarjeta">
-  <h2>Pendientes y horas recomendadas</h2>
-  <p>En <a href="{{ url_for('ver_pendientes') }}">Pendientes</a> están todos los vídeos que aún no están en YouTube ni
-    programados, en dos pasos:</p>
+  <h2>Mis vídeos y horas recomendadas</h2>
+  <p>En <a href="{{ url_for('mis_videos') }}">Mis vídeos</a> ves arriba qué se publica hoy, cuántos tienes por revisar y
+    cuántas subidas a YouTube llevas en 24 h. Debajo, los filtros:</p>
   <ol class="pasos">
-    <li><strong>Por revisar:</strong> con su tipo y las frases dudosas que marcó el verificador. «Revisar» abre el guion;
-      «Marcar revisado» lo da por bueno.</li>
-    <li><strong>Listos para programar:</strong> cada uno con su <strong>hora recomendada</strong> y el motivo. Puedes
-      cambiarla y pulsar «Programar», o «Programar todos a su hora recomendada».</li>
+    <li><strong>Por revisar:</strong> con su tipo y las frases dudosas que marcó el verificador. «Revisar» abre el vídeo;
+      «Revisado → programar» lo da por bueno y lo programa a su hora recomendada en un solo clic.</li>
+    <li><strong>Listos:</strong> revisados y aún sin programar, cada uno con su <strong>hora recomendada</strong> y el
+      motivo. «Programar» lo programa a esa hora; «Otra hora» deja elegirla. «Programar todos» los programa a la vez.</li>
+    <li><strong>Programados</strong> y <strong>Publicados</strong>: lo que ya está en la cola o en YouTube.</li>
   </ol>
   <p>Las horas recomendadas dependen del tipo de vídeo:</p>
   <ul>
@@ -96,14 +95,12 @@
   </ul>
   <p class="ayuda-campo">Nunca más de 2 vídeos al día, separados al menos 3 horas y sin pisar lo ya programado. Son reglas
     generales para Shorts con público de España: cuando tu canal tenga datos, compáralas con YouTube Studio →
-    Estadísticas → «Cuándo están conectados tus espectadores». También salen al programar un vídeo desde su página y en
-    «Publicar varios» → «A las horas recomendadas».</p>
+    Estadísticas → «Cuándo están conectados tus espectadores».</p>
 </div>
 
 <div class="tarjeta">
   <h2>Programados</h2>
-  <p>Al publicar puedes elegir <strong>Programar</strong> (en la página del vídeo) o <strong>Programados y escalonados</strong>
-    (al publicar varios desde el inicio). El vídeo queda en <a href="{{ url_for('ver_programados') }}">Programados</a>:</p>
+  <p>Cuando programas un vídeo, queda en <a href="{{ url_for('ver_programados') }}">Programados</a>:</p>
   <ol class="pasos">
     <li>El programa lo guarda en la cola, en tu ordenador.</li>
     <li>En cuanto hay hueco, lo sube a YouTube ya programado para su hora. Nunca sube más de 5 vídeos en 24 h,
@@ -122,35 +119,6 @@
 </div>
 
 <div class="tarjeta">
-  <h2>Varios vídeos a la vez</h2>
-  <p>En el <a href="{{ url_for('inicio') }}">inicio</a>, marca la casilla de cada guion (o «Seleccionar todo») y abajo
-    aparece una barra con dos botones:</p>
-  <ul>
-    <li><strong>Marcar como revisados:</strong> los marca todos como verificados de una vez. Hazlo solo después de
-      revisarlos.</li>
-    <li><strong>Publicar en YouTube:</strong> los sube uno detrás de otro, en el orden de la lista (las partes de una
-      serie van 1, 2, 3…). Puedes subirlos ya o programarlos escalonados: el primero a la hora que elijas y los demás,
-      uno cada X horas. Antes de confirmar ves el orden, la hora de cada uno y cuáles se saltan (sin revisar, sin vídeo
-      o ya subidos).</li>
-  </ul>
-  <p class="ayuda-campo">YouTube deja subir unos 6 vídeos al día por la API: si eliges más, los que pasen del cupo
-    fallarán y tendrás que publicarlos al día siguiente.</p>
-</div>
-
-<div class="tarjeta">
-  <h2>Piloto automático</h2>
-  <p>En <a href="{{ url_for('piloto_automatico') }}">Piloto automático</a> lo activas y Windows crea un vídeo cada día
-    (turnando efemérides, diarios y tu lista de temas), lo deja en <a href="{{ url_for('ver_programados') }}">Programados</a>
-    a la hora recomendada para su tipo (o a una hora fija) y te avisa con una notificación para subirlo a TikTok: te
-    copia el texto y abre su carpeta. Allí también marcas los de TikTok como subidos o los añades a tu calendario del
-    móvil. «Ejecutar ahora» crea uno al momento, aunque el piloto esté desactivado.</p>
-  <p class="ayuda-campo">Los vídeos sin frases dudosas se programan sin revisión manual (míralos en Programados antes de
-    su hora). Si el verificador marca frases dudosas, no se programan: quedan en
-    <a href="{{ url_for('ver_pendientes') }}">Pendientes</a> y te avisa. Las efemérides que ya tenías hechas no se
-    repiten: coge el siguiente hecho del día.</p>
-</div>
-
-<div class="tarjeta">
   <h2>Formato «Diario de…»</h2>
   <p>Humor histórico en primera persona: «Día 4 como soldado romano en Vindolanda…». Escribes el personaje, de qué se
     queja (opcional) y el día (si lo dejas vacío, sigue la numeración sola). La IA escribe un guion de ~45 s sarcástico
@@ -162,7 +130,8 @@
 
 <div class="tarjeta">
   <h2>Cola de tareas</h2>
-  <p>Puedes lanzar varias cosas seguidas (crear guiones, generar vídeos…): se ponen en la <a href="{{ url_for('ver_tarea') }}">cola</a> y se hacen una detrás de otra. Puedes cancelar cualquiera.</p>
+  <p>Puedes lanzar varias cosas seguidas (crear guiones, generar vídeos…): se ponen en la <a href="{{ url_for('ver_tarea') }}">cola</a> y se hacen una detrás de otra (arriba a la derecha ves
+    cuántas hay en marcha). Puedes cancelar cualquiera.</p>
 </div>
 
 <div class="tarjeta">
@@ -191,6 +160,6 @@
     <li><code>musica\</code>: las pistas de música, incluidas las tuyas.</li>
     <li><code>.env</code> (carpeta principal): tu clave de Groq, la voz y el contacto para Wikimedia.</li>
   </ul>
-  <p class="ayuda-campo">Para apagar el menú, cierra la ventana negra que se abrió al empezar.</p>
+  <p class="ayuda-campo">Para apagar el menú, cierra su ventana.</p>
 </div>
 {% endblock %}

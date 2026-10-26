@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block titulo %}Mis vídeos · Mente Inquieta{% endblock %}
+{% block contenido %}
+{% set tipos = {'efemeride': 'Efeméride', 'serie': 'Serie', 'humor': 'Humor', 'serio': 'Serio / misterio',
+                'general': 'Divulgación', 'ingles': 'En inglés', 'actualidad': 'Actualidad'} %}
+<div class="cabecera-pagina">
+  <h1>Mis vídeos</h1>
+  <form method="post" action="{{ url_for('abrir_carpeta') }}" class="en-linea">
+    <button class="secundario pequeno" type="submit">Abrir carpeta de vídeos</button>
+  </form>
+</div>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso">{{ error }}</div>{% endif %}
+
+{# ---------------------------------------------------------------- Resumen del día #}
+<section class="resumen-dia" aria-label="Resumen de hoy">
+  <div class="dato principal">
+    <span class="etiqueta-dato">Hoy se publica</span>
+    {% if dia.hoy %}
+      {% for v in dia.hoy %}
+        <a class="linea-hoy {{ 'hecho' if v.pasada }}" href="{{ url_for('ver_guion', nombre=v.nombre) }}">
+          <b>{{ v.hhmm }}</b> {{ v.titulo }}{% if v.pasada %} <span class="ayuda-campo">· ya publicado</span>{% endif %}</a>
+      {% endfor %}
+    {% elif dia.siguiente %}
+      <span class="valor-texto">Nada hoy. El próximo, el {{ dia.siguiente.bonita }}:</span>
+      <a class="linea-hoy" href="{{ url_for('ver_guion', nombre=dia.siguiente.nombre) }}">{{ dia.siguiente.titulo }}</a>
+    {% else %}
+      <span class="valor-texto">Nada programado. Programa algo desde «Listos».</span>
+    {% endif %}
+  </div>
+  <a class="dato" href="{{ url_for('mis_videos', ver='revisar') }}">
+    <span class="etiqueta-dato">Por revisar</span><span class="cifra">{{ cuantos.revisar }}</span>
+  </a>
+  <a class="dato" href="{{ url_for('mis_videos', ver='listos') }}">
+    <span class="etiqueta-dato">Listos</span><span class="cifra">{{ cuantos.listos }}</span>
+  </a>
+  <a class="dato" href="{{ url_for('ver_programados') }}" title="Vídeos subidos a YouTube en las últimas 24 h">
+    <span class="etiqueta-dato">Subidas hoy</span><span class="cifra">{{ dia.subidas }}<small>/{{ dia.max }}</small></span>
+  </a>
+</section>
+
+{% if con_dudas %}
+  <div class="aviso">{{ con_dudas }} vídeo{{ 's' if con_dudas > 1 }} por revisar tiene{{ 'n' if con_dudas > 1 }}
+    frases dudosas del verificador: compruébalas antes de programar{{ 'los' if con_dudas > 1 else 'lo' }}.</div>
+{% endif %}
+
+{# ---------------------------------------------------------------- Filtros #}
+<nav class="filtros" aria-label="Filtrar vídeos">
+  {% for clave, nombre in filtros.items() %}
+    <a href="{{ url_for('mis_videos', ver=clave) }}" class="{{ 'actual' if ver == clave }}" {% if ver == clave %}aria-current="true"{% endif %}>
+      {{ nombre }} <span>{{ cuantos[clave] }}</span></a>
+  {% endfor %}
+</nav>
+
+{% if ver == 'listos' and guiones | selectattr('video') | list %}
+  {% set con_hora = guiones | selectattr('video') | map(attribute='nombre') | select('in', recomendadas) | list %}
+  {% if con_hora %}
+    <form method="post" action="{{ url_for('programar_listos') }}" class="barra-accion"
+          onsubmit="return confirm('¿Programar los {{ con_hora | length }} vídeos, cada uno a su hora recomendada?')">
+      {% for n in con_hora %}<input type="hidden" name="nombres" value="{{ n }}">{% endfor %}
+      <span>{{ con_hora | length }} listo{{ 's' if con_hora | length > 1 }} para programar a su hora recomendada.</span>
+      <button type="submit" class="pequeno" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>Programar todos</button>
+    </form>
+  {% endif %}
+{% endif %}
+
+{# ---------------------------------------------------------------- Lista #}
+<div class="lista">
+  {% for g in guiones %}
+    {% set r = recomendadas.get(g.nombre) %}
+    <div class="fila-video">
+      <a class="portadilla" href="{{ url_for('ver_guion', nombre=g.nombre) }}" tabindex="-1" aria-hidden="true">
+        {% if g.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=g.nombre) }}?v={{ g.modificado }}" alt="" loading="lazy">
+        {% else %}<span class="mini vacia"></span>{% endif %}
+      </a>
+      <div class="cuerpo">
+        <a class="titulo" href="{{ url_for('ver_guion', nombre=g.nombre) }}">{{ g.titulo }}</a>
+        <div class="meta">
+          <span class="etiqueta">{{ tipos.get(g.tipo, g.tipo) }}{% if g.serie %} · {{ g.serie.parte }}/{{ g.serie.total }}{% endif %}</span>
+          {% if g.idioma != 'es' %}<span class="idioma">{{ g.idioma }}</span>{% endif %}
+          {% if g.apartado == 'revisar' %}
+            {% if g.dudas %}<span class="etiqueta mal">{{ g.dudas }} frase{{ 's' if g.dudas > 1 }} dudosa{{ 's' if g.dudas > 1 }}</span>
+            {% else %}<span class="etiqueta ok">sin dudas</span>{% endif %}
+          {% endif %}
+          {% if not g.video %}<span class="etiqueta">sin vídeo</span>{% endif %}
+          {% if g.apartado == 'programados' %}<span class="etiqueta prog">{{ g.programado.bonita }}</span>{% endif %}
+          {% if g.apartado == 'publicados' %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+          {% if g.duracion %}<span>{{ '%.0f' % g.duracion }} s</span>{% endif %}
+        </div>
+        {% if g.apartado in ('revisar', 'listos') and g.video and r %}
+          <div class="meta">Hora recomendada: <strong>{{ r.bonita }}</strong> <span class="ayuda-campo">· {{ r.motivo }}</span></div>
+        {% endif %}
+      </div>
+
+      <div class="botones">
+        {% if g.apartado == 'revisar' %}
+          <a class="boton secundario pequeno" href="{{ url_for('ver_guion', nombre=g.nombre) }}">Revisar</a>
+          {% if g.video and r %}
+            <form method="post" action="{{ url_for('revisar_y_programar', nombre=g.nombre) }}"
+                  onsubmit="return confirm('{{ ('El verificador marcó frases dudosas. ¿Las has comprobado? ' if g.dudas else '') ~ '¿Dar por revisado y programar para el ' ~ r.bonita ~ '?' }}')">
+              <input type="hidden" name="volver" value="videos"><input type="hidden" name="ver" value="{{ ver }}">
+              <button class="pequeno" type="submit" {% if not yt_conectado %}disabled{% endif %}
+                      title="Lo da por revisado y lo programa a su hora recomendada">Revisado → programar</button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('verificar_guion', nombre=g.nombre) }}"
+                  onsubmit="return {{ 'confirm(\'El verificador marcó frases dudosas. ¿Lo has comprobado?\')' if g.dudas else 'true' }}">
+              <input type="hidden" name="valor" value="1">
+              <input type="hidden" name="volver" value="videos"><input type="hidden" name="ver" value="{{ ver }}">
+              <button class="pequeno" type="submit">Marcar revisado</button>
+            </form>
+          {% endif %}
+        {% elif g.apartado == 'listos' %}
+          {% if not g.video %}
+            <form method="post" action="{{ url_for('producir_guion', nombre=g.nombre) }}">
+              <button class="pequeno" type="submit">Generar vídeo</button>
+            </form>
+          {% else %}
+            <details class="otra-hora">
+              <summary class="boton secundario pequeno">Otra hora</summary>
+              <form method="post" action="{{ url_for('revisar_y_programar', nombre=g.nombre) }}">
+                <input type="hidden" name="volver" value="videos"><input type="hidden" name="ver" value="{{ ver }}">
+                <input type="datetime-local" name="hora" value="{{ r.hora if r else '' }}" required>
+                <button class="pequeno" type="submit" {% if not yt_conectado %}disabled{% endif %}>Programar</button>
+              </form>
+            </details>
+            {% if r %}
+              <form method="post" action="{{ url_for('revisar_y_programar', nombre=g.nombre) }}">
+                <input type="hidden" name="volver" value="videos"><input type="hidden" name="ver" value="{{ ver }}">
+                <button class="pequeno" type="submit" {% if not yt_conectado %}disabled{% endif %}>Programar · {{ r.hora[11:16] }}</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        {% elif g.apartado == 'programados' %}
+          <a class="boton secundario pequeno" href="{{ url_for('ver_programados') }}">Ver en Programados</a>
+        {% elif g.youtube and g.youtube.url %}
+          <a class="boton secundario pequeno" href="{{ g.youtube.url }}" target="_blank" rel="noopener">Ver en YouTube ↗</a>
+        {% endif %}
+        {% if g.apartado in ('revisar', 'listos') %}
+          <form method="post" action="{{ url_for('borrar_guion', nombre=g.nombre) }}"
+                onsubmit="return confirm('¿Borrar «{{ g.titulo | replace("'", "") }}» y todo lo que se generó para él? Va a la Papelera de reciclaje.')">
+            <input type="hidden" name="volver" value="videos"><input type="hidden" name="ver" value="{{ ver }}">
+            <button class="icono peligro" type="submit" title="Borrar el vídeo y todo lo suyo" aria-label="Borrar «{{ g.titulo }}»">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h6.4a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></svg>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">
+      {% if ver == 'revisar' %}Nada por revisar. ¡Al día!
+      {% elif ver == 'listos' %}Nada listo para programar. Cuando revises un vídeo, aparecerá aquí.
+      {% elif ver == 'programados' %}Nada programado.
+      {% elif ver == 'publicados' %}Todavía no hay nada publicado.
+      {% else %}Aún no hay vídeos. <a href="{{ url_for('inicio') }}">Crea el primero</a>.{% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,146 +1,172 @@
 {% extends "base.html" %}
 {% block titulo %}{{ datos.titulo }} · Mente Inquieta{% endblock %}
 {% block contenido %}
-<a class="volver" href="{{ url_for('inicio') }}">← Inicio</a>
+{% set dudas = datos.get('sin_respaldo', []) %}
+{% set yt = datos.get('youtube') %}
+<a class="volver" href="{{ url_for('mis_videos') }}">← Mis vídeos</a>
 <h1>{{ datos.titulo }}</h1>
 <p class="sub">
   {{ info.idioma | upper }} · {{ datos.evento }}
   {% if info.duracion %} · vídeo de {{ '%.0f' % info.duracion }} s{% endif %}
 </p>
 
+<div class="estado-video">
+  <span class="etiqueta {{ 'ok' if info.verificado else 'mal' }}">{{ 'revisado' if info.verificado else 'sin revisar' }}</span>
+  <span class="etiqueta {{ 'ok' if info.video }}">{{ 'vídeo hecho' if info.video else 'sin vídeo' }}</span>
+  {% if yt and not info.programado %}<span class="etiqueta ok">en YouTube</span>
+  {% elif info.programado %}<span class="etiqueta prog">programado · {{ info.programado.bonita }}</span>{% endif %}
+</div>
+
 {% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
 {% if cola.en_curso() %}<div class="aviso">Hay {{ cola.activos() | length }} tarea(s) en marcha (<a href="{{ url_for('ver_tarea') }}">ver</a>). Lo que lances se pondrá en la cola.</div>{% endif %}
 
-<div class="dos-columnas">
-  <div>
-    {% if datos.get('video_ia') %}
-      {% set ia = datos.video_ia %}
-      {% set listos = clips.values() | select | list | length %}
-      <div class="tarjeta" id="clips">
-        <h2>Clips para {{ herramienta.nombre }} · {{ listos }}/{{ datos.escenas | length }} subidos</h2>
-        <div class="herramienta-info" style="margin: 0 0 14px;">
-          <a class="boton" href="{{ herramienta.url }}" target="_blank" rel="noopener">Abrir {{ herramienta.nombre }} ↗</a>
-          <span class="ayuda-campo">{{ herramienta.consejo }}</span>
-        </div>
-        <ol class="pasos" style="margin-bottom: 16px;">
-          <li>Copia el prompt de cada escena en {{ herramienta.nombre }} y genera el clip en <strong>vertical (9:16)</strong>,
-            de unos {{ ia.segundos }} s.</li>
-          <li>Descárgalo y súbelo en su escena con «Subir clip».</li>
-          <li>Cuando estén todos, pulsa <strong>Generar audio y vídeo</strong>:
-            {% if ia.voz == 'ia' %}se usa la voz que trae cada clip{% else %}narra la voz de la app sobre los clips{% endif %},
-            con subtítulos, música y cierre.</li>
-        </ol>
-        <p class="ayuda-campo" style="margin-top: 0;">Voz: <strong>{{ 'la IA (el personaje habla en el clip)' if ia.voz == 'ia' else 'la app (clips sin diálogo)' }}</strong>.
-          Si cambias una frase del guion, vuelve a generar ese clip{% if ia.voz == 'ia' %}: la frase va dentro del prompt{% endif %}.</p>
-        <div class="clips">
-          {% for e in datos.escenas %}
-            {% set clip = clips.get(e.numero) %}
-            <div class="clip {{ 'listo' if clip }}">
-              <div>
-                <div class="cabecera"><strong>Escena {{ e.numero }}</strong>
-                  {% if clip %}<span class="etiqueta ok">clip subido</span>{% else %}<span class="etiqueta">falta el clip</span>{% endif %}</div>
-                <p class="narracion">«{{ e.narracion }}»</p>
-                <div class="copiable"><textarea readonly rows="5">{{ e.prompt_video }}</textarea>
-                  <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
-              </div>
-              <div class="lado">
-                {% if clip %}
-                  <video src="{{ url_for('ver_clip', nombre=nombre, numero=e.numero) }}?v={{ clip.stat().st_mtime | int }}" controls preload="metadata"></video>
-                {% else %}
-                  <div class="hueco">Sin clip</div>
-                {% endif %}
-                <form method="post" action="{{ url_for('subir_clip', nombre=nombre) }}" enctype="multipart/form-data">
-                  <input type="hidden" name="escena" value="{{ e.numero }}">
-                  <label class="boton {{ 'secundario' if clip }}" style="margin: 0;">{{ 'Cambiar clip' if clip else 'Subir clip' }}
-                    <input type="file" name="clip" accept=".mp4,.mov,.webm,.m4v,video/*" hidden
-                           onchange="this.closest('label').firstChild.textContent = 'Subiendo… '; this.form.submit()">
-                  </label>
-                </form>
-                {% if clip %}
-                  <form method="post" action="{{ url_for('quitar_clip', nombre=nombre, numero=e.numero) }}">
-                    <button class="secundario peligro" type="submit">Quitar</button>
-                  </form>
-                {% endif %}
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-        <label style="margin-top: 16px;">El personaje (va igual en todos los prompts)</label>
-        <div class="copiable"><textarea readonly rows="2">{{ ia.personaje }}</textarea>
-          <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
-      </div>
-    {% endif %}
+<div class="pasos-video">
 
-    {% if not datos.get('video_ia') %}
-    <div class="tarjeta">
-      <h2>1 · Comprueba los datos</h2>
-      {% set dudas = datos.get('sin_respaldo', []) %}
-      {% if dudas %}
-        <p>El verificador automático <strong>no encontró en Wikipedia</strong> estas frases. Compruébalas en las fuentes y corrígelas abajo si hace falta:</p>
-        {% for d in dudas %}
-          <div class="duda">Escena {{ d.escena }}: <q>{{ d.frase }}</q><br><small>{{ d.motivo }}</small></div>
-        {% endfor %}
-      {% else %}
-        <p>El verificador automático no ha encontrado frases sin respaldo. Aun así, échale un vistazo con las fuentes: no es infalible.</p>
-      {% endif %}
-      <p><strong>Fuentes:</strong></p>
-      <ul>
-        {% for f in datos.get('fuentes', []) %}<li><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.titulo }}</a></li>{% endfor %}
-      </ul>
-      {% if datos.get('editado_a_mano') %}<p class="ayuda-campo">Has editado este guion a mano: las dudas de arriba son de la versión original.</p>{% endif %}
+{# ================================================================ Clips (vídeo con IA) #}
+{% if datos.get('video_ia') %}
+  {% set ia = datos.video_ia %}
+  {% set listos = clips.values() | select | list | length %}
+  <section class="tarjeta paso {{ 'hecho' if listos == datos.escenas | length }}" id="clips">
+    <h2><span class="numero"></span>Sube los clips <span class="etiqueta {{ 'ok' if listos == datos.escenas | length }}">{{ listos }}/{{ datos.escenas | length }}</span></h2>
+    <div class="herramienta-info" style="margin: 0 0 14px;">
+      <a class="boton" href="{{ herramienta.url }}" target="_blank" rel="noopener">Abrir {{ herramienta.nombre }} ↗</a>
+      <span class="ayuda-campo">{{ herramienta.consejo }}</span>
     </div>
-    {% endif %}
-
-    {% if datos.get('diario') %}
-      <div class="tarjeta">
-        <h2>Prompts para tu generador de IA</h2>
-        <p class="ayuda-campo">Diario de «{{ datos.diario.personaje }}» · día {{ datos.diario.dia }}. Genera las imágenes o
-          clips en vertical (9:16) con Sora, Runway, Midjourney… y súbelas en «Elegir imágenes» (una por escena). Si no
-          subes ninguna, el vídeo se monta con imágenes históricas reales.</p>
-        {% if datos.get('personaje_visual') %}
-          <label>El personaje (úsalo igual en todas para que salga siempre el mismo)</label>
-          <div class="copiable"><textarea readonly rows="3">{{ datos.personaje_visual }}</textarea>
-            <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
-        {% endif %}
-        {% if datos.get('prompt_video') %}
-          <label>Prompt del vídeo</label>
-          <div class="copiable"><textarea readonly rows="4">{{ datos.prompt_video }}</textarea>
-            <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
-        {% endif %}
-        <label>Una imagen por escena</label>
-        {% for e in datos.escenas %}
-          <div class="copiable"><textarea readonly rows="3">{{ e.visual }}</textarea>
-            <button class="secundario" type="button" onclick="copiar(this)">Escena {{ e.numero }}</button></div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    <form class="tarjeta" method="post" action="{{ url_for('guardar_guion', nombre=nombre) }}">
-      <h2>2 · Corrige el texto si hace falta</h2>
-      <label for="titulo">Título del vídeo</label>
-      <input type="text" id="titulo" name="titulo" value="{{ datos.titulo }}">
-      {% set escenas_con_duda = dudas | map(attribute='escena') | list %}
+    <p class="ayuda-campo" style="margin-top: 0;">Copia el prompt de cada escena en {{ herramienta.nombre }}, genera el clip en
+      <strong>vertical (9:16)</strong> de unos {{ ia.segundos }} s y súbelo en su escena. Voz:
+      <strong>{{ 'la del clip (el personaje habla)' if ia.voz == 'ia' else 'la de la app, sobre clips sin diálogo' }}</strong>.</p>
+    <div class="clips">
       {% for e in datos.escenas %}
-        <div class="escena {{ 'con-duda' if e.numero in escenas_con_duda }}">
-          <label for="n{{ e.numero }}"><span class="num">Escena {{ e.numero }}</span>
-            {% if e.numero in escenas_con_duda %}<span class="etiqueta mal">revisar</span>{% endif %}</label>
-          <textarea id="n{{ e.numero }}" name="narracion_{{ e.numero }}">{{ e.narracion }}</textarea>
-          <div class="visual">Imagen: {{ e.visual }}</div>
+        {% set clip = clips.get(e.numero) %}
+        <div class="clip {{ 'listo' if clip }}">
+          <div>
+            <div class="cabecera"><strong>Escena {{ e.numero }}</strong>
+              {% if clip %}<span class="etiqueta ok">clip subido</span>{% else %}<span class="etiqueta">falta el clip</span>{% endif %}</div>
+            <p class="narracion">«{{ e.narracion }}»</p>
+            <div class="copiable"><textarea readonly rows="5">{{ e.prompt_video }}</textarea>
+              <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+          </div>
+          <div class="lado">
+            {% if clip %}
+              <video src="{{ url_for('ver_clip', nombre=nombre, numero=e.numero) }}?v={{ clip.stat().st_mtime | int }}" controls preload="metadata"></video>
+            {% else %}
+              <div class="hueco">Sin clip</div>
+            {% endif %}
+            <form method="post" action="{{ url_for('subir_clip', nombre=nombre) }}" enctype="multipart/form-data">
+              <input type="hidden" name="escena" value="{{ e.numero }}">
+              <label class="boton {{ 'secundario' if clip }}" style="margin: 0;">{{ 'Cambiar clip' if clip else 'Subir clip' }}
+                <input type="file" name="clip" accept=".mp4,.mov,.webm,.m4v,video/*" hidden
+                       onchange="this.closest('label').firstChild.textContent = 'Subiendo… '; this.form.submit()">
+              </label>
+            </form>
+            {% if clip %}
+              <form method="post" action="{{ url_for('quitar_clip', nombre=nombre, numero=e.numero) }}">
+                <button class="secundario peligro" type="submit">Quitar</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
       {% endfor %}
-      <div class="acciones">
-        <button type="submit">Guardar cambios</button>
-        <span class="ayuda-campo">Si cambias una frase, al rehacer solo se regenera la voz y el vídeo de esa escena.</span>
+    </div>
+    <label style="margin-top: 16px;">El personaje (va igual en todos los prompts)</label>
+    <div class="copiable"><textarea readonly rows="2">{{ ia.personaje }}</textarea>
+      <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+  </section>
+{% endif %}
+
+{# ================================================================ Revisar el texto #}
+<details class="tarjeta paso {{ 'hecho' if info.verificado }}" {% if not info.verificado %}open{% endif %} id="texto">
+  <summary>
+    <h2><span class="numero"></span>Revisa el texto
+      {% if info.verificado %}<span class="etiqueta ok">revisado</span>
+      {% elif dudas %}<span class="etiqueta mal">{{ dudas | length }} frase{{ 's' if dudas | length > 1 }} dudosa{{ 's' if dudas | length > 1 }}</span>{% endif %}</h2>
+  </summary>
+
+  {% if not datos.get('video_ia') %}
+    {% if dudas %}
+      <p>El verificador <strong>no encontró en las fuentes</strong> estas frases. Compruébalas y corrígelas abajo si hace falta:</p>
+      {% for d in dudas %}
+        <div class="duda"><a href="#n{{ d.escena }}">Escena {{ d.escena }}</a>: <q>{{ d.frase }}</q><br><small>{{ d.motivo }}</small></div>
+      {% endfor %}
+    {% else %}
+      <p class="ayuda-campo">El verificador no ha encontrado frases sin respaldo. Aun así, échale un vistazo: no es infalible.</p>
+    {% endif %}
+    {% if datos.get('fuentes') %}
+      <details class="fuentes">
+        <summary>Fuentes ({{ datos.fuentes | length }})</summary>
+        <ul>{% for f in datos.fuentes %}<li><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.titulo }}</a></li>{% endfor %}</ul>
+      </details>
+    {% endif %}
+    {% if datos.get('editado_a_mano') %}<p class="ayuda-campo">Has editado este guion a mano: las dudas de arriba son de la versión original.</p>{% endif %}
+  {% endif %}
+
+  <form method="post" action="{{ url_for('guardar_guion', nombre=nombre) }}">
+    <label for="titulo">Título del vídeo</label>
+    <input type="text" id="titulo" name="titulo" value="{{ datos.titulo }}">
+    {% set escenas_con_duda = dudas | map(attribute='escena') | list %}
+    {% for e in datos.escenas %}
+      <div class="escena {{ 'con-duda' if e.numero in escenas_con_duda }}">
+        <label for="n{{ e.numero }}"><span class="num">Escena {{ e.numero }}</span>
+          {% if e.numero in escenas_con_duda %}<span class="etiqueta mal">revisar</span>{% endif %}</label>
+        <textarea id="n{{ e.numero }}" name="narracion_{{ e.numero }}">{{ e.narracion }}</textarea>
+        <div class="visual">Imagen: {{ e.visual }}</div>
       </div>
+    {% endfor %}
+    <div class="acciones">
+      <button class="secundario" type="submit">Guardar cambios</button>
+      <span class="ayuda-campo">Al rehacer el vídeo solo se regeneran las escenas que cambies.</span>
+    </div>
+  </form>
+
+  <div class="cierre-paso">
+    {% if info.verificado %}
+      <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
+        <input type="hidden" name="valor" value="0">
+        <button class="secundario" type="submit">Quitar «revisado»</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}"
+            {% if dudas %}onsubmit="return confirm('El verificador marcó frases dudosas. ¿Las has comprobado?')"{% endif %}>
+        <input type="hidden" name="valor" value="1">
+        <button type="submit">Marcar como revisado</button>
+      </form>
+      <span class="ayuda-campo">Solo cuando hayas comprobado los datos.</span>
+    {% endif %}
+  </div>
+</details>
+
+{# ================================================================ Generar el vídeo #}
+<section class="tarjeta paso {{ 'hecho' if info.video }}" id="video">
+  <h2><span class="numero"></span>{{ 'El vídeo' if info.video else 'Genera el vídeo' }}</h2>
+  {% if info.video %}
+    <div class="vista-video">
+      <video src="{{ url_for('video', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
+      {% if info.miniatura %}
+        <figure>
+          <img class="portada" src="{{ url_for('miniatura', nombre=nombre) }}?v={{ info.modificado }}" alt="Miniatura">
+          <figcaption class="ayuda-campo">Miniatura</figcaption>
+        </figure>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="ayuda-campo" style="margin-top: 0;">Crea la voz, los subtítulos, la música y la miniatura. Tarda ~1-2 minutos.</p>
+  {% endif %}
+  <div class="acciones">
+    <form method="post" action="{{ url_for('producir_guion', nombre=nombre) }}">
+      <button class="{{ 'secundario' if info.video }}" type="submit">{{ 'Rehacer' if info.video else 'Generar' }} audio y vídeo</button>
     </form>
+    {% if info.video %}
+      <form method="post" action="{{ url_for('abrir_carpeta_video', nombre=nombre) }}">
+        <button class="secundario" type="submit">Abrir su carpeta</button>
+      </form>
+    {% endif %}
   </div>
 
-  <div>
-    <form class="tarjeta" method="post" action="{{ url_for('ajustes_guion', nombre=nombre) }}">
-      <h2>Gancho, música e imágenes</h2>
+  <details class="plegable">
+    <summary>Gancho, música{{ ' e imágenes' if not datos.get('video_ia') }}</summary>
+    <form method="post" action="{{ url_for('ajustes_guion', nombre=nombre) }}">
       <label for="gancho">Gancho <span class="ayuda-campo">— 1 a 4 palabras en grande al empezar y en la miniatura</span></label>
-      <input type="text" id="gancho" name="gancho" maxlength="40" value="{{ datos.get('gancho', '') }}"
-             placeholder="Ej.: 53 días. · Un simple florero">
+      <input type="text" id="gancho" name="gancho" maxlength="40" value="{{ datos.get('gancho', '') }}" placeholder="53 días. · Un simple florero">
       <label for="musica">Música de fondo</label>
       {% set actual = datos.get('musica', 'neutro') %}
       <select id="musica" name="musica" onchange="document.getElementById('oir').src = this.value === 'ninguna' ? '' : '/musica/' + encodeURIComponent(this.value) + '.mp3'">
@@ -152,136 +178,131 @@
       <div class="acciones">
         <button class="secundario" type="submit">Guardar gancho y música</button>
         {% if not datos.get('video_ia') %}
-        <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">Elegir imágenes</a>
+          <a class="boton secundario" href="{{ url_for('imagenes_guion', nombre=nombre) }}">Elegir imágenes</a>
         {% endif %}
       </div>
+      <p class="ayuda-campo">Después de cambiarlos, rehaz el vídeo para aplicarlos.</p>
     </form>
+  </details>
+</section>
 
-    <div class="tarjeta">
-      <h2>3 · Verifica y produce</h2>
-      {% if info.verificado %}
-        <p><span class="etiqueta ok">verificado</span></p>
-        <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
-          <input type="hidden" name="valor" value="0">
-          <button class="secundario" type="submit">Quitar verificado</button>
-        </form>
-      {% else %}
-        <p><span class="etiqueta mal">sin verificar</span> Marca esto solo cuando hayas comprobado los datos.</p>
-        <form method="post" action="{{ url_for('verificar_guion', nombre=nombre) }}">
-          <input type="hidden" name="valor" value="1">
-          <button class="secundario" type="submit">Marcar como verificado</button>
-        </form>
-      {% endif %}
-      <form method="post" action="{{ url_for('producir_guion', nombre=nombre) }}" style="margin-top: 14px;">
-        <button type="submit">
-          {{ 'Rehacer' if info.video else 'Generar' }} audio y vídeo
-        </button>
-      </form>
-      <p class="ayuda-campo">Crea la voz, los subtítulos, la música y la miniatura. La primera vez tarda ~1-2 minutos;
-        al rehacer, solo se regeneran las escenas que hayan cambiado.</p>
-    </div>
-
-    {% if info.video %}
-      <div class="tarjeta">
-        <h2>4 · Mira el vídeo</h2>
-        <video src="{{ url_for('video', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
-        <p class="ayuda-campo" style="margin-top: 10px;">{{ archivo_video }}</p>
-        <form method="post" action="{{ url_for('abrir_carpeta_video', nombre=nombre) }}">
-          <button class="secundario" type="submit">Abrir su carpeta</button>
-        </form>
-      </div>
-      {% if info.miniatura %}
-        <div class="tarjeta">
-          <h2>Miniatura</h2>
-          <p class="ayuda-campo">Súbela como portada del vídeo. Está en la misma carpeta.</p>
-          <img class="portada" src="{{ url_for('miniatura', nombre=nombre) }}?v={{ info.modificado }}" alt="Miniatura">
-        </div>
-      {% endif %}
-      <div class="tarjeta">
-        <h2>Publicar en YouTube Shorts</h2>
-        {% set yt = datos.get('youtube') %}
-        {% if yt %}
-          <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}</p>
-          <p><a href="{{ yt.url }}" target="_blank" rel="noopener">{{ yt.url }}</a></p>
-          {% if yt.privacidad == 'private' and not yt.publicar_el %}
-            <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
-          {% endif %}
-        {% elif info.programado %}
-          <p><span class="etiqueta {{ 'ok' if info.programado.estado == 'en_youtube' else '' }}">programado</span>
-            {{ info.programado.bonita }}</p>
-          <p class="ayuda-campo">Lo sube el programa a YouTube antes de su hora y YouTube lo publica a esa hora.
-            Cámbialo o quítalo en <a href="{{ url_for('ver_programados') }}">Programados</a>.</p>
-        {% elif not yt_conectado %}
-          <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
-        {% elif not info.verificado %}
-          <p class="ayuda-campo">Solo se pueden subir guiones verificados. Revisa los datos y márcalo como verificado.</p>
-        {% else %}
-          <form method="post" action="{{ url_for('subir_a_youtube', nombre=nombre) }}">
-            <label>Cuándo</label>
-            <div class="opciones">
-              <label><input type="radio" name="cuando_uno" value="ahora" checked onchange="cuandoUno()"> Ahora</label>
-              <label><input type="radio" name="cuando_uno" value="programar" onchange="cuandoUno()"> Programar</label>
-            </div>
-            <div id="uno-ahora">
-              <label for="privacidad">Visibilidad</label>
-              <select id="privacidad" name="privacidad">
-                <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
-                <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
-                <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
-              </select>
-            </div>
-            <div id="uno-programar" hidden>
-              <label for="publicar_el">Se publica el</label>
-              <input type="datetime-local" id="publicar_el" name="publicar_el" disabled required
-                     data-recomendada="{{ recomendada.hora if recomendada else '' }}">
-              {% if recomendada %}
-                <div class="recomendada"><strong>Recomendada: {{ recomendada.bonita }}</strong><span>{{ recomendada.motivo }}</span>
-                  <button type="button" class="enlace" onclick="const c = document.getElementById('publicar_el'); c.value = c.dataset.recomendada">Usar esta hora</button></div>
-              {% endif %}
-              <p class="ayuda-campo">Queda en <a href="{{ url_for('ver_programados') }}">Programados</a>. El programa lo
-                sube a YouTube antes de esa hora y YouTube lo publica en público a su hora, aunque el ordenador esté apagado.</p>
-            </div>
-            <div class="acciones">
-              <button type="submit" id="boton-uno">Subir a YouTube</button>
-            </div>
-          </form>
-          <p class="ayuda-campo">Se sube con el título, la descripción y las etiquetas del .txt, y marcado como «contenido sintético».</p>
-          <script>
-            function cuandoUno() {
-              const programar = document.querySelector('input[name=cuando_uno]:checked').value === 'programar';
-              document.getElementById('uno-ahora').hidden = programar;
-              document.getElementById('uno-programar').hidden = !programar;
-              const campo = document.getElementById('publicar_el');
-              campo.disabled = !programar;  // desactivado no se envía: así «Ahora» sube al momento
-              if (programar && !campo.value && campo.dataset.recomendada) campo.value = campo.dataset.recomendada;
-              if (programar && !campo.value) {
-                const d = new Date(Date.now() + 2 * 3600 * 1000);
-                d.setMinutes(0, 0, 0);
-                campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-              }
-              document.getElementById('boton-uno').textContent = programar ? 'Programar' : 'Subir a YouTube';
-            }
-          </script>
-        {% endif %}
-      </div>
-      {% if descripcion %}
-        <div class="tarjeta">
-          <h2>5 · Texto para publicar</h2>
-          <p class="ayuda-campo">Un bloque para TikTok y otro para YouTube Shorts (título y descripción). Es el mismo
-            .txt que está junto al vídeo. Incluye las fuentes y los créditos de las imágenes, que la licencia obliga a citar.</p>
-          <textarea readonly rows="16" onclick="this.select()">{{ descripcion }}</textarea>
-        </div>
-      {% endif %}
+{# ================================================================ Publicar #}
+<section class="tarjeta paso {{ 'hecho' if yt or info.programado }}" id="publicar">
+  <h2><span class="numero"></span>Publica en YouTube</h2>
+  {% if info.programado %}
+    <p><span class="etiqueta {{ 'ok' if info.programado.estado == 'en_youtube' else 'prog' }}">programado</span>
+      {{ info.programado.bonita }}{% if info.programado.estado == 'en_youtube' %} · ya está en YouTube{% endif %}</p>
+    <p class="ayuda-campo">YouTube lo publica a esa hora aunque el ordenador esté apagado. Cámbialo o quítalo en
+      <a href="{{ url_for('ver_programados') }}">Programados</a>.</p>
+  {% elif yt %}
+    <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}
+      · <a href="{{ yt.url }}" target="_blank" rel="noopener">verlo en YouTube ↗</a></p>
+    {% if yt.privacidad == 'private' and not yt.publicar_el %}
+      <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
     {% endif %}
+  {% elif not yt_conectado %}
+    <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
+  {% elif not info.video %}
+    <p class="ayuda-campo">Cuando el vídeo esté hecho, podrás programarlo aquí con un clic.</p>
+  {% else %}
+    {% if recomendada %}
+      <form method="post" action="{{ url_for('revisar_y_programar', nombre=nombre) }}" class="publicar-rapido"
+            {% if not info.verificado and dudas %}onsubmit="return confirm('El verificador marcó frases dudosas. ¿Las has comprobado?')"{% endif %}>
+        <button type="submit">{{ 'Programar' if info.verificado else 'Dar por revisado y programar' }} · {{ recomendada.bonita }}</button>
+        <span class="ayuda-campo">Hora recomendada: {{ recomendada.motivo }}</span>
+      </form>
+    {% endif %}
+    <details class="plegable" {% if not recomendada %}open{% endif %}>
+      <summary>{{ 'Otra hora, o subirlo ahora' if recomendada else 'Elegir cuándo' }}</summary>
+      {% if not info.verificado %}
+        <p class="ayuda-campo">Para elegir otra hora o subirlo ya, márcalo antes como revisado (paso «Revisa el texto»).</p>
+      {% else %}
+        <form method="post" action="{{ url_for('subir_a_youtube', nombre=nombre) }}">
+          <div class="opciones">
+            <label><input type="radio" name="cuando_uno" value="programar" checked onchange="cuandoUno()"> Programar</label>
+            <label><input type="radio" name="cuando_uno" value="ahora" onchange="cuandoUno()"> Subir ahora</label>
+          </div>
+          <div id="uno-programar">
+            <label for="publicar_el">Se publica el</label>
+            <input type="datetime-local" id="publicar_el" name="publicar_el" required class="medio"
+                   value="{{ recomendada.hora if recomendada else '' }}">
+          </div>
+          <div id="uno-ahora" hidden>
+            <label for="privacidad">Visibilidad</label>
+            <select id="privacidad" name="privacidad" class="medio">
+              <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo revisas y lo publicas tú)</option>
+              <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+              <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+            </select>
+          </div>
+          <div class="acciones">
+            <button class="secundario" type="submit" id="boton-uno">Programar</button>
+          </div>
+        </form>
+        <script>
+          function cuandoUno() {
+            const programar = document.querySelector('input[name=cuando_uno]:checked').value === 'programar';
+            document.getElementById('uno-ahora').hidden = programar;
+            document.getElementById('uno-programar').hidden = !programar;
+            const campo = document.getElementById('publicar_el');
+            campo.disabled = !programar;  // desactivado no se envía: así «Subir ahora» sube al momento
+            if (programar && !campo.value) {
+              const d = new Date(Date.now() + 2 * 3600 * 1000);
+              d.setMinutes(0, 0, 0);
+              campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            }
+            document.getElementById('boton-uno').textContent = programar ? 'Programar' : 'Subir a YouTube';
+          }
+          cuandoUno();
+        </script>
+      {% endif %}
+    </details>
+  {% endif %}
+</section>
 
-    <div class="tarjeta borrar">
-      <h2>Borrar este vídeo</h2>
-      <p class="ayuda-campo">Si no te gusta el contenido, bórralo con todo lo que se generó para él (guion, voz,
-        imágenes, vídeo, miniatura y textos). Va a la Papelera de reciclaje de Windows.</p>
-      <button class="secundario peligro" type="button" onclick="document.getElementById('dialogo-borrar').showModal()">Borrar…</button>
-    </div>
-  </div>
 </div>
+
+{# ================================================================ Más opciones #}
+<details class="mas-opciones">
+  <summary>Más opciones</summary>
+  {% if descripcion %}
+    <div class="bloque">
+      <h3>Texto para publicar</h3>
+      <p class="ayuda-campo">Para TikTok y YouTube (el mismo .txt que está junto al vídeo). Incluye las fuentes y los créditos
+        de las imágenes, que la licencia obliga a citar.</p>
+      <textarea readonly rows="12" onclick="this.select()">{{ descripcion }}</textarea>
+    </div>
+  {% endif %}
+  {% if datos.get('diario') %}
+    <div class="bloque">
+      <h3>Prompts para tu generador de IA</h3>
+      <p class="ayuda-campo">Diario de «{{ datos.diario.personaje }}» · día {{ datos.diario.dia }}. Genera las imágenes en
+        vertical (9:16) y súbelas en «Elegir imágenes» (una por escena).</p>
+      {% if datos.get('personaje_visual') %}
+        <label>El personaje (igual en todas)</label>
+        <div class="copiable"><textarea readonly rows="3">{{ datos.personaje_visual }}</textarea>
+          <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+      {% endif %}
+      {% if datos.get('prompt_video') %}
+        <label>Prompt del vídeo</label>
+        <div class="copiable"><textarea readonly rows="4">{{ datos.prompt_video }}</textarea>
+          <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+      {% endif %}
+      <label>Una imagen por escena</label>
+      {% for e in datos.escenas %}
+        <div class="copiable"><textarea readonly rows="3">{{ e.visual }}</textarea>
+          <button class="secundario" type="button" onclick="copiar(this)">Escena {{ e.numero }}</button></div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% if archivo_video %}<p class="ayuda-campo">Archivo: <code>{{ archivo_video }}</code></p>{% endif %}
+  <div class="bloque">
+    <h3>Borrar este vídeo</h3>
+    <p class="ayuda-campo">Borra el guion, la voz, las imágenes, el vídeo, la miniatura y los textos. Va a la Papelera de
+      reciclaje de Windows.</p>
+    <button class="secundario peligro" type="button" onclick="document.getElementById('dialogo-borrar').showModal()">Borrar…</button>
+  </div>
+</details>
 
 <dialog id="dialogo-borrar" class="dialogo">
   <form method="post" action="{{ url_for('borrar_guion', nombre=nombre) }}">
@@ -315,5 +336,7 @@
   document.getElementById('dialogo-borrar').addEventListener('click', e => {
     if (e.target.id === 'dialogo-borrar') e.target.close();
   });
+  // Al saltar a una escena con duda desde la lista de arriba, que el paso esté abierto.
+  if (location.hash.startsWith('#n')) document.getElementById('texto').open = true;
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""Notificaciones de Windows (las que salen abajo a la derecha) para el piloto automático y TikTok."""
+"""Notificaciones de Windows (las que salen abajo a la derecha) para los vídeos programados."""
 import os
 import subprocess
 

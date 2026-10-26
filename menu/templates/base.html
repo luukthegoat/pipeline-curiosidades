@@ -15,38 +15,41 @@
   </script>
 </head>
 <body>
-  {% set seccion = {'ver_guion': 'inicio', 'imagenes_guion': 'inicio', 'ver_calendario': 'ver_programados'}.get(request.endpoint, request.endpoint) %}
+  {% set seccion = {'ver_guion': 'mis_videos', 'imagenes_guion': 'mis_videos', 'ver_calendario': 'ver_programados',
+                    'ver_actualidad': 'inicio', 'ayuda': 'ajustes'}.get(request.endpoint, request.endpoint) %}
   {% set activos = cola.activos() | length %}
-  {% macro enlace(endpoint, texto, icono) %}
-    <a href="{{ url_for(endpoint) }}" class="{{ 'actual' if seccion == endpoint }}" {% if endpoint == 'ver_tarea' %}id="nav-tarea"{% endif %}>
+  {% macro enlace(endpoint, texto, icono, numero=0) %}
+    <a href="{{ url_for(endpoint) }}" class="{{ 'actual' if seccion == endpoint }}" {% if seccion == endpoint %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" aria-hidden="true">{{ icono | safe }}</svg>
-      <span class="texto-nav">{{ texto }}</span>
-      {% if endpoint == 'ver_tarea' %}<span class="contador" id="nav-contador" {% if not activos %}hidden{% endif %}>{{ activos }}</span>{% endif %}
-      {% if endpoint == 'ver_pendientes' and num_pendientes %}<span class="contador suave">{{ num_pendientes }}</span>{% endif %}
-      {% if endpoint == 'ver_programados' and num_programados %}<span class="contador suave">{{ num_programados }}</span>{% endif %}
+      <span>{{ texto }}</span>
+      {% if numero %}<span class="contador">{{ numero }}</span>{% endif %}
     </a>
   {% endmacro %}
-  <aside class="lateral">
-    <a class="marca" href="{{ url_for('inicio') }}">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="">
-      <span>Mente Inquieta<small>Estudio de vídeos</small></span>
-    </a>
-    <nav class="navegacion">
-      {{ enlace('inicio', 'Crear', '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8.5v7M8.5 12h7"/>') }}
-      {{ enlace('ver_tarea', 'Tareas', '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4 6.5h.01M4 12h.01M4 17.5h.01" stroke-width="2.6"/>') }}
-      {{ enlace('ver_pendientes', 'Pendientes', '<rect x="5" y="4" width="14" height="17" rx="3.5"/><path d="M9 4.5V3.8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.7"/><path d="m9 13 2 2 4-4"/>') }}
-      {{ enlace('ver_programados', 'Programados', '<rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M12 13.5v2.5l1.6 1"/>') }}
-      {{ enlace('piloto_automatico', 'Piloto automático', '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>') }}
-      {{ enlace('ajustes', 'Ajustes', '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>') }}
-      {{ enlace('ayuda', 'Ayuda', '<circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.6a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.4v.4M12 16.6h.01"/>') }}
-    </nav>
-    <div class="pie-lateral">
-      <span>Shorts de historia con IA</span>
-      <button class="tema" type="button" onclick="cambiarTema()" title="Cambiar tema claro / oscuro" aria-label="Cambiar tema">
-        <svg viewBox="0 0 24 24"><path d="M19.5 14.2A7.8 7.8 0 1 1 9.8 4.5a6.2 6.2 0 0 0 9.7 9.7z"/></svg>
-      </button>
+  <header class="barra">
+    <div class="barra-dentro">
+      <a class="marca" href="{{ url_for('inicio') }}" aria-label="Mente Inquieta: crear un vídeo">
+        <span class="sello" aria-hidden="true">MI</span>
+        <span class="nombre-marca">Mente Inquieta</span>
+      </a>
+      <nav class="navegacion" aria-label="Secciones">
+        {{ enlace('inicio', 'Crear', '<path d="M12 5v14M5 12h14"/>') }}
+        {{ enlace('mis_videos', 'Mis vídeos', '<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>', num_pendientes) }}
+        {{ enlace('ver_programados', 'Programados', '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/>', num_programados) }}
+        {{ enlace('ajustes', 'Ajustes', '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>') }}
+      </nav>
+      <div class="barra-derecha">
+        <a class="tareas {{ 'activas' if activos }} {{ 'actual' if request.endpoint == 'ver_tarea' }}" href="{{ url_for('ver_tarea') }}"
+           id="nav-tarea" title="Tareas en marcha" aria-label="Tareas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+          <span class="texto-tareas" id="nav-texto">{{ activos ~ ' en marcha' if activos else 'Tareas' }}</span>
+          <span class="contador" id="nav-contador" {% if not activos %}hidden{% endif %}>{{ activos }}</span>
+        </a>
+        <button class="tema" type="button" onclick="cambiarTema()" title="Cambiar tema claro / oscuro" aria-label="Cambiar tema">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.2A7.8 7.8 0 1 1 9.8 4.5a6.2 6.2 0 0 0 9.7 9.7z"/></svg>
+        </button>
+      </div>
     </div>
-  </aside>
+  </header>
   <script>
     function cambiarTema() {
       const raiz = document.documentElement;
@@ -64,7 +67,14 @@
       });
     }
   </script>
-  <main>
+  <main class="{% block ancho %}{% endblock %}">
+    {% if errores_programados and request.endpoint != 'ver_programados' %}
+      <div class="aviso error">
+        {% if errores_programados | length == 1 %}«{{ errores_programados[0].titulo }}» no se ha podido subir a YouTube.
+        {% else %}{{ errores_programados | length }} vídeos programados no se han podido subir a YouTube.{% endif %}
+        <a href="{{ url_for('ver_programados') }}">Ver en Programados</a>
+      </div>
+    {% endif %}
     {% if espera_wikipedia %}
       <div class="aviso">Wikipedia nos ha pedido esperar hasta las <strong>{{ espera_wikipedia }}</strong>.
         Hasta entonces no se busca nada nuevo (lo ya descargado sigue funcionando). Las tareas que lo necesiten

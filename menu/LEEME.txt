@@ -15,46 +15,39 @@ CÓMO ABRIRLO
   Solo se puede abrir desde tu ordenador. Tras actualizar el programa,
   ciérralo y vuelve a abrirlo para cargar la versión nueva.
 
-QUÉ PUEDES HACER
-  Inicio
-    · Crear vídeos sobre el TEMA que quieras (p. ej. «Juana de Arco»), en
-      una o varias partes de ~1 minuto (una serie: pt1, pt2, pt3…).
-    · O usar las EFEMÉRIDES de una fecha («tal día como hoy»).
-    · Elegir idiomas (español / inglés) y si quieres solo el guion
+QUÉ PUEDES HACER (barra de arriba)
+  Crear
+    · Elegir el tipo: tema libre (en una o varias partes), efemérides, actualidad,
+      vídeo con IA o «Diario de…».
+    · Rellenar los detalles y elegir idiomas y si quieres solo el guion
       (recomendado, para revisarlo) o guion + audio + vídeo del tirón.
-    · Ver todos tus guiones con su miniatura y su estado.
 
-  Página de cada guion
-    · Frases dudosas que el verificador no encontró en Wikipedia + fuentes.
-    · Corregir el título y el texto de cada escena.
-    · Cambiar el gancho (texto grande del inicio) y la música (escuchándola).
-    · Elegir imágenes: la foto de cada escena entre las candidatas, o subir una tuya.
-    · Marcar como verificado y generar / rehacer el audio y el vídeo.
-      Al rehacer, solo se regeneran las escenas que hayan cambiado.
-    · Ver el vídeo, su miniatura y copiar la descripción para publicar.
+  Mis vídeos
+    · Arriba, el resumen del día: qué se publica hoy, cuántos hay por revisar o
+      listos y cuántas subidas a YouTube llevas en 24 h.
+    · Filtros: Por revisar · Listos · Programados · Publicados.
+    · «Revisado → programar»: lo da por bueno y lo programa a su hora
+      recomendada con un clic. «Programar todos» programa todos los listos.
 
-  Tareas
+  Página de cada vídeo (por pasos)
+    1. Revisa el texto: frases dudosas del verificador, fuentes y el texto de
+       cada escena para corregirlo. «Marcar como revisado».
+    2. El vídeo: generar / rehacer audio y vídeo (solo se rehacen las escenas
+       cambiadas), verlo con su miniatura, y el gancho, la música y las imágenes.
+    3. Publica en YouTube: a la hora recomendada con un clic, a otra hora o ya.
+    · Más opciones: texto para publicar (TikTok y YouTube), prompts y borrar.
+
+  Programados
+    La cola de publicaciones (Lista y Calendario): publicar ya, cambiar la hora,
+    reintentar o quitar.
+
+  Ajustes
+    Voz, música, programar solos los vídeos sin avisos, noticias de actualidad,
+    conexión con YouTube y la Ayuda («Cómo funciona la app»).
+
+  Tareas (arriba a la derecha)
     Las tareas se ponen en cola y se hacen una detrás de otra. Muestra en
     directo lo que se está haciendo. Puedes cancelar cualquiera.
-
-  Voz y música
-    Elegir la voz de cada idioma y la velocidad, escuchando una muestra.
-    Escuchar las músicas y abrir la carpeta «musica» para añadir las tuyas.
-
-  Ayuda
-    Explica el funcionamiento y qué revisar antes de publicar.
-
-PILOTO AUTOMÁTICO (un vídeo al día)
-  En el menú → «Piloto automático»:
-    · Elige los tipos (efemérides, diarios, temas), las horas, los personajes y la cola de temas.
-    · «Activar» crea dos tareas en el Programador de tareas de Windows:
-        «Mente Inquieta - crear video»          crea el vídeo y lo programa en YouTube
-        «Mente Inquieta - recordatorio TikTok»  te avisa, copia el texto y abre la carpeta
-      Si el ordenador está apagado a esa hora, se ejecutan al encenderlo.
-    · «Desactivar» las quita. «Ejecutar ahora» crea uno en el momento.
-    · «Pendientes de TikTok»: copiar texto, abrir carpeta, añadir al calendario y marcar como subido.
-  Los vídeos se publican sin revisión salvo que el verificador marque dudas (quedan en privado).
-  Registro de lo que hace: salida\_trabajo\automatico.log (también se ve en el menú).
 
 SUBIR A YOUTUBE SHORTS AUTOMÁTICAMENTE
   Configuración (una sola vez):

@@ -82,8 +82,8 @@
   {% else %}
     <div class="tarjeta vacio">
       No hay nada programado.<br>
-      <span class="ayuda-campo">Programa un vídeo desde su página (Publicar en YouTube → Programar) o selecciona
-        varios en el <a href="{{ url_for('inicio') }}#guiones">inicio</a> y elige «Programados y escalonados».</span>
+      <span class="ayuda-campo">Programa vídeos desde <a href="{{ url_for('mis_videos', ver='listos') }}">Mis vídeos → Listos</a>
+        o desde la página de cada vídeo.</span>
     </div>
   {% endfor %}
 </div>

@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block titulo %}Ajustes · Mente Inquieta{% endblock %}
 {% block contenido %}
-<h1>Ajustes</h1>
-<p class="sub">Voz, música y conexión con YouTube.</p>
+<div class="cabecera-pagina">
+  <h1>Ajustes</h1>
+  <a class="boton secundario pequeno" href="{{ url_for('ayuda') }}">Cómo funciona la app</a>
+</div>
+<p class="sub">Voz, música, programación automática y conexión con YouTube.</p>
 {% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
 
 {% if not voces %}
@@ -71,7 +74,7 @@
     <p><span class="etiqueta ok">activado</span> Al terminar de generar un vídeo, si el verificador no ha marcado nada que
       revisar, se da por revisado y se programa solo a su hora recomendada (lo ves en Programados y en el Calendario).</p>
   {% else %}
-    <p><span class="etiqueta">desactivado</span> Los vídeos esperan en Pendientes a que los revises y los programes tú.</p>
+    <p><span class="etiqueta">desactivado</span> Los vídeos esperan en Mis vídeos a que los revises y los programes tú.</p>
   {% endif %}
   <p class="ayuda-campo">Los de actualidad nunca se programan solos: las noticias se revisan siempre a mano. Los que tienen
     frases dudosas tampoco.</p>
@@ -161,7 +164,7 @@
   <p class="ayuda-campo" style="margin-top: 12px;">
     Importante: mientras Google no verifique tu proyecto, YouTube deja en <strong>privado</strong> todo lo que se sube
     por la API, elijas lo que elijas; lo haces público con un clic en YouTube Studio. El cupo gratuito da para unos
-    6 vídeos al día. Las credenciales se guardan en la carpeta <code>credenciales</code>: no las compartas con nadie.
+    5 vídeos al día. Las credenciales se guardan en la carpeta <code>credenciales</code>: no las compartas con nadie.
   </p>
 </div>
 {% endblock %}
