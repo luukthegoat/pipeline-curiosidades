@@ -3,6 +3,23 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.13.0] - 2026-10-26
+
+### Añadido
+- **Vistas de YouTube por vídeo.** Cada vídeo subido muestra sus vistas y «me gusta» en Mis vídeos y en su página
+  (con los comentarios). Se actualizan cada 15 min junto con la sincronización de Programados (1 unidad de cuota por
+  cada 50 vídeos) y con «↻ Actualizar». En «Publicados» salen las vistas totales y se puede ordenar por «Más vistos».
+- **Planos de ambiente de Pexels** (opcional, con una clave gratuita en Ajustes): cuando ninguna foto encaja bien con
+  una escena, puede ir un plano en movimiento de lo que pide (mar, tormenta, fuego, humo, mapas antiguos, ruinas…),
+  como mucho 2 por vídeo. Solo cosas que no delatan la época: nunca personas, ciudades ni coches. No se usan en las
+  noticias de actualidad ni en los «Diario de…».
+
+### Cambiado
+- **La primera frase del guion es siempre el gancho.** Además de pedirlo, ahora se comprueba: si empieza con un
+  saludo, «Hoy te voy a contar», «¿Sabías que…?», «Érase una vez», una fecha suelta («En 1936, …») o pasa de 18
+  palabras, se pide otro guion diciéndole qué falla. Si tras 3 intentos no sale, se guarda el mejor avisando. No se
+  aplica a los «Diario de…», que ya empiezan con su «Día X como…».
+
 ## [1.12.1] - 2026-10-26
 
 ### Añadido
@@ -294,6 +311,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.13.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.1...v1.12.0
 [1.11.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.0...v1.11.1

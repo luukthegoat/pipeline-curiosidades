@@ -65,6 +65,22 @@
   {% endif %}
 {% endif %}
 
+{% if ver == 'publicados' and cuantos.publicados %}
+  <div class="barra-accion">
+    <span>{% if vistas.actualizado %}<strong>{{ vistas.total | miles }}</strong> vistas en total
+      <span class="ayuda-campo">· datos de YouTube del {{ vistas.actualizado }}</span>
+      {% else %}Aún no se han traído las vistas de YouTube.{% endif %}</span>
+    <span class="en-linea">
+      {% if orden == 'vistas' %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados') }}">Más recientes primero</a>
+      {% else %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados', orden='vistas') }}">Más vistos primero</a>{% endif %}
+      <form method="post" action="{{ url_for('actualizar_vistas') }}" class="en-linea">
+        <input type="hidden" name="orden" value="{{ orden }}">
+        <button class="pequeno" type="submit" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>↻ Actualizar</button>
+      </form>
+    </span>
+  </div>
+{% endif %}
+
 {# ---------------------------------------------------------------- Lista #}
 <div class="lista">
   {% for g in guiones %}
@@ -87,6 +103,11 @@
           {% if g.apartado == 'programados' %}<span class="etiqueta prog">{{ g.programado.bonita }}</span>{% endif %}
           {% if g.apartado == 'publicados' %}<span class="etiqueta ok">en YouTube</span>{% endif %}
           {% if g.duracion %}<span>{{ '%.0f' % g.duracion }} s</span>{% endif %}
+          {% if g.estadisticas %}
+            <span class="reproducciones" title="{{ g.estadisticas.me_gusta | miles }} me gusta · {{ g.estadisticas.comentarios | miles }} comentario{{ 's' if g.estadisticas.comentarios != 1 }}">
+              <b>{{ g.estadisticas.vistas | miles }}</b> vista{{ 's' if g.estadisticas.vistas != 1 }}
+              · {{ g.estadisticas.me_gusta | miles }} me gusta</span>
+          {% endif %}
         </div>
         {% if g.apartado in ('revisar', 'listos') and g.video and r %}
           <div class="meta">Hora recomendada: <strong>{{ r.bonita }}</strong> <span class="ayuda-campo">· {{ r.motivo }}</span></div>

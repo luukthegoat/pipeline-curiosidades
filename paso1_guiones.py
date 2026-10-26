@@ -58,7 +58,8 @@ Reglas de veracidad, obligatorias:
 Estilo:
 - La PRIMERA FRASE decide si la gente se queda: piensa antes 3 opciones y usa la más intrigante. Funcionan:
   un dato sorprendente, una contradicción («la ciudad que resistió mil años cayó en 53 días») o una pregunta
-  que el espectador necesite resolver. Nunca empieces con «Hoy te voy a contar», una fecha suelta o un saludo.
+  que el espectador necesite resolver. Nunca empieces con «Hoy te voy a contar», «¿Sabías que…?», una fecha suelta
+  («En 1936, …») o un saludo. La primera frase es el gancho y tiene como mucho 18 palabras.
   El gancho tiene que ser cierto según el MATERIAL.
 - Frases cortas, fáciles de narrar en voz alta. Tono curioso y cercano, sin exagerar.
 - Termina con un cierre que deje pensando o invite a comentar.
@@ -137,7 +138,8 @@ Reglas de veracidad, obligatorias (es una noticia en curso: un error aquí es gr
 
 Estilo:
 - La PRIMERA FRASE engancha con un hecho cierto y concreto del MATERIAL (una cifra, una imagen, una contradicción).
-  Nunca empieces con «Hoy te voy a contar» ni con un saludo. Sin titulares engañosos.
+  Nunca empieces con «Hoy te voy a contar», una fecha suelta ni un saludo. Como mucho 18 palabras. Sin titulares
+  engañosos.
 - Frases cortas, fáciles de narrar. Cuenta: qué ha pasado, dónde y cuándo, cifras, reacciones y qué puede pasar ahora
   (solo si el MATERIAL lo dice).
 - Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
@@ -429,32 +431,71 @@ def contar_palabras(escenas: list) -> int:
     return sum(len(e["narracion"].split()) for e in escenas)
 
 
+MAX_PALABRAS_GANCHO = 18  # la primera frase tiene que caber en los 3-4 primeros segundos
+_MESES = "|".join(MESES_ES) + "|january|february|march|april|may|june|july|august|september|october|november|december"
+# Arranques que hacen deslizar: saludos, presentaciones, «había una vez» y fechas sueltas («En 1936,», «El 11 de
+# septiembre de 2001,», «Corría el año…»). Un año dentro de un dato sorprendente sí vale («En 1936 cayó…» no).
+INICIOS_FLOJOS = re.compile(
+    r"^(hola|hey|buenas|bienvenid|hello|hi\b|welcome|"
+    r"hoy (te|os|les) (voy|vamos)|hoy (vamos|voy) a|en (este|el) (v[ií]deo|short)|te voy a contar|os voy a contar|"
+    r"today (i|we)('m| am|'re| are)? ?(going|gonna)|in this (video|short)|let me tell you|"
+    r"[ée]rase una vez|hab[ií]a una vez|once upon a time|corr[ií]a el a[ñn]o|"
+    r"¿?sab[ií]as que|did you know)", re.I)
+FECHA_SUELTA = re.compile(
+    rf"^(en|el|in|on)?\s*(el\s+)?(\d{{1,2}}\s+(de\s+)?({_MESES})(\s+de)?\s*)?(\d{{3,4}}|({_MESES})\s+\d{{1,2}},?\s+\d{{4}})\s*,",
+    re.I)
+
+
+def problema_gancho(narracion: str) -> str:
+    """Por qué la primera frase de la escena 1 no sirve de gancho, o "" si vale."""
+    texto = narracion.strip().lstrip("«\"'¡")
+    primera = re.split(r"(?<=[.!?…])\s+", texto, maxsplit=1)[0]
+    if INICIOS_FLOJOS.match(texto):
+        return f"empieza con «{' '.join(primera.split()[:4])}…», que hace deslizar"
+    if fecha := FECHA_SUELTA.match(texto):
+        return f"empieza con una fecha suelta («{fecha.group(0).rstrip(' ,')}»)"
+    if len(primera.split()) > MAX_PALABRAS_GANCHO:
+        return f"tiene {len(primera.split())} palabras y debe tener {MAX_PALABRAS_GANCHO} como mucho"
+    return ""
+
+
 def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicaciones: str = "",
-                  sistema: str = "", minimo: int = PALABRAS_MIN, maximo: int = PALABRAS_MAX, objetivo: int = 170) -> dict:
-    """Pide el guion y lo valida. `sistema`, `minimo`, `maximo` y `objetivo` permiten otros formatos (p. ej. el diario)."""
+                  sistema: str = "", minimo: int = PALABRAS_MIN, maximo: int = PALABRAS_MAX, objetivo: int = 170,
+                  revisar_gancho: bool = True) -> dict:
+    """Pide el guion y lo valida. `sistema`, `minimo`, `maximo` y `objetivo` permiten otros formatos (p. ej. el diario).
+
+    Con `revisar_gancho`, la primera frase tiene que enganchar (ni saludos, ni fechas sueltas, ni frases largas).
+    """
     sistema = sistema or PROMPT_SISTEMA.format(min_palabras=minimo, max_palabras=maximo, idioma=IDIOMAS[idioma])
     if indicaciones:
         material = f"{indicaciones}\n\n{material}"
     usuario = f"MATERIAL:\n{material}"
     ultimo_error = mejor = None
-    for _ in range(3):  # reintenta si el JSON o la longitud no valen
+    mejor_puntos = None
+    for _ in range(3):  # reintenta si el JSON, la longitud o el gancho no valen
         try:
             datos = normalizar_claves(json.loads(llamar_groq(api_key, modelo, sistema, usuario)))
             escenas = validar_guion(datos)
             palabras = contar_palabras(escenas)
-            if minimo <= palabras <= maximo:
+            fallos = []
+            if not minimo <= palabras <= maximo:
+                direccion = "corto: añade" if palabras < minimo else "largo: quita"
+                fallos.append(f"tiene {palabras} palabras y debe tener entre {minimo} y {maximo}; "
+                              f"es demasiado {direccion} unas {abs(objetivo - palabras)} palabras")
+            gancho = problema_gancho(escenas[0]["narracion"]) if revisar_gancho else ""
+            if gancho:
+                fallos.append(f"la primera frase no engancha: {gancho}. Empieza directamente con el dato más "
+                              "sorprendente, la contradicción o la pregunta del MATERIAL, en una frase corta")
+            if not fallos:
                 return {**datos, "escenas": escenas}
-            if mejor is None or abs(palabras - objetivo) < abs(contar_palabras(mejor["escenas"]) - objetivo):
-                mejor = {**datos, "escenas": escenas}
-            direccion = "corto: añade" if palabras < minimo else "largo: quita"
-            raise ValueError(
-                f"tiene {palabras} palabras y debe tener entre {minimo} y {maximo}; "
-                f"es demasiado {direccion} unas {abs(objetivo - palabras)} palabras"
-            )
+            puntos = (bool(gancho), abs(palabras - objetivo))  # mejor un buen gancho que la longitud exacta
+            if mejor is None or puntos < mejor_puntos:
+                mejor, mejor_puntos = {**datos, "escenas": escenas}, puntos
+            raise ValueError("; ".join(fallos))
         except ValueError as error:  # incluye JSON inválido
             ultimo_error = error
             usuario = f"MATERIAL:\n{material}\n\nTu intento anterior no era válido ({error}). Corrígelo."
-    if mejor is not None:  # forma correcta pero longitud fuera de rango: se guarda avisando
+    if mejor is not None:  # forma correcta pero longitud o gancho mejorables: se guarda avisando
         print(f"    aviso: {ultimo_error}; se guarda el intento más cercano")
         return mejor
     raise ValueError(f"no se obtuvo un guion válido: {ultimo_error}")
@@ -982,7 +1023,8 @@ def main(argv=None) -> int:
                     diario = evento["diario"]
                     minimo, maximo, objetivo = PALABRAS_DIARIO
                     guion = generar_guion(api_key, modelo, material, idioma, "",
-                                          sistema_diario(diario["dia"], idioma), minimo, maximo, objetivo)
+                                          sistema_diario(diario["dia"], idioma), minimo, maximo, objetivo,
+                                          revisar_gancho=False)  # su gancho es el «Día X como…» fijo
                     # Todos los días de un personaje comparten nombre (y carpeta): se fija la primera vez.
                     nombre = nombre_diario(diario["personaje"], idioma) or acortar_nombre(guion.get("nombre_corto"))
                     apuntar_nombre_diario(diario["personaje"], idioma, nombre)

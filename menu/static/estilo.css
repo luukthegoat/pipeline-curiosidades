@@ -537,6 +537,9 @@ a.dato:hover { border-color: var(--borde-fuerte); }
 
 .barra-accion { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 10px 12px 10px 16px; margin-bottom: 12px; border-radius: var(--radio-sm); background: var(--acento-suave); font-size: 14px; }
+span.en-linea { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reproducciones { color: var(--suave); }
+.reproducciones b { color: var(--texto); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---------- Página de un vídeo: pasos ---------- */
 

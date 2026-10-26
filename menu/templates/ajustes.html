@@ -100,6 +100,23 @@
   </form>
 </div>
 
+<div class="tarjeta" id="pexels">
+  <h2>Planos de ambiente (Pexels)</h2>
+  {% if pexels %}
+    <p><span class="etiqueta ok">Pexels conectado</span> Cuando una escena no tiene una imagen que encaje bien, puede
+      llevar un plano de ambiente en movimiento (mar, fuego, humo, mapas antiguos, ruinas…), como mucho 2 por vídeo.</p>
+  {% else %}
+    <p><span class="etiqueta">Sin Pexels</span> Las escenas usan solo fotos y vídeo de archivo.</p>
+  {% endif %}
+  <p class="ayuda-campo">Opcional: con una clave gratuita de <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">Pexels</a>
+    (crea una cuenta y pide tu «API key») se añaden planos de ambiente sin época: nunca personas, ciudades ni coches.
+    No se usan en las noticias de actualidad ni en los «Diario de…».</p>
+  <form method="post" action="{{ url_for('guardar_pexels') }}" class="programar-uno" style="max-width: 560px;">
+    <input type="password" name="clave" placeholder="{{ 'Clave guardada (escribe otra para cambiarla, o vacío para quitarla)' if pexels else 'Clave de Pexels' }}" autocomplete="off" style="flex: 1;">
+    <button class="secundario" type="submit">Guardar</button>
+  </form>
+</div>
+
 <div class="tarjeta" id="youtube">
   <h2>YouTube Shorts</h2>
   {% if yt_canal and yt_canal.id %}

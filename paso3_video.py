@@ -46,6 +46,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 import cierre
 import musica
+import pexels  # planos de ambiente (mar, humo, mapas…) para las escenas sin vídeo de archivo
 import wikimedia  # acceso a Wikimedia con caché y ritmo controlado (evita que te pongan en espera)
 
 load_dotenv()
@@ -63,6 +64,8 @@ MAX_VIDEOS_COMMONS = 20         # vídeos buscados en Wikimedia Commons (en espa
 MAX_CLIPS_POR_VIDEO = 3         # escenas con vídeo como mucho: el resto, fotos
 PUNTUACION_MINIMA_VIDEO = 0.8   # un vídeo tiene que encajar mejor que una foto para usarse
 VENTAJA_VIDEO = 0.3             # a igual relevancia, mejor en movimiento
+MAX_AMBIENTE_POR_VIDEO = 2      # planos de ambiente de Pexels como mucho (son genéricos: solo rellenan)
+PUNTUACION_AMBIENTE = 0.8       # si la mejor foto nueva encaja menos que esto, mejor un plano de ambiente
 DURACION_CLIP = 12.0            # s que se descargan de cada vídeo (las escenas duran menos)
 DURACION_MAXIMA_VIDEO = 1200    # s; más largos suelen ser grabaciones enteras de un acto
 TAMANO_MAXIMO_VIDEO = 60        # MB de la versión ligera: se descarga entera para recortarla
@@ -330,7 +333,7 @@ def imagenes_del_art_institute(busqueda: str) -> list:
     return imagenes
 
 
-VERSION_CANDIDATAS = 7  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
+VERSION_CANDIDATAS = 8  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
 
 
 def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
@@ -393,6 +396,17 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
                 encontrados = [v for v in encontrados if len(set(v["claves"]) & tema) >= min(2, len(tema))]
             imagenes += encontrados
             print(f"  {donde}: {len(encontrados)} vídeos de «{argumentos[0]}»")
+    # Planos de ambiente de Pexels (mar, humo, mapas…) para lo que pidan las escenas: solo rellenan huecos.
+    # No en las noticias (un plano de fuego o humo junto a un suceso real confundiría) ni en los diarios.
+    if not datos.get("diario") and pexels.clave():
+        for busqueda in pexels.busquedas_para([e.get("visual", "") for e in datos.get("escenas", [])]):
+            try:
+                encontrados = pexels.buscar(busqueda)
+            except (requests.RequestException, ValueError) as error:
+                print(f"  aviso: no se pudo buscar en Pexels ({type(error).__name__})")
+                break
+            imagenes += encontrados
+            print(f"  Pexels: {len(encontrados)} planos de ambiente para «{busqueda}»")
     # Museos: si fallan, se sigue sin ellos (no dependen de Wikimedia).
     en_ingles = busqueda_museos(en_ingles)
     for museo, buscar in (("The Met", imagenes_del_met), ("Art Institute of Chicago", imagenes_del_art_institute)):
@@ -469,7 +483,11 @@ class SelectorImagenes:
         return puntos
 
     def _vale(self, indice: int, claves: set) -> bool:
-        """¿Encaja lo bastante con la escena? A los vídeos se les pide más (y hay un máximo por vídeo)."""
+        """¿Encaja lo bastante con la escena? A los vídeos se les pide más (y hay un máximo por vídeo).
+
+        Los planos de ambiente no compiten aquí: solo entran en `para_escena` cuando no hay nada mejor."""
+        if self.imagenes[indice].get("ambiente"):
+            return False
         if self.imagenes[indice].get("video"):
             clips = sum(1 for i in self.usadas if self.imagenes[i].get("video"))
             minima = PUNTUACION_MINIMA if self.imagenes[indice].get("del_articulo") else PUNTUACION_MINIMA_VIDEO
@@ -509,12 +527,28 @@ class SelectorImagenes:
             self.fallidas.add(indice)
         return None
 
+    def _ambiente(self, escena: dict):
+        """Un plano de ambiente de Pexels de lo que pide el «visual» de la escena (fuego, mar, mapa…), si queda cupo."""
+        if sum(1 for i in self.usadas if self.imagenes[i].get("ambiente")) >= MAX_AMBIENTE_POR_VIDEO:
+            return None
+        busquedas = pexels.busquedas_para([escena.get("visual", "")])
+        for indice, imagen in enumerate(self.imagenes):
+            if (imagen.get("ambiente") and imagen.get("busqueda") in busquedas and indice not in self.usadas
+                    and indice not in self.fallidas):
+                if resultado := self._descargar(indice):
+                    return resultado
+        return None
+
     def para_escena(self, escena: dict):
         """Devuelve (imagen, ruta) de la mejor imagen disponible, o (None, None)."""
         claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
         ranking = self.ranking(escena)
         nuevas = [i for i in ranking if i not in self.usadas and i not in self.fallidas and self._vale(i, claves)]
-        for indice in [i for i in nuevas if not self._bloqueada(i)][:5]:
+        nuevas = [i for i in nuevas if not self._bloqueada(i)]
+        if not nuevas or self.puntuacion(nuevas[0], claves) < PUNTUACION_AMBIENTE:
+            if resultado := self._ambiente(escena):  # nada que encaje bien: un plano de ambiente de lo que se cuenta
+                return resultado
+        for indice in nuevas[:5]:
             if resultado := self._descargar(indice):
                 return resultado
         # Sin imagen nueva relevante: mejor repetir una buena (sin repetir la de la escena anterior).

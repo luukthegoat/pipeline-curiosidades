@@ -335,6 +335,45 @@ def cambiar_publicacion(id_video: str, privacidad: str = "public", publicar_el: 
     return youtube.videos().update(part="status", body={"id": id_video, "status": estado}).execute()["status"]
 
 
+ESTADISTICAS = Path("salida/estadisticas_youtube.json")
+
+
+def actualizar_estadisticas() -> dict:
+    """Pide a YouTube las vistas, «me gusta» y comentarios de todos los vídeos subidos (1 unidad de cuota por
+    cada 50) y los guarda en salida/estadisticas_youtube.json. Devuelve {id: {vistas, me_gusta, comentarios}}."""
+    ids = []
+    for ruta in paso3_video.CARPETA_GUIONES.glob("*.json"):
+        try:
+            id_video = (json.loads(ruta.read_text(encoding="utf-8")).get("youtube") or {}).get("id")
+        except (OSError, ValueError):
+            continue
+        if id_video:
+            ids.append(id_video)
+    if not ids:
+        return {}
+    youtube = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
+    estadisticas = {}
+    for i in range(0, len(ids), 50):
+        respuesta = youtube.videos().list(part="statistics", id=",".join(ids[i:i + 50])).execute()
+        for video in respuesta.get("items", []):
+            datos = video.get("statistics", {})
+            estadisticas[video["id"]] = {"vistas": int(datos.get("viewCount", 0)),
+                                         "me_gusta": int(datos.get("likeCount", 0)),
+                                         "comentarios": int(datos.get("commentCount", 0))}
+    ESTADISTICAS.parent.mkdir(parents=True, exist_ok=True)
+    ESTADISTICAS.write_text(json.dumps({"actualizado": datetime.now().isoformat(timespec="seconds"),
+                                        "videos": estadisticas}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return estadisticas
+
+
+def estadisticas() -> dict:
+    """Las últimas estadísticas guardadas: {"actualizado": «…», "videos": {id: {…}}} (vacío si aún no hay)."""
+    try:
+        return json.loads(ESTADISTICAS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"actualizado": "", "videos": {}}
+
+
 def pendientes() -> list:
     """Guiones verificados, con vídeo y aún sin subir."""
     lista = []

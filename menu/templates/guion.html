@@ -192,11 +192,18 @@
   {% if info.programado %}
     <p><span class="etiqueta {{ 'ok' if info.programado.estado == 'en_youtube' else 'prog' }}">programado</span>
       {{ info.programado.bonita }}{% if info.programado.estado == 'en_youtube' %} · ya está en YouTube{% endif %}</p>
+    {% if info.estadisticas and info.estadisticas.vistas %}
+      <p class="reproducciones"><b>{{ info.estadisticas.vistas | miles }}</b> vista{{ 's' if info.estadisticas.vistas != 1 }} · {{ info.estadisticas.me_gusta | miles }} me gusta</p>
+    {% endif %}
     <p class="ayuda-campo">YouTube lo publica a esa hora aunque el ordenador esté apagado. Cámbialo o quítalo en
       <a href="{{ url_for('ver_programados') }}">Programados</a>.</p>
   {% elif yt %}
     <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %}
       · <a href="{{ yt.url }}" target="_blank" rel="noopener">verlo en YouTube ↗</a></p>
+    {% if info.estadisticas %}
+      <p class="reproducciones"><b>{{ info.estadisticas.vistas | miles }}</b> vista{{ 's' if info.estadisticas.vistas != 1 }} · {{ info.estadisticas.me_gusta | miles }} me gusta
+        · {{ info.estadisticas.comentarios | miles }} comentario{{ 's' if info.estadisticas.comentarios != 1 }} <span class="ayuda-campo">(se actualiza cada 15 min)</span></p>
+    {% endif %}
     {% if yt.privacidad == 'private' and not yt.publicar_el %}
       <p class="ayuda-campo">Está en privado: cuando quieras, hazlo público desde YouTube Studio.</p>
     {% endif %}

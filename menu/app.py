@@ -225,6 +225,26 @@ def ruta_video(datos: dict):
     return ruta if ruta.exists() and VIDEOS.resolve() in ruta.parents else None
 
 
+_estadisticas = {"mtime": None, "datos": {}}
+
+
+def estadisticas_youtube() -> dict:
+    """Vistas y «me gusta» de cada vídeo subido (las guarda la vigilancia cada 15 min); se relee si cambian."""
+    try:
+        mtime = subir_youtube.ESTADISTICAS.stat().st_mtime
+    except OSError:
+        return {"actualizado": "", "videos": {}}
+    if _estadisticas["mtime"] != mtime:
+        _estadisticas.update(mtime=mtime, datos=subir_youtube.estadisticas())
+    return _estadisticas["datos"]
+
+
+@app.template_filter("miles")
+def miles(numero) -> str:
+    """12345 → «12.345»."""
+    return f"{int(numero or 0):,}".replace(",", ".")
+
+
 def resumen(ruta: Path) -> dict:
     datos = json.loads(ruta.read_text(encoding="utf-8"))
     nombre = ruta.stem
@@ -249,6 +269,7 @@ def resumen(ruta: Path) -> dict:
         "video": bool(video),
         "miniatura": bool(video and paso3_video.ruta_miniatura(video).exists()),
         "youtube": datos.get("youtube"),
+        "estadisticas": estadisticas_youtube()["videos"].get((datos.get("youtube") or {}).get("id")),
         "modificado": ruta.stat().st_mtime,
         "serie": datos.get("serie"),
         "programado": programados.por_guion().get(nombre),
@@ -372,9 +393,15 @@ def mis_videos():
     if ver not in FILTROS:
         ver = "todos"
     lista = [g for g in guiones if ver == "todos" or g["apartado"] == ver]
+    if ver == "publicados" and request.args.get("orden") == "vistas":
+        lista.sort(key=lambda g: -(g["estadisticas"] or {}).get("vistas", 0))
+    stats = estadisticas_youtube()
+    vistas = {"total": sum(v["vistas"] for v in stats["videos"].values()),
+              "actualizado": stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else ""}
     sin_youtube = [g["nombre"] for g in lista if g["apartado"] in ("revisar", "listos") and g["video"]]
     return render_template(
         "videos.html", guiones=lista, ver=ver, filtros=FILTROS, cuantos=cuantos, dia=resumen_del_dia(),
+        vistas=vistas, orden=request.args.get("orden", ""),
         recomendadas=horarios.recomendar(sin_youtube) if sin_youtube else {},
         con_dudas=sum(1 for g in guiones if g["apartado"] == "revisar" and g["dudas"]),
         mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
@@ -515,6 +542,13 @@ def guardar_tavily():
     guardar_env({"TAVILY_API_KEY": request.form.get("clave", "").strip()})
     return redirect(url_for("ajustes", mensaje="Clave de Tavily guardada." if request.form.get("clave", "").strip()
                             else "Clave de Tavily quitada: se usará Bing Noticias.", _anchor="actualidad"))
+
+
+@app.post("/ajustes/pexels")
+def guardar_pexels():
+    guardar_env({"PEXELS_API_KEY": request.form.get("clave", "").strip()})
+    return redirect(url_for("ajustes", mensaje="Clave de Pexels guardada: los vídeos nuevos podrán llevar planos de ambiente."
+                            if request.form.get("clave", "").strip() else "Clave de Pexels quitada.", _anchor="pexels"))
 
 
 @app.route("/tarea")
@@ -931,6 +965,7 @@ def vigilar_programados() -> None:
                 if time.time() - ultima_comprobacion > 15 * 60 and subir_youtube.TOKEN.exists():
                     ultima_comprobacion = time.time()  # cada 15 min: ¿se ha cambiado algo en YouTube Studio?
                     programados.sincronizar()
+                    subir_youtube.actualizar_estadisticas()  # y las vistas de cada vídeo
             except Exception as error:  # noqa: BLE001 — sin conexión no pasa nada: se mira la próxima vez
                 print(f"[programados] {error}", file=sys.stderr)
             try:
@@ -1010,6 +1045,7 @@ def revisar_programados():
     extra = {"mes": request.form["mes"]} if request.form.get("mes") else {}
     try:
         cambios = programados.sincronizar()
+        subir_youtube.actualizar_estadisticas()
     except Exception as error:  # noqa: BLE001 — sin conexión o sin YouTube conectado
         return redirect(url_for(destino, error=f"No se ha podido comprobar con YouTube: {error}", **extra))
     datos = programados.leer()
@@ -1019,6 +1055,17 @@ def revisar_programados():
     mensaje = ("Actualizado con YouTube: " + "; ".join(cambios) + "." if cambios
                else "Actualizado: todo coincide con YouTube.")
     return redirect(url_for(destino, mensaje=mensaje, **extra))
+
+
+@app.post("/videos/vistas")
+def actualizar_vistas():
+    """«↻ Actualizar» en Publicados: trae ya de YouTube las vistas de cada vídeo."""
+    destino = {"ver": "publicados", **({"orden": "vistas"} if request.form.get("orden") == "vistas" else {})}
+    try:
+        cuantos = len(subir_youtube.actualizar_estadisticas())
+    except Exception as error:  # noqa: BLE001 — sin conexión o sin YouTube conectado
+        return redirect(url_for("mis_videos", error=f"No se han podido traer las vistas de YouTube: {error}", **destino))
+    return redirect(url_for("mis_videos", mensaje=f"Vistas actualizadas ({cuantos} vídeos).", **destino))
 
 
 @app.post("/youtube/conectar")
@@ -1082,6 +1129,7 @@ def ajustes():
         yt_token=subir_youtube.TOKEN.exists(),
         yt_privacidad=env.get("YT_PRIVACIDAD") or "private",
         tavily=bool(os.getenv("TAVILY_API_KEY")),
+        pexels=bool(os.getenv("PEXELS_API_KEY")),
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
     )
 
