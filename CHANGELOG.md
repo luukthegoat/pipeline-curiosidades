@@ -3,6 +3,13 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.14.2] - 2026-10-26
+
+### Cambiado
+- **Carpeta principal más limpia:** todos los scripts de Python están ahora en `scripts/`. Para usarlos a mano desde
+  la carpeta principal: `python scripts\paso1_guiones.py …`. El menú, el .exe y las tareas de Windows (publicar
+  programados y piloto de actualidad) ya apuntan a la nueva carpeta.
+
 ## [1.14.1] - 2026-10-26
 
 ### Cambiado

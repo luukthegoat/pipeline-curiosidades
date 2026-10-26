@@ -5,8 +5,8 @@ triste.mp3, neutro.mp3). Puedes añadir tus propias canciones (.mp3) a esa carpe
 en el menú con su nombre de archivo. Usa solo música que tengas derecho a usar.
 
 Uso:
-    python musica.py             # crea las pistas que falten
-    python musica.py --rehacer   # las vuelve a crear
+    python scripts/musica.py             # crea las pistas que falten
+    python scripts/musica.py --rehacer   # las vuelve a crear
 """
 import math
 import subprocess

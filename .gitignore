@@ -11,7 +11,7 @@ __pycache__/
 # Todo lo generado (guiones, audio, vídeos, cachés)
 salida/
 
-# Música: la generan los scripts (python musica.py); las pistas propias pueden tener derechos
+# Música: la generan los scripts (python scripts/musica.py); las pistas propias pueden tener derechos
 musica/
 
 # Configuración personal del piloto de actualidad (se crea sola con valores por defecto)

@@ -3,18 +3,18 @@
 Usa la API oficial de YouTube. Configuración, una sola vez (guía completa en menu/LEEME.txt):
   1. Crea un proyecto en Google Cloud, activa «YouTube Data API v3» y descarga las credenciales
      de tipo «App de escritorio» como  credenciales/client_secret.json
-  2. Conecta tu canal:  python subir_youtube.py --conectar   (o desde el menú)
+  2. Conecta tu canal:  python scripts/subir_youtube.py --conectar   (o desde el menú)
      Se abre Google en el navegador: inicias sesión TÚ y autorizas. Se guarda
      credenciales/token_youtube.json para no tener que repetirlo.
 
 Solo se suben guiones marcados como verificados, y nunca dos veces el mismo (salvo --forzar).
 
 Uso:
-    python subir_youtube.py --conectar
-    python subir_youtube.py <guion> [<guion> …]          # nombre del guion (sin .json) o su ruta
-    python subir_youtube.py --pendientes                  # todos los verificados aún sin subir
-    python subir_youtube.py <guion> --privacidad public   # private (por defecto) | unlisted | public
-    python subir_youtube.py <guion> --publicar-el 2026-10-25T18:00   # programado (hora local)
+    python scripts/subir_youtube.py --conectar
+    python scripts/subir_youtube.py <guion> [<guion> …]          # nombre del guion (sin .json) o su ruta
+    python scripts/subir_youtube.py --pendientes                  # todos los verificados aún sin subir
+    python scripts/subir_youtube.py <guion> --privacidad public   # private (por defecto) | unlisted | public
+    python scripts/subir_youtube.py <guion> --publicar-el 2026-10-25T18:00   # programado (hora local)
 """
 import argparse
 import json
@@ -78,7 +78,7 @@ def credenciales(interactivo: bool = False, nueva: bool = False) -> Credentials:
             creds = None  # el permiso se retiró o caducó: hay que volver a conectar
     if not interactivo:
         raise SinConexion("El canal de YouTube no está conectado. Conéctalo en el menú (Ajustes → YouTube) "
-                          "o con: python subir_youtube.py --conectar")
+                          "o con: python scripts/subir_youtube.py --conectar")
     if not CLIENTE.exists():
         raise SinConexion(f"Falta {CLIENTE}: descárgalo de Google Cloud (mira la guía en menu/LEEME.txt).")
     flujo = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), PERMISOS)

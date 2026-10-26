@@ -13,10 +13,10 @@ Cerca de unas elecciones (lista «elecciones»), el día antes y el mismo día n
 La configuración está en piloto_actualidad.json (se cambia desde el menú → Ajustes → Piloto de actualidad).
 
 Uso:
-    python piloto_actualidad.py             # crea el vídeo que toque (si el piloto está activado)
-    python piloto_actualidad.py --ahora     # lo crea aunque esté desactivado o ya se haya llegado al máximo
-    python piloto_actualidad.py activar     # registra las tareas de Windows con las horas de la configuración
-    python piloto_actualidad.py desactivar  # las quita
+    python scripts/piloto_actualidad.py             # crea el vídeo que toque (si el piloto está activado)
+    python scripts/piloto_actualidad.py --ahora     # lo crea aunque esté desactivado o ya se haya llegado al máximo
+    python scripts/piloto_actualidad.py activar     # registra las tareas de Windows con las horas de la configuración
+    python scripts/piloto_actualidad.py desactivar  # las quita
 """
 import argparse
 import csv
@@ -30,7 +30,7 @@ import traceback
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 os.chdir(RAIZ)  # los pasos usan rutas relativas a la carpeta principal
 for _flujo in (sys.stdout, sys.stderr):
     if hasattr(_flujo, "reconfigure"):
@@ -128,7 +128,8 @@ def motivo_sin_politica(config: dict, hoy: date = None) -> str:
 def ejecutar(script: str, *argumentos: str) -> int:
     registrar(f"▶ {script} {' '.join(argumentos)}")
     entorno = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
-    proceso = subprocess.run([sys.executable, script, *argumentos], cwd=RAIZ, env=entorno,
+    ruta = Path(__file__).resolve().parent / script  # los demás pasos están en esta misma carpeta
+    proceso = subprocess.run([sys.executable, str(ruta), *argumentos], cwd=RAIZ, env=entorno,
                              capture_output=True, text=True, encoding="utf-8", errors="replace",
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     for linea in (proceso.stdout + proceso.stderr).splitlines():
@@ -262,7 +263,7 @@ def activar() -> str:
     config = guardar_configuracion({"activo": True})
     horas = [h for h in config["horas"] if re.fullmatch(r"\d{1,2}:\d{2}", h)] or CONFIG_INICIAL["horas"]
     ejecutable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
-    resultado = _powershell(_REGISTRAR, T_EXE=ejecutable, T_SCRIPT=RAIZ / "piloto_actualidad.py", T_DIR=RAIZ,
+    resultado = _powershell(_REGISTRAR, T_EXE=ejecutable, T_SCRIPT=Path(__file__).resolve(), T_DIR=RAIZ,
                             T_HORAS=",".join(horas), T_NOMBRE=TAREA,
                             T_DESC="Hace y publica el vídeo de la noticia del día de Mente Inquieta.")
     return resultado.stderr.strip()[-300:] if resultado.returncode != 0 else ""

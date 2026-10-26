@@ -7,7 +7,7 @@ Wikipedia no sirve para lo que está pasando ahora, así que el material de esto
 Se queda con un artículo por medio, de los últimos días, con texto suficiente, y marca los medios reconocidos.
 
 Uso:
-    python actualidad.py "saqueos Francia" [--dias 3] [--mas-idiomas]
+    python scripts/actualidad.py "saqueos Francia" [--dias 3] [--mas-idiomas]
 """
 import hashlib
 import json
@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 load_dotenv(RAIZ / ".env")
 
 CARPETA = RAIZ / "salida" / "_trabajo" / "actualidad"

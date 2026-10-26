@@ -37,7 +37,7 @@ Lo interesante del proyecto no es llamar a un LLM, sino todo lo que hace falta a
   sube en privado. Cada vídeo se declara a YouTube como contenido sintético.
 - **Cupos gratuitos de los LLM.** Groq limita los tokens por día *y por modelo*: si el principal se agota, el programa
   pasa a modelos de reserva y apunta hasta cuándo no reintentar, en vez de quedarse esperando.
-- **Ser un buen cliente de las APIs.** Un módulo común ([`wikimedia.py`](wikimedia.py)) da a todas las peticiones
+- **Ser un buen cliente de las APIs.** Un módulo común ([`wikimedia.py`](scripts/wikimedia.py)) da a todas las peticiones
   caché en disco, ritmo máximo por servidor (compartido entre procesos), respeto a `Retry-After`/`maxlag` e
   identificación con contacto, como exige Wikimedia. Esto acabó con los bloqueos temporales.
 - **Elegir imágenes que encajen.** Puntuación por palabras clave ponderadas por rareza (tipo IDF), penalización de
@@ -66,21 +66,21 @@ flowchart LR
 
 | Archivo | Función |
 |---|---|
-| [`paso1_guiones.py`](paso1_guiones.py) | Material de Wikipedia, guion con el LLM, índice de series, verificador, modelos de reserva |
-| [`paso2_audio.py`](paso2_audio.py) | Voz por escena con tiempos por palabra; solo regenera las escenas cambiadas |
-| [`paso3_video.py`](paso3_video.py) | Selección de imágenes, composición vertical, subtítulos ASS, segmentos en caché, música, miniatura, textos |
-| [`cierre.py`](cierre.py) | Animación final de «like y suscríbete» dibujada fotograma a fotograma |
-| [`wikimedia.py`](wikimedia.py) | Acceso a Wikipedia, Commons y museos: caché, límites, esperas |
-| [`imagenes_ia.py`](imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
-| [`musica.py`](musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
-| [`subir_youtube.py`](subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
-| [`video_ia.py`](video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
-| [`actualidad.py`](actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
-| [`radar.py`](radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
-| [`piloto_actualidad.py`](piloto_actualidad.py) | Hace y publica solo el vídeo de la noticia del día, con salvaguarda |
-| [`borrar.py`](borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
-| [`horarios.py`](horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
-| [`programados.py`](programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |
+| [`paso1_guiones.py`](scripts/paso1_guiones.py) | Material de Wikipedia, guion con el LLM, índice de series, verificador, modelos de reserva |
+| [`paso2_audio.py`](scripts/paso2_audio.py) | Voz por escena con tiempos por palabra; solo regenera las escenas cambiadas |
+| [`paso3_video.py`](scripts/paso3_video.py) | Selección de imágenes, composición vertical, subtítulos ASS, segmentos en caché, música, miniatura, textos |
+| [`cierre.py`](scripts/cierre.py) | Animación final de «like y suscríbete» dibujada fotograma a fotograma |
+| [`wikimedia.py`](scripts/wikimedia.py) | Acceso a Wikipedia, Commons y museos: caché, límites, esperas |
+| [`imagenes_ia.py`](scripts/imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
+| [`musica.py`](scripts/musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
+| [`subir_youtube.py`](scripts/subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
+| [`video_ia.py`](scripts/video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
+| [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
+| [`radar.py`](scripts/radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
+| [`piloto_actualidad.py`](scripts/piloto_actualidad.py) | Hace y publica solo el vídeo de la noticia del día, con salvaguarda |
+| [`borrar.py`](scripts/borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
+| [`horarios.py`](scripts/horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
+| [`programados.py`](scripts/programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |
 | [`menu/`](menu/) | Menú (Flask): Crear, Mis vídeos (por revisar, listos, programados, publicados), Programados con calendario y Ajustes |
 | [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |
 | [`lanzador/`](lanzador/) | Lanzador `Mente Inquieta.exe` (C#), que abre la aplicación sin consola |
@@ -111,10 +111,10 @@ Para subir a YouTube hace falta crear unas credenciales OAuth en Google Cloud: l
 También se puede usar por línea de comandos:
 
 ```bash
-python paso1_guiones.py --tema "La caída de Constantinopla" --partes 3
-python paso2_audio.py
-python paso3_video.py
-python subir_youtube.py <guion> --privacidad private --publicar-el 2026-10-25T20:00
+python scripts/paso1_guiones.py --tema "La caída de Constantinopla" --partes 3
+python scripts/paso2_audio.py
+python scripts/paso3_video.py
+python scripts/subir_youtube.py <guion> --privacidad private --publicar-el 2026-10-25T20:00
 ```
 
 ## Limitaciones conocidas

@@ -10,7 +10,7 @@ medios a la vez, y descarta lo que no sirve (deportes, famosos, crímenes con pa
 el canal ya ha contado estos días.
 
 Uso:
-    python radar.py              # muestra las candidatas de ahora, sin crear nada
+    python scripts/radar.py              # muestra las candidatas de ahora, sin crear nada
 """
 import html
 import json
@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 from dotenv import load_dotenv
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 load_dotenv(RAIZ / ".env")
 
 URL_TENDENCIAS = "https://trends.google.com/trending/rss?geo=ES"

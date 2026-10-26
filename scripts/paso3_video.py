@@ -18,10 +18,10 @@ Cada escena se guarda en caché (salida/_trabajo): al cambiar una imagen o una f
 se rehace esa escena. Las escenas se montan en paralelo.
 
 Uso:
-    python paso3_video.py                    # todos los guiones con audio
-    python paso3_video.py salida/audio/X     # solo uno
-    python paso3_video.py --solo-verificados
-    python paso3_video.py --forzar           # rehace aunque ya exista el vídeo
+    python scripts/paso3_video.py                    # todos los guiones con audio
+    python scripts/paso3_video.py salida/audio/X     # solo uno
+    python scripts/paso3_video.py --solo-verificados
+    python scripts/paso3_video.py --forzar           # rehace aunque ya exista el vídeo
 """
 import argparse
 import hashlib

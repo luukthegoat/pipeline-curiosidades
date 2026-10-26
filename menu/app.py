@@ -22,7 +22,8 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, sen
 
 RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal del proyecto
 os.chdir(RAIZ)  # los pasos usan rutas relativas a la carpeta principal
-sys.path.insert(0, str(RAIZ))
+SCRIPTS = RAIZ / "scripts"  # los pasos y módulos del programa
+sys.path.insert(0, str(SCRIPTS))
 import musica  # noqa: E402
 import paso3_video  # noqa: E402  (nombres, carpetas e imágenes de los vídeos)
 import wikimedia  # noqa: E402  (acceso a Wikimedia con caché y ritmo controlado)
@@ -76,7 +77,7 @@ class Trabajo:
         self.escribir(f"▶ {script} {' '.join(argumentos)}")
         entorno = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         self.proceso = subprocess.Popen(
-            [sys.executable, str(RAIZ / script), *argumentos],
+            [sys.executable, str(SCRIPTS / script), *argumentos],
             cwd=RAIZ, env=entorno, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -996,7 +997,7 @@ def vigilar_programados() -> None:
                 print(f"[programados] {error}", file=sys.stderr)
             try:
                 if programados.toca_revisar():
-                    subprocess.run([sys.executable, str(RAIZ / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
+                    subprocess.run([sys.executable, str(SCRIPTS / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
                                    env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

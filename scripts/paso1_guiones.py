@@ -6,9 +6,9 @@ dividido en escenas con narración y descripción visual. El guion solo puede us
 hechos del material descargado, y el JSON guarda las fuentes para verificarlas.
 
 Uso:
-    python paso1_guiones.py
-    python paso1_guiones.py --cantidad 5 --fecha 2026-07-20
-    python paso1_guiones.py --idiomas es
+    python scripts/paso1_guiones.py
+    python scripts/paso1_guiones.py --cantidad 5 --fecha 2026-07-20
+    python scripts/paso1_guiones.py --idiomas es
 """
 import argparse
 import json

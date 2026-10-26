@@ -14,7 +14,7 @@ Las cachés compartidas (imágenes descargadas, Wikipedia) no se tocan: las usan
 En YouTube solo se borra si se pide expresamente (no se puede deshacer).
 
 Uso:
-    python borrar.py <guion> [--youtube]
+    python scripts/borrar.py <guion> [--youtube]
 """
 import json
 import sys
@@ -22,7 +22,7 @@ from pathlib import Path
 
 from send2trash import send2trash
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 SALIDA = RAIZ / "salida"
 GUIONES = SALIDA / "guiones"
 

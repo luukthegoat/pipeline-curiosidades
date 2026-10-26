@@ -14,8 +14,8 @@ Quién lo ejecuta:
     subida y también se lanza al iniciar sesión (si el ordenador estaba apagado, en cuanto se encienda).
 
 Uso:
-    python programados.py            # sube lo que toque ahora y reprograma la tarea de Windows
-    python programados.py --estado   # muestra la cola
+    python scripts/programados.py            # sube lo que toque ahora y reprograma la tarea de Windows
+    python scripts/programados.py --estado   # muestra la cola
 """
 import json
 import msvcrt
@@ -26,7 +26,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 os.chdir(RAIZ)  # las credenciales y las carpetas de salida van con rutas relativas
 for _flujo in (sys.stdout, sys.stderr):  # un «✔» en una consola que no es UTF-8 no debe romper nada
     if hasattr(_flujo, "reconfigure"):
@@ -644,7 +644,7 @@ def programar_tarea_windows(cuando) -> None:
         return
     ejecutable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
     resultado = _powershell(
-        _REGISTRAR, T_EXE=ejecutable, T_SCRIPT=RAIZ / "programados.py", T_DIR=RAIZ,
+        _REGISTRAR, T_EXE=ejecutable, T_SCRIPT=Path(__file__).resolve(), T_DIR=RAIZ,
         T_HORA=cuando.strftime("%Y-%m-%dT%H:%M:%S"), T_NOMBRE=TAREA,
         T_DESC="Sube a YouTube los vídeos programados de Mente Inquieta (se reprograma sola).")
     if resultado.returncode != 0:

@@ -7,10 +7,10 @@ Lee los guiones JSON del paso 1 y, por cada uno, crea en salida/audio/<guion>/:
   - subtitulos.srt                  : subtítulos cortos, estilo Shorts, ya sincronizados
 
 Uso:
-    python paso2_audio.py                       # todos los guiones de salida/guiones
-    python paso2_audio.py salida/guiones/X.json # solo uno
-    python paso2_audio.py --solo-verificados    # omite los que no tengan "verificado": true
-    python paso2_audio.py --forzar              # rehace los que ya tienen audio
+    python scripts/paso2_audio.py                       # todos los guiones de salida/guiones
+    python scripts/paso2_audio.py salida/guiones/X.json # solo uno
+    python scripts/paso2_audio.py --solo-verificados    # omite los que no tengan "verificado": true
+    python scripts/paso2_audio.py --forzar              # rehace los que ya tienen audio
 """
 import argparse
 import asyncio

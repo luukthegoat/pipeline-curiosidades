@@ -19,7 +19,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parent.parent  # carpeta principal (este archivo está en scripts/)
 GUIONES = RAIZ / "salida" / "guiones"
 MAX_AL_DIA = 2
 SEPARACION_H = 3

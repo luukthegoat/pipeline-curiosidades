@@ -6,8 +6,8 @@ de la descripción del personaje, y todas la misma «semilla» para que el perso
 Las imágenes llevan la marca de agua de Pollinations (obligatoria sin cuenta).
 
 Uso:
-    python imagenes_ia.py <guion> [<guion> …]     # nombre del guion (sin .json) o su ruta
-    python imagenes_ia.py <guion> --rehacer       # vuelve a generarlas aunque ya existan
+    python scripts/imagenes_ia.py <guion> [<guion> …]     # nombre del guion (sin .json) o su ruta
+    python scripts/imagenes_ia.py <guion> --rehacer       # vuelve a generarlas aunque ya existan
 """
 import argparse
 import hashlib
