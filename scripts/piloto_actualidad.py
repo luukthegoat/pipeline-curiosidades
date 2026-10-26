@@ -101,6 +101,17 @@ def contados(dias: int = DIAS_SIN_REPETIR) -> list:
     return [c for c in leer_json(ESTADO, {}).get("contados", []) if c.get("fecha", "") >= limite]
 
 
+def noticias_hechas(dias: int = DIAS_SIN_REPETIR) -> list:
+    """Titulares de lo ya contado estos días: lo del piloto y también las noticias que hiciste tú desde el menú."""
+    titulares = [c["titular"] for c in contados(dias)]
+    limite = (date.today() - timedelta(days=dias)).isoformat()
+    for ruta in paso3_video.CARPETA_GUIONES.glob("*_actualidad_*.json"):
+        guion = leer_json(ruta, {})
+        if guion.get("actualidad") and guion.get("fecha", "") >= limite:
+            titulares.append(f"{guion.get('titulo', '')} ({guion['actualidad'].get('tema', '')})")
+    return list(dict.fromkeys(titulares))
+
+
 def apuntar_contado(candidata: dict, nombre: str, publicado: bool) -> None:
     estado = leer_json(ESTADO, {})
     estado["contados"] = contados(30) + [{
@@ -167,7 +178,7 @@ def crear_video(config: dict, forzar: bool = False) -> bool:
     if sin_politica:
         registrar(f"Hoy no hay política: {sin_politica}.")
     registrar("=== Piloto de actualidad: buscando la noticia del día ===")
-    lista = radar.candidatas([c["titular"] for c in contados()], sin_politica)
+    lista = radar.candidatas(noticias_hechas(), sin_politica)
     if not lista:
         registrar("El radar no ha encontrado ninguna noticia que valga ahora. Se vuelve a mirar en la próxima hora.")
         return True
