@@ -3,6 +3,13 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.11.1] - 2026-10-26
+
+### Arreglado
+- **Vídeos atascados en «procesándose» en YouTube** (desde la 1.10.2): la subida con límite de espera trataba las
+  respuestas 308 de YouTube como redirecciones y el vídeo llegaba incompleto (0 s). Ahora usa la conexión de la librería
+  de Google con ese caso resuelto, manteniendo el límite de 3 minutos.
+
 ## [1.11.0] - 2026-10-26
 
 ### Cambiado
@@ -267,6 +274,7 @@ Primera versión publicada.
 - **Piloto automático** con el Programador de tareas de Windows.
 - Acceso común a las APIs de Wikimedia con caché, ritmo por servidor y respeto a `Retry-After`.
 
+[1.11.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/luukthegoat/pipeline-curiosidades/compare/v1.10.0...v1.10.1

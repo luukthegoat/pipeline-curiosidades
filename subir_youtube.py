@@ -161,9 +161,13 @@ def _hora_utc(texto: str) -> str:
 
 def _youtube_con_limite():
     """Cliente de YouTube que no se queda colgado para siempre si la conexión se queda muda."""
-    import httplib2
     import google_auth_httplib2
-    http = google_auth_httplib2.AuthorizedHttp(credenciales(), http=httplib2.Http(timeout=ESPERA_RED))
+    from googleapiclient.http import build_http
+    # build_http, y no un httplib2.Http a secas: YouTube contesta 308 a cada trozo de una subida reanudable y
+    # build_http hace que no se tome como redirección. Sin eso, el vídeo se queda a medias y «procesándose» para siempre.
+    conexion = build_http()
+    conexion.timeout = ESPERA_RED
+    http = google_auth_httplib2.AuthorizedHttp(credenciales(), http=conexion)
     return build("youtube", "v3", http=http, cache_discovery=False)
 
 
