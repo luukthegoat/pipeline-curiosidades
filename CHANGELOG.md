@@ -3,6 +3,14 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.14.1] - 2026-10-26
+
+### Cambiado
+- **Las efemérides se programan siempre en su día.** Antes, si ese día ya tenía sus franjas llenas o su fecha había
+  pasado, se programaban como un vídeo normal en otro día. Ahora, con el día lleno van a otra hora de ese mismo día
+  (aunque pase del máximo diario), y si su día ya pasó este año, salen en su aniversario del año que viene. También
+  vale para las efemérides en inglés.
+
 ## [1.14.0] - 2026-10-26
 
 ### Añadido

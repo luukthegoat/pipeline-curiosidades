@@ -3,7 +3,8 @@
 Son reglas generales para Shorts con público de España (no datos de tu canal). Cuando el canal tenga
 estadísticas, conviene ajustarlas con YouTube Studio → Estadísticas → «Cuándo están conectados tus espectadores».
 
-- Efeméride: el mismo día del aniversario, por la mañana («tal día como hoy» vale todo ese día).
+- Efeméride: SIEMPRE el día del aniversario, por la mañana («tal día como hoy» vale todo ese día). Si su día ya
+  pasó este año, el del año que viene; si ese día está lleno, se busca otra hora del mismo día (nunca otro día).
 - Serie: una parte al día, a la misma hora, para que quien vio la anterior vuelva a por la siguiente.
 - Humor («Diario de…»): por la noche, cuando más entretenimiento se consume.
 - Tema serio o de misterio: por la noche, con más calma para verlo entero.
@@ -11,7 +12,7 @@ estadísticas, conviene ajustarlas con YouTube Studio → Estadísticas → «Cu
 - En inglés: a la hora de comer en EE. UU. (tarde en España).
 - Actualidad: en la primera franja libre, porque la noticia caduca en uno o dos días.
 
-Además: como mucho MAX_AL_DIA vídeos al día, separados al menos SEPARACION_H horas, sin pisar los ya
+Además (salvo las efemérides, que mandan en su día): como mucho MAX_AL_DIA vídeos al día, separados al menos SEPARACION_H horas, sin pisar los ya
 programados, y nunca antes de dentro de una hora.
 """
 import json
@@ -34,8 +35,9 @@ FRANJAS = {
 }
 
 MOTIVOS = {
-    "efemeride": "Efeméride del {fecha}: mejor ese mismo día y temprano, para que «tal día como hoy» valga todo el día.",
-    "efemeride_pasada": "Su fecha ({fecha}) ya pasó este año: se trata como un vídeo normal.",
+    "efemeride": "Efeméride del {fecha}: ese mismo día y temprano, para que «tal día como hoy» valga todo el día.",
+    "efemeride_pasada": "Su día ya pasó este año: sale en su aniversario del año que viene ({fecha}).",
+    "efemeride_llena": "Efeméride del {fecha}: sus franjas de ese día estaban ocupadas; va a otra hora del mismo día.",
     "serie_1": "Serie: la parte 1 por la noche; las siguientes, una al día a la misma hora.",
     "serie_n": "Serie: un día después de la parte {anterior}, a la misma hora, para que quien la vio vuelva a por esta.",
     "humor": "Humor: mejor por la noche, cuando más entretenimiento se consume.",
@@ -166,16 +168,41 @@ def recomendar(nombres: list, desde: datetime = None) -> dict:
                     return hora
         return None
 
-    def aniversario(g) -> date:
-        return date.fromisoformat(g["fecha"]).replace(year=ahora.year)
+    def es_efemeride(g) -> bool:  # también las de inglés (su tipo es «ingles», pero van atadas a su día igual)
+        return bool(g.get("anio_evento")) and bool(g.get("fecha")) and not g.get("actualidad")
+
+    def aniversario(g, anio: int) -> date:
+        original = date.fromisoformat(g["fecha"])
+        try:
+            return original.replace(year=anio)
+        except ValueError:  # 29 de febrero en un año que no es bisiesto
+            return date(anio, 2, 28)
+
+    def hora_en_su_dia(g, franjas: list) -> tuple:
+        """(hora, motivo) en el día de la efeméride: este año si aún llega (hoy incluido); si no, el que viene."""
+        dia = aniversario(g, ahora.year)
+        if dia < ahora.date() or (dia == ahora.date() and primera.date() != dia):
+            dia = aniversario(g, ahora.year + 1)
+        fecha_bonita = f"{dia.day} {MESES[dia.month - 1]}" + (f" de {dia.year}" if dia.year != ahora.year else "")
+        motivo = MOTIVOS["efemeride_pasada" if dia.year != ahora.year else "efemeride"].format(fecha=fecha_bonita)
+        hora = buscar(dia, franjas)
+        if hora and hora.date() == dia:
+            return hora, motivo
+        # Lleno con las reglas normales: otra hora de ese mismo día, aunque se pase del máximo diario.
+        candidatas = [_hora_franja(dia, f) for f in franjas + PREFERENCIAS["general"]]
+        candidatas += [datetime.combine(dia, datetime.min.time()) + timedelta(hours=h) for h in range(8, 23)]
+        validas = [c for c in candidatas if c >= primera]
+        if not validas:  # es hoy y ya es tarde: lo antes posible
+            return primera.replace(second=0, microsecond=0), motivo
+        sin_choque = [c for c in validas if all(abs((u - c).total_seconds()) >= 3600 for u in usadas)]
+        return (sin_choque or validas)[0], MOTIVOS["efemeride_llena"].format(fecha=fecha_bonita)
 
     # Primero las efemérides que aún pueden salir en su día (van atadas a él), luego las series en orden,
     # luego el resto (incluidas las efemérides cuya fecha ya pasó).
     def prioridad(nombre):
         g = guiones[nombre]
         serie = g.get("serie") or {}
-        atada = tipo_de(g) == "efemeride" and aniversario(g) >= ahora.date()
-        return (0 if atada else 1 if serie else 2, serie.get("tema", ""), serie.get("parte", 0), nombre)
+        return (0 if es_efemeride(g) else 1 if serie else 2, serie.get("tema", ""), serie.get("parte", 0), nombre)
 
     resultado = {}
     for nombre in sorted(guiones, key=prioridad):
@@ -185,18 +212,8 @@ def recomendar(nombres: list, desde: datetime = None) -> dict:
         motivo = MOTIVOS[tipo] if tipo in MOTIVOS else ""
         hora = None
 
-        if tipo == "efemeride":
-            dia = aniversario(g)
-            fecha_bonita = f"{dia.day} {MESES[dia.month - 1]}"
-            if dia >= ahora.date():
-                hora = buscar(dia, franjas)
-                if hora and hora.date() != dia:
-                    hora = None  # ese día ya está lleno: mejor tratarlo como normal que publicarlo otro día cualquiera
-                motivo = MOTIVOS["efemeride"].format(fecha=fecha_bonita)
-            if not hora:
-                motivo = MOTIVOS["efemeride_pasada"].format(fecha=fecha_bonita) if dia < ahora.date() else \
-                    f"El {fecha_bonita} ya está lleno: se publica en la siguiente franja libre."
-                tipo, franjas = "general", PREFERENCIAS["general"]
+        if es_efemeride(g):
+            hora, motivo = hora_en_su_dia(g, PREFERENCIAS["ingles"] if tipo == "ingles" else PREFERENCIAS["efemeride"])
 
         elif g.get("serie"):
             serie = g["serie"]
