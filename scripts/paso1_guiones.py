@@ -1,7 +1,7 @@
 """Paso 1: genera guiones de vídeos cortos a partir de efemérides reales de Wikipedia.
 
 Descarga los eventos de «tal día como hoy» de Wikipedia en español, elige los que
-tienen más material y pide a un LLM (Groq) un guion de 60-75 segundos por idioma,
+tienen más material y pide a un LLM (Groq) un guion de 40-45 segundos por idioma,
 dividido en escenas con narración y descripción visual. El guion solo puede usar
 hechos del material descargado, y el JSON guarda las fuentes para verificarlas.
 
@@ -34,9 +34,11 @@ URL_WIKI_API = "https://es.wikipedia.org/w/api.php"
 MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
 CARPETA_SALIDA = Path("salida/guiones")
 
-# Una narración de 60-75 s a ritmo de vídeo corto (~2,5 palabras por segundo).
+# Una narración de unos 40 s (40-45 s con el cierre) a ritmo de vídeo corto (~2,5 palabras por segundo): los Shorts que se ven enteros son
+# los que YouTube reparte, y con 60-75 s casi nadie llegaba al final.
 PALABRAS_POR_SEGUNDO = 2.5
-PALABRAS_MIN, PALABRAS_MAX = 140, 195
+PALABRAS_MIN, PALABRAS_MAX = 95, 115
+PALABRAS_OBJETIVO = 105
 
 ANTIGUEDAD_MINIMA = 20      # años: evita fichajes y noticias recientes
 MAX_PAGINAS_POR_EVENTO = 3
@@ -62,10 +64,12 @@ Estilo:
   («En 1936, …») o un saludo. La primera frase es el gancho y tiene como mucho 18 palabras.
   El gancho tiene que ser cierto según el MATERIAL.
 - Frases cortas, fáciles de narrar en voz alta. Tono curioso y cercano, sin exagerar.
-- Termina con un cierre que deje pensando o invite a comentar.
-- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
-- Entre 6 y 8 escenas, de 20 a 30 palabras de narración cada una. Cuenta las palabras antes de responder.
-- Si te falta texto, desarrolla el contexto, las causas y las consecuencias que da el MATERIAL; nunca rellenes con datos inventados.
+- Ve al grano: nada de introducciones ni de contexto que no sea imprescindible. Cada escena aporta un dato nuevo.
+- La ÚLTIMA escena termina con una PREGUNTA directa al espectador, corta y fácil de contestar en los comentarios
+  (una opinión o una apuesta: «¿Tú habrías firmado?», «¿Héroe o traidor?»). Nunca «¿Lo sabías?» ni «Comenta abajo».
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (40-45 segundos). Apunta a unas {objetivo}.
+- Entre 5 y 6 escenas, de 17 a 22 palabras de narración cada una. Cuenta las palabras antes de responder.
+- Si te sobra material, quédate con lo más sorprendente; nunca rellenes con datos inventados.
 
 Responde SOLO con un objeto JSON con esta forma:
 {{
@@ -76,10 +80,11 @@ Responde SOLO con un objeto JSON con esta forma:
   "escenas": [
     {{"narracion": "texto que dice la voz en off", "visual": "descripción concreta de la imagen o clip: qué se ve, época, encuadre"}}
   ],
+  "pregunta": "la pregunta final de la última escena, tal cual (irá también como comentario fijado)",
   "hashtags": ["#historia", "..."]
 }}
-Los NOMBRES de las claves son siempre exactamente estos, sin traducir: "titulo", "nombre_corto", "gancho", "tono", "escenas", "narracion", "visual", "hashtags".
-Los VALORES de "narracion", "titulo", "nombre_corto", "gancho" y "hashtags" van en {idioma}. El de "tono" va tal cual de la lista. El valor de "visual" va SIEMPRE en inglés (servirá para buscar o generar imágenes)."""
+Los NOMBRES de las claves son siempre exactamente estos, sin traducir: "titulo", "nombre_corto", "gancho", "tono", "escenas", "narracion", "visual", "pregunta", "hashtags".
+Los VALORES de "narracion", "titulo", "nombre_corto", "gancho", "pregunta" y "hashtags" van en {idioma}. El de "tono" va tal cual de la lista. El valor de "visual" va SIEMPRE en inglés (servirá para buscar o generar imágenes)."""
 
 PROMPT_DIARIO = """Eres guionista de vídeos cortos virales de humor histórico (TikTok, Shorts) con el formato «Día X de …».
 Recibirás un PERSONAJE, un número de DÍA, quizá un TEMA concreto, y un MATERIAL de Wikipedia.
@@ -96,9 +101,10 @@ Formato:
 - Escenas centrales: UNA molestia, norma absurda o penuria concreta y real de la época (si hay TEMA, esa), con detalles del MATERIAL.
   Cada escena se apoya en al menos UN dato real y concreto del MATERIAL; el chiste es la reacción del personaje a ese dato.
 - Si el MATERIAL no dice algo, no lo afirmes (ni cifras, ni objetos, ni cargos): búscale la gracia a lo que sí dice.
-- Última escena: despedida cínica o graciosa pensando en el día siguiente.
-- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (unos 45 segundos). Apunta a {objetivo}.
-- Entre 5 y 7 escenas.
+- Última escena: despedida cínica o graciosa pensando en el día siguiente, y una pregunta corta al espectador
+  («¿Tú aguantarías un día?»).
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (unos 40-45 segundos). Apunta a {objetivo}.
+- Entre 5 y 6 escenas.
 
 Responde SOLO con un objeto JSON con esta forma:
 {{
@@ -111,6 +117,7 @@ Responde SOLO con un objeto JSON con esta forma:
   "escenas": [
     {{"narracion": "texto que dice la voz en off", "visual": "en inglés: prompt de imagen de esta escena con la descripción completa del personaje, su acción y el escenario, vertical 9:16"}}
   ],
+  "pregunta": "la pregunta final al espectador, tal cual",
   "palabras_clave": ["de 4 a 8 palabras graciosas de la narración para resaltar en los subtítulos"],
   "hashtags": ["#historia", "..."]
 }}
@@ -118,7 +125,7 @@ Los NOMBRES de las claves son siempre exactamente estos, sin traducir.
 Los VALORES de "titulo", "nombre_corto", "gancho", "narracion", "palabras_clave" y "hashtags" van en {idioma};
 "personaje_visual", "prompt_video" y "visual" van SIEMPRE en inglés."""
 
-PALABRAS_DIARIO = (95, 150, 120)  # mínimo, máximo y objetivo: unos 45-55 s
+PALABRAS_DIARIO = (95, 115, 105)  # mínimo, máximo y objetivo: unos 40-45 s
 
 PROMPT_ACTUALIDAD = """Eres guionista de vídeos cortos de ACTUALIDAD (YouTube Shorts, TikTok) para un canal de divulgación.
 Recibirás un MATERIAL con varios artículos de prensa recientes, cada uno con su medio y su fecha. Hoy es {hoy}.
@@ -147,8 +154,9 @@ Estilo:
   (solo si el MATERIAL lo dice).
 - La ÚLTIMA escena, después de la fecha, lanza al espectador una pregunta abierta sobre la polémica para que opine
   en los comentarios («¿Quién crees que tiene razón?», «¿Tú qué harías?»), sin sugerir la respuesta.
-- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (60-75 segundos). Apunta a unas 170.
-- Entre 6 y 8 escenas, de 20 a 30 palabras de narración cada una.
+- Ve al grano: lo esencial de la noticia, sin rodeos.
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (40-45 segundos). Apunta a unas {objetivo}.
+- Entre 5 y 6 escenas, de 17 a 22 palabras de narración cada una.
 
 Responde SOLO con un objeto JSON con esta forma:
 {{
@@ -159,6 +167,7 @@ Responde SOLO con un objeto JSON con esta forma:
   "escenas": [
     {{"narracion": "texto que dice la voz en off", "visual": "descripción de una imagen de ARCHIVO neutra para esa escena: lugar, edificio, institución, bandera o mapa (nunca el suceso en sí)"}}
   ],
+  "pregunta": "la pregunta final al espectador, tal cual",
   "busquedas_imagenes": ["3 a 5 búsquedas en inglés para encontrar fotos de archivo en Wikimedia Commons de los LUGARES e INSTITUCIONES de la noticia: ciudades, calles conocidas, monumentos, edificios oficiales, banderas (p. ej. «Paris Champs-Élysées», «Palais de l'Élysée», «Hôtel de Matignon», «Flag of France»). NUNCA disturbios, protestas, incendios, policía en acción, víctimas ni capturas de apps o webs: esas fotos serían de otros sucesos o tendrían derechos"],
   "hashtags": ["#actualidad", "..."]
 }}
@@ -196,7 +205,7 @@ en {idioma}; "personaje" y "accion" van SIEMPRE en inglés."""
 REGLAS_VOZ_IA = """- La "narracion" de cada escena la DICE EL PERSONAJE en el clip, mirando a cámara o a otro personaje: como mucho
   {maximo} palabras por escena (tiene que caber en {segundos} segundos hablando con calma). Frases naturales, en primera
   persona o como diálogo."""
-REGLAS_VOZ_APP = """- La "narracion" la lee una voz en off sobre los clips: entre {minimo} y {maximo} palabras en total (unos 60 s),
+REGLAS_VOZ_APP = """- La "narracion" la lee una voz en off sobre los clips: entre {minimo} y {maximo} palabras en total (unos 40-45 s),
   repartidas entre las escenas. En los clips nadie habla."""
 
 PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL (las fuentes) y las escenas numeradas de un guion.
@@ -247,19 +256,46 @@ def texto_articulo(titulo: str) -> str:
         return ""
 
 
+# Lo que mejor funciona en el canal: España (y el mundo hispano) y personajes famosos. Esos eventos pesan más.
+TEMAS_CERCANOS = re.compile(
+    r"\b(españ\w*|madrid|barcelona|sevilla|valencia|bilbao|cataluñ\w*|andaluc\w*|galicia|país vasco|castilla|"
+    r"aragón|navarra|canari\w*|baleares|franco|franquis\w*|guerra civil|república española|borbón|"
+    r"alfonso xii|felipe vi?|juan carlos|real madrid|barça|fc barcelona|atlético de madrid|"
+    r"méxic\w*|argentin\w*|colombi\w*|chile\w*|perú|peruan\w*|venezol\w*|cuba\w*|hispan\w*|latinoam\w*)\b", re.I)
+FAMOSOS = re.compile(
+    r"\b(futbolista|futbol\w*|tenista|piloto|ciclista|baloncestista|boxeador|deportista|cantante|cantautor|"
+    r"actor|actriz|cineasta|director de cine|músico|compositor|rapero|banda|pintor|científico|inventor|"
+    r"explorador|astronauta)\b", re.I)
+PESO_CERCANO, PESO_FAMOSO, PESO_SELECCIONADO = 1.8, 1.5, 1.5
+
+
+def peso_tema(evento: dict) -> float:
+    """Cuánto más interesa el evento al público del canal (1 = normal)."""
+    paginas = evento.get("pages", [])[:MAX_PAGINAS_POR_EVENTO]
+    texto = " ".join([evento.get("text", "")] + [f"{_titulo(p)} {p.get('description', '')}" for p in paginas])
+    peso = PESO_CERCANO if TEMAS_CERCANOS.search(texto) else 1.0
+    if FAMOSOS.search(" ".join(p.get("description", "") for p in paginas)):
+        peso *= PESO_FAMOSO
+    return peso
+
+
 def elegir_eventos(seleccionados: list, eventos: list, cantidad: int, anio_actual: int) -> list:
-    """Primero los elegidos por Wikipedia; después, eventos antiguos con artículos largos.
+    """Los eventos con más material, dando más peso a España, a los famosos y a los que eligió Wikipedia.
 
     Uno por año para variar.
     """
-    candidatos = [(float("inf"), e) for e in seleccionados if isinstance(e.get("year"), int) and e.get("pages")]
-    for evento in eventos:
+    candidatos, vistos = [], set()
+    for evento in [*seleccionados, *eventos]:
         anio = evento.get("year")
-        if not isinstance(anio, int) or anio > anio_actual - ANTIGUEDAD_MINIMA:
+        if not isinstance(anio, int) or not evento.get("pages") or evento.get("text") in vistos:
             continue
+        elegido = evento in seleccionados
+        if not elegido and anio > anio_actual - ANTIGUEDAD_MINIMA:
+            continue
+        vistos.add(evento.get("text"))
         riqueza = sum(len(p.get("extract", "")) for p in evento.get("pages", [])[:MAX_PAGINAS_POR_EVENTO])
         if riqueza:
-            candidatos.append((riqueza, evento))
+            candidatos.append((riqueza * peso_tema(evento) * (PESO_SELECCIONADO if elegido else 1), evento))
     candidatos.sort(key=lambda par: par[0], reverse=True)
 
     elegidos, anios = [], set()
@@ -451,6 +487,12 @@ FECHA_SUELTA = re.compile(
     re.I)
 
 
+# «Buenaventura Durruti, figura clave del anarquismo…»: presentar a alguien como una enciclopedia hace deslizar.
+PRESENTACION = re.compile(
+    r"^([A-ZÁÉÍÓÚÑ][\w.'-]+\s+){0,3}[A-ZÁÉÍÓÚÑ][\w.'-]+,\s+(figura|l[ií]der|conocid|famos|considerad|"
+    r"nacid|reconocid|destacad|important|c[eé]lebre|known|famous|born)\w*")
+
+
 def problema_gancho(narracion: str) -> str:
     """Por qué la primera frase de la escena 1 no sirve de gancho, o "" si vale."""
     texto = narracion.strip().lstrip("«\"'¡")
@@ -459,19 +501,35 @@ def problema_gancho(narracion: str) -> str:
         return f"empieza con «{' '.join(primera.split()[:4])}…», que hace deslizar"
     if fecha := FECHA_SUELTA.match(texto):
         return f"empieza con una fecha suelta («{fecha.group(0).rstrip(' ,')}»)"
+    if PRESENTACION.match(texto):
+        return "empieza presentando al protagonista como una enciclopedia («X, figura clave de…»)"
     if len(primera.split()) > MAX_PALABRAS_GANCHO:
         return f"tiene {len(primera.split())} palabras y debe tener {MAX_PALABRAS_GANCHO} como mucho"
     return ""
 
 
+def pregunta_de(escenas: list) -> str:
+    """La pregunta con la que acaba la última escena («¿Tú qué habrías hecho?»), o "" si no acaba preguntando."""
+    final = escenas[-1]["narracion"].strip().rstrip("»\"' ") if escenas else ""
+    if not final.endswith("?"):
+        return ""
+    inicio = final.rfind("¿")
+    if inicio < 0:  # en inglés no hay «¿»: desde el final de la frase anterior
+        inicio = max(final.rfind(". ", 0, len(final) - 1), final.rfind("! ", 0, len(final) - 1)) + 1
+    pregunta = final[inicio:].strip()
+    return pregunta[:2].upper() + pregunta[2:] if pregunta.startswith("¿") else pregunta[:1].upper() + pregunta[1:]
+
+
 def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicaciones: str = "",
-                  sistema: str = "", minimo: int = PALABRAS_MIN, maximo: int = PALABRAS_MAX, objetivo: int = 170,
-                  revisar_gancho: bool = True) -> dict:
+                  sistema: str = "", minimo: int = PALABRAS_MIN, maximo: int = PALABRAS_MAX,
+                  objetivo: int = PALABRAS_OBJETIVO, revisar_gancho: bool = True, pregunta_final: bool = True) -> dict:
     """Pide el guion y lo valida. `sistema`, `minimo`, `maximo` y `objetivo` permiten otros formatos (p. ej. el diario).
 
     Con `revisar_gancho`, la primera frase tiene que enganchar (ni saludos, ni fechas sueltas, ni frases largas).
+    Con `pregunta_final`, la última escena tiene que acabar preguntando al espectador (da comentarios).
     """
-    sistema = sistema or PROMPT_SISTEMA.format(min_palabras=minimo, max_palabras=maximo, idioma=IDIOMAS[idioma])
+    sistema = sistema or PROMPT_SISTEMA.format(min_palabras=minimo, max_palabras=maximo, objetivo=objetivo,
+                                               idioma=IDIOMAS[idioma])
     if indicaciones:
         material = f"{indicaciones}\n\n{material}"
     usuario = f"MATERIAL:\n{material}"
@@ -491,9 +549,13 @@ def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicac
             if gancho:
                 fallos.append(f"la primera frase no engancha: {gancho}. Empieza directamente con el dato más "
                               "sorprendente, la contradicción o la pregunta del MATERIAL, en una frase corta")
+            sin_pregunta = pregunta_final and not pregunta_de(escenas)
+            if sin_pregunta:
+                fallos.append("la última escena no termina con una pregunta al espectador: añádela al final")
             if not fallos:
-                return {**datos, "escenas": escenas}
-            puntos = (bool(gancho), abs(palabras - objetivo))  # mejor un buen gancho que la longitud exacta
+                return {**datos, "escenas": escenas, "pregunta": pregunta_de(escenas) or datos.get("pregunta", "")}
+            # Mejor un buen gancho que la pregunta, y la pregunta que la longitud exacta.
+            puntos = (bool(gancho), sin_pregunta, abs(palabras - objetivo))
             if mejor is None or puntos < mejor_puntos:
                 mejor, mejor_puntos = {**datos, "escenas": escenas}, puntos
             raise ValueError("; ".join(fallos))
@@ -502,7 +564,7 @@ def generar_guion(api_key: str, modelo: str, material: str, idioma: str, indicac
             usuario = f"MATERIAL:\n{material}\n\nTu intento anterior no era válido ({error}). Corrígelo."
     if mejor is not None:  # forma correcta pero longitud o gancho mejorables: se guarda avisando
         print(f"    aviso: {ultimo_error}; se guarda el intento más cercano")
-        return mejor
+        return {**mejor, "pregunta": pregunta_de(mejor["escenas"]) or mejor.get("pregunta", "")}
     raise ValueError(f"no se obtuvo un guion válido: {ultimo_error}")
 
 
@@ -585,6 +647,8 @@ def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, 
         # Música de fondo: un tono de salida/musica (epico, misterio, triste, neutro) o "ninguna".
         "musica": normalizar_tono(guion.get("tono")) or "neutro",
         "hashtags": [h for h in guion.get("hashtags", []) if isinstance(h, str)],
+        # Pregunta final: se repite en la descripción y como comentario para fijar (da comentarios).
+        "pregunta": str(guion.get("pregunta") or "").strip()[:200],
         # Palabras que los subtítulos resaltan siempre (las graciosas o clave).
         "palabras_clave": [str(p) for p in guion.get("palabras_clave", []) if isinstance(p, str)][:10],
         "fuentes": fuentes,
@@ -611,7 +675,8 @@ def guardar(guion: dict, evento: dict, fuentes: list, dudas: list, fecha: date, 
         documento["actualidad"] = {
             **evento["actualidad"],
             "fecha_datos": date.today().isoformat(),
-            "busquedas_imagenes": [str(b) for b in guion.get("busquedas_imagenes", []) if isinstance(b, str)][:5],
+            "pregunta": "la pregunta final al espectador, tal cual",
+  "busquedas_imagenes": [str(b) for b in guion.get("busquedas_imagenes", []) if isinstance(b, str)][:5],
         }
     if evento.get("diario"):  # formato «Día X como…»: prompts para el generador de IA y el número de día
         diario = evento["diario"]
@@ -656,7 +721,7 @@ SECCIONES_FINALES = re.compile(
     re.M | re.I,
 )
 MAX_CARACTERES_PARTE = 6000   # material por parte de una serie
-MIN_CARACTERES_PARTE = 1500   # por debajo no hay material para un vídeo de 1 minuto
+MIN_CARACTERES_PARTE = 1500   # por debajo no hay material para un vídeo
 
 
 def dividir_en_partes(texto: str, partes: int) -> list:
@@ -673,7 +738,7 @@ def dividir_en_partes(texto: str, partes: int) -> list:
     return ["\n".join(t)[:MAX_CARACTERES_PARTE] for t in tramos]
 
 
-PROMPT_INDICE = """Planificas una serie de {partes} vídeos cortos de historia (~1 minuto cada uno) sobre «{tema}».
+PROMPT_INDICE = """Planificas una serie de {partes} vídeos cortos de historia (~40-45 segundos cada uno) sobre «{tema}».
 Recibirás las secciones numeradas de un artículo de Wikipedia, con su tamaño y su comienzo.
 
 Reparte las secciones entre las {partes} partes:
@@ -746,7 +811,7 @@ def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = M
 
     posibles = max(1, len(SECCIONES_FINALES.split(texto)[0]) // MIN_CARACTERES_PARTE)
     if partes > posibles:
-        print(f"Aviso: el artículo solo da para unas {posibles} partes de 1 minuto; hago {posibles}.")
+        print(f"Aviso: el artículo solo da para unas {posibles} partes; hago {posibles}.")
         partes = posibles
         if partes == 1:
             return preparar_tema(tema, 1)
@@ -895,24 +960,30 @@ def indicaciones_serie(evento: dict, titulos_previos: list) -> str:
         lineas.append(f"Esta parte cuenta: {evento['enfoque']}")
     if evento.get("enfoques"):
         lineas.append("Índice de la serie: " + " | ".join(f"{i}. {e}" for i, e in enumerate(evento["enfoques"], 1)))
+    # Casi nadie ve las partes en orden: YouTube enseña cada una suelta. Tiene que entenderse sola.
+    lineas.append("MUY IMPORTANTE: esta parte tiene que entenderse SOLA, sin haber visto las demás. Después del "
+                  "gancho, sitúa en media frase de quién o de qué hablas y cuándo pasó. Nunca digas «como vimos», "
+                  "«en la parte anterior» ni «seguimos».")
     if parte == 1:
         lineas.append("Es la primera parte: presenta el tema con un gancho fuerte.")
     else:
-        lineas.append("No es la primera parte: abre retomando la historia en una frase, sin repetir lo ya contado.")
+        lineas.append("No es la primera parte, pero empieza con un gancho propio de lo que cuenta ESTA parte, "
+                      "no con un resumen de las anteriores. No repitas lo ya contado.")
         lineas.append("Títulos de las partes anteriores: " + " | ".join(titulos_previos))
     if parte < total:
         if evento.get("desenlace"):
             lineas.append(f"NO reveles el desenlace, que se cuenta en la última parte: {evento['desenlace']}")
-        lineas.append("Termina invitando a ver la parte siguiente, sin desvelar qué pasa.")
+        lineas.append("Termina con la pregunta al espectador sobre lo que pasará después, sin desvelarlo "
+                      "(la parte siguiente se anuncia en la descripción).")
     else:
-        lineas.append("Es la última parte: cierra la historia e invita a comentar.")
+        lineas.append("Es la última parte: cierra la historia y termina con la pregunta al espectador.")
     return "\n".join(lineas)
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Genera guiones a partir de Wikipedia (efemérides o un tema libre)")
     parser.add_argument("--tema", help='tema libre, p. ej. "La caída de Constantinopla" (en vez de efemérides)')
-    parser.add_argument("--partes", type=int, default=1, help="con --tema: dividirlo en varios vídeos de ~1 minuto")
+    parser.add_argument("--partes", type=int, default=1, help="con --tema: dividirlo en varios vídeos de 40-45 s")
     parser.add_argument("--diario", metavar="PERSONAJE",
                         help='formato «Día X como…» de humor histórico, p. ej. "soldado romano en Vindolanda"')
     parser.add_argument("--dia", type=int, default=0, help="con --diario: número de día (por defecto, el siguiente)")
@@ -993,7 +1064,7 @@ def main(argv=None) -> int:
             return 1
         print(f"Artículo encontrado: {trabajos[0][2][0]['titulo']} ({trabajos[0][2][0]['url']})")
         if len(trabajos) > 1:
-            print(f"Serie de {len(trabajos)} partes de ~1 minuto")
+            print(f"Serie de {len(trabajos)} partes de 40-45 s")
     else:
         print(f"Descargando efemérides del {args.fecha:%d/%m}…")
         try:
@@ -1050,13 +1121,13 @@ def main(argv=None) -> int:
                     sistema = PROMPT_VIDEO_IA.format(segundos=ia["segundos"], escenas=ia["escenas"],
                                                      reglas_voz=reglas, idioma=IDIOMAS[idioma])
                     guion = generar_guion(api_key, modelo, material, idioma, "", sistema, minimo, maximo,
-                                          (minimo + maximo) // 2)
+                                          (minimo + maximo) // 2, pregunta_final=False)  # el formato no la pide
                 elif evento.get("actualidad"):
                     hoy = date.today()
                     sistema = PROMPT_ACTUALIDAD.format(
                         hoy=hoy.isoformat(), hoy_corto=f"{hoy.day} de {MESES_ES[hoy.month - 1]}" if idioma == "es"
                         else hoy.strftime("%B %d"), min_palabras=PALABRAS_MIN, max_palabras=PALABRAS_MAX,
-                        idioma=IDIOMAS[idioma])
+                        objetivo=PALABRAS_OBJETIVO, idioma=IDIOMAS[idioma])
                     guion = generar_guion(api_key, modelo, material, idioma, "", sistema)
                 else:
                     indicaciones = indicaciones_serie(evento, titulos_previos[idioma])

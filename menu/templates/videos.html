@@ -71,14 +71,28 @@
       <span class="ayuda-campo">· datos de YouTube del {{ vistas.actualizado }}</span>
       {% else %}Aún no se han traído las vistas de YouTube.{% endif %}</span>
     <span class="en-linea">
-      {% if orden == 'vistas' %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados') }}">Más recientes primero</a>
-      {% else %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados', orden='vistas') }}">Más vistos primero</a>{% endif %}
+      {% if orden %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados') }}">Más recientes primero</a>{% endif %}
+      {% if orden != 'vistas' %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados', orden='vistas') }}">Más vistos primero</a>{% endif %}
+      {% if orden != 'retencion' and vistas.se_quedan is not none %}<a class="boton secundario pequeno" href="{{ url_for('mis_videos', ver='publicados', orden='retencion') }}">Mejor retención primero</a>{% endif %}
       <form method="post" action="{{ url_for('actualizar_vistas') }}" class="en-linea">
         <input type="hidden" name="orden" value="{{ orden }}">
         <button class="pequeno" type="submit" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}>↻ Actualizar</button>
       </form>
     </span>
   </div>
+  {% if vistas.se_quedan is not none %}
+    <p class="ayuda-campo retencion-canal">De cada 100 personas a las que YouTube les enseña un vídeo tuyo,
+      <strong>{{ vistas.se_quedan }}</strong> se quedan a verlo{% if vistas.visto_pct %} y ven de media el
+      <strong>{{ vistas.visto_pct }} %</strong>{% endif %}. Por encima de 70 % YouTube lo enseña a mucha más gente;
+      por debajo de 50 %, casi deja de enseñarlo. Fíjate en qué tienen en común los primeros segundos de los mejores.</p>
+  {% elif vistas.error_retencion == 'sin_permiso' %}
+    <p class="ayuda-campo retencion-canal">Para ver cuánta gente se queda a ver cada vídeo y cuánta desliza,
+      <a href="{{ url_for('ajustes') }}#youtube">vuelve a conectar YouTube</a> (pedirá un permiso nuevo, solo de lectura).</p>
+  {% elif vistas.error_retencion == 'api_apagada' %}
+    <p class="ayuda-campo retencion-canal">Para ver la retención, activa la <strong>YouTube Analytics API</strong> en
+      <a href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com" target="_blank" rel="noopener">Google Cloud</a>
+      (el mismo proyecto de la subida) y pulsa ↻ Actualizar.</p>
+  {% endif %}
 {% endif %}
 
 {# ---------------------------------------------------------------- Lista #}
@@ -107,6 +121,14 @@
             <span class="reproducciones" title="{{ g.estadisticas.me_gusta | miles }} me gusta · {{ g.estadisticas.comentarios | miles }} comentario{{ 's' if g.estadisticas.comentarios != 1 }}">
               <b>{{ g.estadisticas.vistas | miles }}</b> vista{{ 's' if g.estadisticas.vistas != 1 }}
               · {{ g.estadisticas.me_gusta | miles }} me gusta</span>
+            {% set ret = g.estadisticas %}
+            {% if ret.se_quedan is not none and ret.se_quedan is defined %}
+              <span class="etiqueta {{ 'ok' if ret.se_quedan >= 70 else 'mal' if ret.se_quedan < 50 else '' }}"
+                    title="De cada 100 personas a las que les salió, {{ ret.se_quedan }} se quedaron a verlo; el resto deslizó">{{ ret.se_quedan }} % se queda</span>
+            {% endif %}
+            {% if ret.visto_pct %}
+              <span title="De media se ve {{ ret.segundos }} s, el {{ ret.visto_pct }} % del vídeo (más de 100 % = lo repiten)">ve el {{ ret.visto_pct }} % ({{ ret.segundos }} s)</span>
+            {% endif %}
           {% endif %}
         </div>
         {% if g.apartado in ('revisar', 'listos') and g.video and r %}

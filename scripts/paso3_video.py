@@ -76,6 +76,7 @@ EXCLUIR_VIDEO = re.compile(
     r"news in|webinar|discurso|entrevista|rueda de prensa|declaraci|conferencia|audio|subtitles|trailer|"
     r"remember|testimon|oral history|tribute|ceremony|commentary|story|recuerd|homenaje|testimonio|"
     r"president|presidente|minister|ministro|senator|senador|secretary|secretario|governor|mayor|alcalde|"
+    r"hall of fame|oral|keynote|panel|q&a|wrap up|vlog|"
     r"^\d+\.\s",  # «4. Apellido, Nombre (lugar, año)»: series de entrevistas
     re.I)
 
@@ -333,7 +334,7 @@ def imagenes_del_art_institute(busqueda: str) -> list:
     return imagenes
 
 
-VERSION_CANDIDATAS = 10  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
+VERSION_CANDIDATAS = 11  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
 
 
 def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
@@ -486,6 +487,7 @@ class SelectorImagenes:
         self.bloqueados = set()  # grupos de servidores que nos han pedido esperar
         self.anterior = None  # para no repetir la misma imagen en dos escenas seguidas
         self.reservadas = set()  # clips apartados para una escena concreta (reservar_clips)
+        self.epoca_maxima = None  # temas anteriores al 2000: sin clips de búsqueda grabados después (ver montar)
 
     def puntuacion(self, indice: int, claves: set) -> float:
         imagen = self.imagenes[indice]
@@ -504,9 +506,7 @@ class SelectorImagenes:
         if self.imagenes[indice].get("ambiente"):
             return False
         if self.imagenes[indice].get("video"):
-            clips = sum(1 for i in self.usadas if self.imagenes[i].get("video"))
-            minima = PUNTUACION_MINIMA if self.imagenes[indice].get("del_articulo") else PUNTUACION_MINIMA_VIDEO
-            return clips < MAX_CLIPS_POR_VIDEO and self.puntuacion(indice, claves) >= minima
+            return False  # los clips solo entran reservados (reservar_clips_con_ia): escena a escena, nunca
         return self.puntuacion(indice, claves) >= PUNTUACION_MINIMA
 
     def ranking(self, escena: dict) -> list:
@@ -542,6 +542,31 @@ class SelectorImagenes:
             self.fallidas.add(indice)
         return None
 
+    def _fuera_de_epoca(self, indice: int) -> bool:
+        imagen = self.imagenes[indice]
+        return bool(self.epoca_maxima and not imagen.get("del_articulo") and imagen.get("anio")
+                    and imagen["anio"] > self.epoca_maxima)
+
+    def clips_posibles(self, escenas: list, maximo: int = 14) -> list:
+        """Índices de los clips que podrían ir en alguna escena (los que mejor encajan primero)."""
+        mejores = {}
+        for escena in escenas:
+            if escena.get("imagen"):
+                continue
+            claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
+            for indice, imagen in enumerate(self.imagenes):
+                if (imagen.get("video") and not imagen.get("ambiente") and indice not in self.usadas
+                        and not self._fuera_de_epoca(indice)):
+                    mejores[indice] = max(mejores.get(indice, -9), self.puntuacion(indice, claves))
+        return sorted(mejores, key=mejores.get, reverse=True)[:maximo]
+
+    def apartar(self, reservas: dict) -> dict:
+        """Deja apartados los clips de `reservas` ({escena: índice}) para que ninguna otra escena los coja."""
+        clips_ya = sum(1 for i in self.usadas if self.imagenes[i].get("video"))
+        reservas = dict(list(reservas.items())[:max(0, MAX_CLIPS_POR_VIDEO - clips_ya)])
+        self.reservadas = set(reservas.values())
+        return reservas
+
     def reservar_clips(self, escenas: list) -> dict:
         """{número de escena: índice del clip}: hasta MAX_CLIPS_POR_VIDEO clips, cada uno en la escena donde mejor
         encaja, decididos antes que las fotos para que siempre que haya un clip que encaje, salga."""
@@ -553,10 +578,13 @@ class SelectorImagenes:
             for indice, imagen in enumerate(self.imagenes):
                 if not imagen.get("video") or imagen.get("ambiente") or indice in self.usadas:
                     continue
-                # Ya son del tema (del artículo, o de una búsqueda del tema o sus lugares que lo nombran): basta con
-                # que tengan algo que ver con la escena. Los demás, la exigencia normal de los vídeos.
-                del_tema = imagen.get("del_articulo") or imagen.get("del_tema")
-                if (del_tema and self.puntuacion(indice, claves) > 0) or self._vale(indice, claves):
+                # Los del artículo (los eligieron sus editores) valen con que tengan algo que ver con la escena; los
+                # de una búsqueda del tema, con la relevancia de una foto; los demás, la exigencia normal de los vídeos.
+                if self._fuera_de_epoca(indice):
+                    continue
+                puntos = self.puntuacion(indice, claves)
+                if ((imagen.get("del_articulo") and puntos > 0) or (imagen.get("del_tema") and puntos >= PUNTUACION_MINIMA)
+                        or puntos >= PUNTUACION_MINIMA_VIDEO):
                     parejas.append((self.puntuacion(indice, claves), -escena["numero"], indice))
         reservas = {}
         for _, numero, indice in sorted(parejas, reverse=True):  # a igualdad, la escena más temprana
@@ -608,6 +636,75 @@ class SelectorImagenes:
             if resultado := self._descargar(indice):
                 return resultado
         return None, None
+
+
+PROMPT_CLIPS = """Eres el montador de un canal de Shorts de historia y actualidad. Te paso las escenas de un vídeo y
+unos clips de vídeo de archivo con licencia libre (título, descripción, año y origen). Decide qué clips encajan.
+
+Un clip SOLO vale para una escena si:
+- muestra algo coherente con lo que cuenta la escena (el lugar, el hecho, la época), no solo comparte una palabra;
+- es de la época de lo que se cuenta: nada de vídeo moderno (misiones, huracanes, protestas, eventos de 2000 en adelante)
+  en un tema histórico, salvo un lugar o paisaje que no delate la época (un timelapse de la ciudad, el mar, una montaña);
+- no es una persona hablando a cámara (entrevista, discurso, conferencia, rueda de prensa) ni un vídeo de otro suceso.
+
+Los clips retienen más que las fotos: si alguno encaja razonablemente, pon AL MENOS UNO. Elige como mucho {maximo},
+cada clip en una sola escena y cada escena con un solo clip. Si ninguno encaja de verdad, no elijas ninguno: es mejor
+una foto que un clip que no pega.
+Responde SOLO con JSON: {{"asignaciones": [{{"escena": 3, "clip": 2, "motivo": "…"}}]}}"""
+
+
+def reservar_clips_con_ia(selector, datos: dict, trabajo: Path) -> dict:
+    """{escena: índice de clip}: la IA decide qué clips de archivo encajan de verdad (como mucho MAX_CLIPS_POR_VIDEO).
+
+    La respuesta se guarda (clips_ia.json) para no volver a preguntar al rehacer el mismo vídeo. Sin IA disponible,
+    solo los clips del propio artículo de Wikipedia (los eligieron sus editores), con la regla de palabras clave.
+    """
+    escenas = datos["escenas"]
+    posibles = selector.clips_posibles(escenas)
+    if not posibles:
+        return {}
+    libres = [e for e in escenas if not e.get("imagen")]
+    clips = [{"clip": n, "titulo": selector.imagenes[i]["archivo"], "descripcion": selector.imagenes[i].get("descripcion", "")[:200],
+              "anio": selector.imagenes[i].get("anio"), "segundos": selector.imagenes[i].get("duracion"),
+              "origen": selector.imagenes[i].get("articulo", "")} for n, i in enumerate(posibles, 1)]
+    pedido = json.dumps({"tema": datos.get("titulo", ""), "evento": datos.get("evento", ""),
+                         "escenas": [{"escena": e["numero"], "texto": e["narracion"], "idea_visual": e.get("visual", "")}
+                                     for e in libres],
+                         "clips": clips}, ensure_ascii=False)
+    guardado = trabajo / "clips_ia.json"
+    firma = huella(pedido, MAX_CLIPS_POR_VIDEO)
+    respuesta = None
+    if guardado.exists():
+        anterior = json.loads(guardado.read_text(encoding="utf-8"))
+        respuesta = anterior.get("respuesta") if anterior.get("firma") == firma else None
+    if respuesta is None:
+        try:
+            import paso1_guiones
+            api_key = os.getenv("GROQ_API_KEY", "")
+            if not api_key:
+                raise RuntimeError("sin GROQ_API_KEY")
+            texto = paso1_guiones.llamar_groq(api_key, paso1_guiones.MODELO_VERIFICADOR,
+                                              PROMPT_CLIPS.format(maximo=MAX_CLIPS_POR_VIDEO), pedido)
+            respuesta = json.loads(texto).get("asignaciones", [])
+            guardado.write_text(json.dumps({"firma": firma, "respuesta": respuesta}, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+        except Exception as error:  # noqa: BLE001 — sin IA: solo los clips seguros (los del artículo)
+            print(f"  aviso: la IA no ha podido elegir clips ({type(error).__name__}); solo uso los del artículo")
+            reservas = selector.reservar_clips(escenas)
+            return selector.apartar({n: i for n, i in reservas.items() if selector.imagenes[i].get("del_articulo")})
+    validas = {e["numero"] for e in libres}
+    reservas = {}
+    for a in respuesta if isinstance(respuesta, list) else []:
+        try:
+            numero, indice = int(a["escena"]), posibles[int(a["clip"]) - 1]
+        except (KeyError, ValueError, TypeError, IndexError):
+            continue
+        if numero in validas and numero not in reservas and indice not in reservas.values():
+            reservas[numero] = indice
+            print(f"  clip para la escena {numero}: {selector.imagenes[indice]['archivo'][:50]} ({a.get('motivo', '')[:70]})")
+    if not reservas:
+        print(f"  ningún clip de los {len(posibles)} encaja de verdad: van fotos")
+    return selector.apartar(reservas)
 
 
 # Wikimedia pide esperar demasiado: no se descargan más imágenes en esta ejecución.
@@ -1155,11 +1252,14 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     imagenes = candidatas(nombre, datos)
     print(f"  {len(imagenes)} imágenes candidatas")
     selector = SelectorImagenes(imagenes, datos.get("evento", ""), datos.get("anio_evento"))
+    anios = [int(a) for e in datos["escenas"] for a in re.findall(r"(1[0-9]{3}|20[0-9]{2})", e["narracion"])]
+    if not datos.get("actualidad") and anios and max(anios) < 2000:
+        selector.epoca_maxima = 1999  # nada de huracanes de 2024 en un vídeo sobre la colonia
     for escena in datos["escenas"]:
         if escena.get("imagen"):
             selector.marcar_usada(escena["imagen"])
     elegidas, creditos = {}, []
-    reservas = selector.reservar_clips(datos["escenas"])  # 1-2 clips de vídeo libres, en sus mejores escenas
+    reservas = reservar_clips_con_ia(selector, datos, trabajo)  # 1-2 clips de vídeo libres, si encajan de verdad
     for escena in datos["escenas"]:
         imagen, ruta = escena.get("imagen"), None
         if imagen:
@@ -1406,7 +1506,9 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
     tiktok = [titulo_sin_parte, "", entrada]
     if linea_serie:
         tiktok += ["", linea_serie]
-    tiktok += ["", "💬 Did you know? Tell me in the comments." if ingles else "💬 ¿Lo sabías? Te leo en comentarios.", ""]
+    pregunta = str(datos.get("pregunta") or "").strip()  # la del final del vídeo: da más comentarios que una genérica
+    tiktok += ["", f"💬 {pregunta}" if pregunta else
+               ("💬 Did you know? Tell me in the comments." if ingles else "💬 ¿Lo sabías? Te leo en comentarios."), ""]
     nombres_fuentes = ", ".join(f["titulo"] for f in datos.get("fuentes", []))
     if datos.get("actualidad"):
         medios = ", ".join(dict.fromkeys(f.get("medio") or f["titulo"] for f in datos.get("fuentes", [])))
@@ -1461,6 +1563,8 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
     titulo = datos.get("titulo", "").strip()
     escenas = datos.get("escenas", [])
     lineas = [escenas[0]["narracion"].strip() if escenas else ""]
+    if str(datos.get("pregunta") or "").strip():
+        lineas += ["", f"💬 {datos['pregunta'].strip()}"]
     serie = datos.get("serie") or {}
     if serie.get("total", 1) > 1:
         parte, total = serie["parte"], serie["total"]

@@ -47,6 +47,9 @@ PERMISOS = [
     "https://www.googleapis.com/auth/youtube.readonly",  # ver el nombre del canal conectado
     "https://www.googleapis.com/auth/youtube",           # cambiar la descripción del canal (--perfil)
 ]
+# Retención (cuánta gente se queda y cuánto ve de cada vídeo). Se pide al conectar; las conexiones de antes no lo
+# tienen y siguen subiendo igual: solo hace falta volver a conectar para ver la retención.
+ANALITICA = "https://www.googleapis.com/auth/yt-analytics.readonly"
 DESCRIPCION_CANAL = Path("marca/descripcion_youtube.txt")
 PALABRAS_CLAVE_CANAL = Path("marca/palabras_clave_youtube.txt")
 CATEGORIA_EDUCACION = "27"
@@ -66,7 +69,8 @@ def credenciales(interactivo: bool = False, nueva: bool = False) -> Credentials:
 
     Con `nueva`, ignora la autorización guardada y vuelve a preguntar (para cambiar de canal o de cuenta).
     """
-    creds = Credentials.from_authorized_user_file(str(TOKEN), PERMISOS) if TOKEN.exists() and not nueva else None
+    permisos = PERMISOS + [ANALITICA] if tiene_analitica() else PERMISOS  # al renovar se conservan todos
+    creds = Credentials.from_authorized_user_file(str(TOKEN), permisos) if TOKEN.exists() and not nueva else None
     if creds and creds.valid:
         return creds
     if creds and creds.expired and creds.refresh_token:
@@ -81,7 +85,7 @@ def credenciales(interactivo: bool = False, nueva: bool = False) -> Credentials:
                           "o con: python scripts/subir_youtube.py --conectar")
     if not CLIENTE.exists():
         raise SinConexion(f"Falta {CLIENTE}: descárgalo de Google Cloud (mira la guía en menu/LEEME.txt).")
-    flujo = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), PERMISOS)
+    flujo = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), PERMISOS + [ANALITICA])
     print("Se abre Google en tu navegador: inicia sesión con la cuenta del canal y autoriza el acceso.", flush=True)
     creds = flujo.run_local_server(
         # «select_account»: Google siempre pregunta qué cuenta usar (ahí aparecen los canales de marca).
@@ -92,6 +96,14 @@ def credenciales(interactivo: bool = False, nueva: bool = False) -> Credentials:
     CARPETA_CREDENCIALES.mkdir(exist_ok=True)
     TOKEN.write_text(creds.to_json(), encoding="utf-8")
     return creds
+
+
+def tiene_analitica() -> bool:
+    """¿La conexión guardada incluye el permiso de ver la retención?"""
+    try:
+        return ANALITICA in json.loads(TOKEN.read_text(encoding="utf-8")).get("scopes", [])
+    except (OSError, ValueError):
+        return False
 
 
 AVISO_SIN_CANAL = ("La cuenta autorizada no tiene canal de YouTube. Crea el canal en youtube.com (foto de perfil → "
@@ -363,15 +375,81 @@ def actualizar_estadisticas() -> dict:
     ESTADISTICAS.parent.mkdir(parents=True, exist_ok=True)
     ESTADISTICAS.write_text(json.dumps({"actualizado": datetime.now().isoformat(timespec="seconds"),
                                         "videos": estadisticas}, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        actualizar_retencion()  # cada pocas horas como mucho
+    except Exception as error:  # noqa: BLE001 — la retención es un extra: que no impida tener las vistas
+        print(f"  aviso: no se ha podido traer la retención: {error}")
     return estadisticas
 
 
-def estadisticas() -> dict:
-    """Las últimas estadísticas guardadas: {"actualizado": «…», "videos": {id: {…}}} (vacío si aún no hay)."""
+RETENCION = Path("salida/retencion_youtube.json")
+HORAS_RETENCION = 6  # YouTube Analytics va con uno o dos días de retraso: no hace falta pedirla más a menudo
+
+
+def actualizar_retencion(forzar: bool = False) -> dict:
+    """Pide a YouTube Analytics, por vídeo, cuánta gente se queda a verlo (frente a la que desliza) y cuánto ve de
+    media. Lo guarda en salida/retencion_youtube.json. Sin el permiso, apunta que hay que volver a conectar."""
+    anterior = retencion()
+    if not forzar and anterior.get("actualizado") and datetime.now() - datetime.fromisoformat(
+            anterior["actualizado"]) < timedelta(hours=HORAS_RETENCION):
+        return anterior
+    resultado = {"actualizado": datetime.now().isoformat(timespec="seconds"), "videos": anterior.get("videos", {})}
+    if not tiene_analitica():
+        resultado["error"] = "sin_permiso"
+    else:
+        analitica = build("youtubeAnalytics", "v2", credentials=credenciales(), cache_discovery=False)
+        consulta = dict(ids="channel==MINE", startDate="2020-01-01", endDate=datetime.now().strftime("%Y-%m-%d"),
+                        dimensions="video", sort="-views", maxResults=200)
+        try:
+            # engagedViews: vistas en las que no se deslizó al empezar (lo que Studio llama «se quedaron a verlo»).
+            respuesta = analitica.reports().query(
+                metrics="views,engagedViews,averageViewDuration,averageViewPercentage", **consulta).execute()
+        except HttpError as error:
+            if "accessNotConfigured" in str(error) or "has not been used" in str(error):
+                resultado["error"] = "api_apagada"
+                respuesta = None
+            else:  # por si la métrica engagedViews no está disponible: sin ella
+                respuesta = analitica.reports().query(
+                    metrics="views,averageViewDuration,averageViewPercentage", **consulta).execute()
+        if respuesta is not None:
+            columnas = [c["name"] for c in respuesta.get("columnHeaders", [])]
+            videos = {}
+            for fila in respuesta.get("rows", []):
+                d = dict(zip(columnas, fila))
+                vistas = int(d.get("views") or 0)
+                videos[d["video"]] = {
+                    "vistas": vistas,
+                    "se_quedan": round(100 * d["engagedViews"] / vistas) if vistas and "engagedViews" in d else None,
+                    "visto_pct": round(d.get("averageViewPercentage") or 0),
+                    "segundos": round(d.get("averageViewDuration") or 0),
+                }
+            resultado["videos"] = videos
+    RETENCION.parent.mkdir(parents=True, exist_ok=True)
+    RETENCION.write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
+    return resultado
+
+
+def retencion() -> dict:
+    """La última retención guardada: {"actualizado", "videos": {id: {se_quedan, visto_pct, segundos}}, "error"?}."""
     try:
-        return json.loads(ESTADISTICAS.read_text(encoding="utf-8"))
+        return json.loads(RETENCION.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"actualizado": "", "videos": {}}
+
+
+def estadisticas() -> dict:
+    """Las últimas estadísticas guardadas: {"actualizado": «…», "videos": {id: {…}}} (vacío si aún no hay).
+
+    Cada vídeo lleva también su retención, si se tiene: «se_quedan» (%), «visto_pct» (%) y «segundos» de media.
+    """
+    try:
+        datos = json.loads(ESTADISTICAS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"actualizado": "", "videos": {}}
+    for id_video, ret in retencion().get("videos", {}).items():
+        if id_video in datos["videos"]:
+            datos["videos"][id_video].update({k: v for k, v in ret.items() if k != "vistas"})
+    return datos
 
 
 def pendientes() -> list:

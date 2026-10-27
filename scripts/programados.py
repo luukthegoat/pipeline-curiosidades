@@ -126,10 +126,39 @@ def proxima_subida_libre() -> datetime:
 _cerrojo_tarea = threading.Lock()
 
 
+INTENTOS_INSTAGRAM = 3
+
+
+def instagram_activo() -> dict:
+    """La configuración de Instagram si está conectado y activado (si no, {})."""
+    try:
+        import instagram
+    except ImportError:
+        return {}
+    config = instagram.leer_config()
+    return config if instagram.conectado() and config.get("publicar") else {}
+
+
+def pendiente_instagram(video: dict, config: dict = None) -> bool:
+    """¿Este vídeo de la cola tiene que publicarse en Instagram (a su hora)? Solo los de después de activarlo."""
+    config = instagram_activo() if config is None else config
+    ig = video.get("instagram") or {}
+    return bool(config and video["hora"][:16] >= config.get("desde", "9999")[:16] and ig.get("estado") != "publicado"
+                and ig.get("intentos", 0) < INTENTOS_INSTAGRAM)
+
+
+def proxima_instagram():
+    """Hora de la próxima publicación en Instagram pendiente, o None."""
+    config = instagram_activo()
+    horas = [_hora(v["hora"]) for v in leer()["videos"] if pendiente_instagram(v, config)]
+    return min(horas) if horas else None
+
+
 def proxima_revision():
-    """Cuándo hay que volver a mirar la cola: la primera subida pendiente (o None si no queda nada)."""
+    """Cuándo hay que volver a mirar la cola: la primera subida o publicación en Instagram pendiente (o None)."""
     pendientes = [v for v in leer()["videos"] if v["estado"] == "en_cola"]
-    return max(min(momento_de_subida(v) for v in pendientes), datetime.now()) if pendientes else None
+    momentos = [momento_de_subida(v) for v in pendientes] + [h for h in [proxima_instagram()] if h]
+    return max(min(momentos), datetime.now()) if momentos else None
 
 
 def _reprogramar_tarea() -> None:
@@ -465,8 +494,11 @@ def toca_revisar() -> bool:
     """¿Hay algo que subir ya? (lo usa el menú cada minuto para no lanzar el proceso sin motivo)."""
     datos = leer()
     esperando = bool(datos["siguiente_intento"]) and datetime.fromisoformat(datos["siguiente_intento"]) > datetime.now()
-    return any(v["estado"] in ("en_cola", "subiendo") and momento_de_subida(v) <= datetime.now()
-               and (v.get("forzar") or not esperando) for v in datos["videos"])
+    if any(v["estado"] in ("en_cola", "subiendo") and momento_de_subida(v) <= datetime.now()
+           and (v.get("forzar") or not esperando) for v in datos["videos"]):
+        return True
+    config = instagram_activo()
+    return any(pendiente_instagram(v, config) and _hora(v["hora"]) <= datetime.now() for v in datos["videos"])
 
 
 # --- Subida -----------------------------------------------------------------------------
@@ -590,7 +622,10 @@ def _revisar() -> int:
         _log(f"  error: {fallo}")
         _avisar("No se ha podido subir un vídeo programado", f"«{v['titulo']}»: {fallo}")
 
-    # Cuándo volver a mirar: la próxima subida posible (o en 1 h si YouTube nos ha frenado).
+    _publicar_en_instagram()
+
+    # Cuándo volver a mirar: la próxima subida posible (o en 1 h si YouTube nos ha frenado), o la próxima
+    # publicación en Instagram (que no se puede programar allí: hay que estar a la hora).
     datos = leer()
     pendientes = [v for v in datos["videos"] if v["estado"] == "en_cola"]
     siguiente = None
@@ -600,12 +635,42 @@ def _revisar() -> int:
             siguiente = max(libre, datetime.now() + timedelta(minutes=5))
         else:
             siguiente = max(min(momento_de_subida(v) for v in pendientes), datetime.now() + timedelta(minutes=1))
+    proxima_ig = proxima_instagram()
+    if proxima_ig:
+        proxima_ig = max(proxima_ig, datetime.now() + timedelta(minutes=5))  # tras un fallo, se reintenta en 5 min
+        siguiente = min(siguiente, proxima_ig) if siguiente else proxima_ig
     datos["siguiente_intento"] = siguiente.isoformat(timespec="seconds") if siguiente else None
     guardar(datos)
     programar_tarea_windows(siguiente)
     if bloqueado:
         _log(f"en espera: {bloqueado}; siguiente intento {siguiente:%d/%m %H:%M}" if siguiente else f"en espera: {bloqueado}")
     return subidos
+
+
+def _publicar_en_instagram() -> None:
+    """Publica como Reel los vídeos de la cola cuya hora ya ha llegado (Instagram no deja programar)."""
+    config = instagram_activo()
+    if not config:
+        return
+    import instagram
+    for v in sorted(leer()["videos"], key=lambda v: v["hora"]):
+        if not pendiente_instagram(v, config) or _hora(v["hora"]) > datetime.now():
+            continue
+        ig = dict(v.get("instagram") or {})
+        _log(f"Instagram: publicando «{v['titulo']}»")
+        try:
+            resultado = instagram.publicar_guion(v["nombre"])
+        except Exception as error:  # noqa: BLE001 — se apunta y se reintenta en la siguiente revisión
+            ig.update(estado="error", intentos=ig.get("intentos", 0) + 1, mensaje=str(error)[:200])
+            _actualizar(v["nombre"], instagram=ig)
+            _log(f"  error en Instagram: {error}")
+            if ig["intentos"] >= INTENTOS_INSTAGRAM:
+                _avisar("No se ha podido publicar en Instagram", f"«{v['titulo']}»: {error}")
+            continue
+        _actualizar(v["nombre"], instagram={"estado": "publicado", "id": resultado.get("id"), "url": resultado.get("url", ""),
+                                            "publicado": resultado.get("publicado")})
+        _log(f"  ✔ Instagram: {resultado.get('url', '')}")
+        _avisar("Reel publicado en Instagram", f"«{v['titulo']}»")
 
 
 def _avisar(titulo: str, texto: str) -> None:

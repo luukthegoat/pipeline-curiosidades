@@ -189,6 +189,15 @@
 {# ================================================================ Publicar #}
 <section class="tarjeta paso {{ 'hecho' if yt or info.programado }}" id="publicar">
   <h2><span class="numero"></span>Publica en YouTube</h2>
+  {% if datos.pregunta and (info.programado or yt) %}
+    <div class="comentario-fijado">
+      <label>Comentario para fijar</label>
+      <div class="copiable"><textarea readonly rows="2">{{ datos.pregunta }} 👇</textarea>
+        <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+      <p class="ayuda-campo">Cuando el vídeo ya sea público, pégalo como comentario y fíjalo (⋮ → Fijar). Un comentario
+        tuyo arriba del todo hace que más gente conteste.</p>
+    </div>
+  {% endif %}
   {% if info.programado %}
     <p><span class="etiqueta {{ 'ok' if info.programado.estado == 'en_youtube' else 'prog' }}">programado</span>
       {{ info.programado.bonita }}{% if info.programado.estado == 'en_youtube' %} · ya está en YouTube{% endif %}</p>

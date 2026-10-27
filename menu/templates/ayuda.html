@@ -8,10 +8,42 @@
 <div class="tarjeta">
   <h2>Los tres pasos</h2>
   <ol class="pasos">
-    <li><strong>Guion.</strong> Busca el tema en Wikipedia (o lo que pasó en esa fecha) y la IA de Groq escribe un guion de 60-75 segundos dividido en escenas, con un gancho, un tono de música y un nombre corto. Después, un verificador automático compara cada frase con Wikipedia y marca las que no encuentra. Si pides varias partes, primero hace un índice de la serie: qué cuenta cada parte y qué desenlace guarda para la última.</li>
+    <li><strong>Guion.</strong> Busca el tema en Wikipedia (o lo que pasó en esa fecha) y la IA de Groq escribe un guion
+      de <strong>40-45 segundos</strong> en 5-6 escenas, con un gancho, un tono de música y un nombre corto. Después, un
+      verificador automático compara cada frase con Wikipedia y marca las que no encuentra. Si pides varias partes,
+      primero hace un índice de la serie: qué cuenta cada parte y qué desenlace guarda para la última.</li>
     <li><strong>Audio.</strong> Cada escena se convierte en voz y se mide su duración exacta. Si cambias una frase, solo se rehace esa escena.</li>
-    <li><strong>Vídeo.</strong> Une imágenes reales de Wikipedia, Wikimedia Commons y dos museos con obras de dominio público (The Met de Nueva York y el Art Institute of Chicago) y, cuando los hay, <strong>clips de vídeo de archivo</strong> con licencia libre: se buscan siempre primero (los de los artículos de Wikipedia y de Wikimedia Commons; en las noticias, del suceso o de sus lugares, con el rótulo «IMÁGENES DE ARCHIVO») y se ponen 1-2 por vídeo en las escenas donde mejor encajan; en «Elegir imágenes» salen marcados con ▶ para ponerlos a mano donde quieras, con un zoom lento, la voz, subtítulos que resaltan la palabra que suena, el gancho en grande al empezar y música de fondo que baja sola cuando se habla. Crea también la miniatura y la descripción con fuentes y créditos.</li>
+    <li><strong>Vídeo.</strong> Primero busca <strong>clips de vídeo de archivo</strong> con licencia libre (los de los
+      artículos de Wikipedia y de Wikimedia Commons; en las noticias, del suceso o de sus lugares, con el rótulo
+      «IMÁGENES DE ARCHIVO»). Una IA revisa cuáles encajan de verdad con cada escena y con la época, y pone 1-2 por vídeo
+      (al menos uno si alguno encaja). Las demás escenas llevan imágenes reales de Wikipedia, Wikimedia Commons y dos
+      museos con obras de dominio público (The Met y el Art Institute of Chicago), con un zoom lento. Encima van la voz,
+      subtítulos que resaltan la palabra que suena, el gancho en grande al empezar y música que baja sola cuando se
+      habla. Crea también la miniatura y la descripción con fuentes y créditos. En «Elegir imágenes» los clips salen
+      marcados con ▶ para ponerlos a mano donde quieras.</li>
   </ol>
+</div>
+
+<div class="tarjeta">
+  <h2>Cómo se hacen para que la gente se quede</h2>
+  <p>YouTube enseña cada Short a unas pocas personas y, según cuántas se quedan a verlo, se lo enseña a más o deja de
+    hacerlo. Por eso todos los vídeos se generan así:</p>
+  <ul>
+    <li><strong>40-45 segundos:</strong> cortos y directos al grano, para que mucha gente llegue al final (y lo repita).</li>
+    <li><strong>La primera frase es el gancho:</strong> un dato sorprendente, una contradicción o una pregunta, de 18
+      palabras como mucho. Se rechazan solos los arranques que hacen deslizar: saludos, «¿Sabías que…?», una fecha
+      suelta («En 1936, …») o presentar al protagonista como una enciclopedia («X, figura clave de…»).</li>
+    <li><strong>Clips de vídeo antes que fotos:</strong> el movimiento retiene más; siempre que hay un clip libre que
+      encaje, entra.</li>
+    <li><strong>Una pregunta al final</strong> («¿Héroe o traidor?») para que comenten. Va también en la descripción, en
+      el texto de TikTok e Instagram y en la página del vídeo como <strong>comentario para fijar</strong>: cópialo,
+      pégalo como comentario cuando el vídeo sea público y fíjalo (⋮ → Fijar).</li>
+    <li><strong>Series que se entienden solas:</strong> casi nadie las ve en orden, así que cada parte tiene su propio
+      gancho y explica en media frase de qué va. Salen una por día, nunca dos el mismo día.</li>
+    <li><strong>Temas que funcionan:</strong> al elegir efemérides pesan más las de España y el mundo hispano y las de
+      deportistas, músicos, actores y científicos.</li>
+  </ul>
+  <p class="ayuda-campo">Para saber qué funciona, mira la <strong>retención</strong> en Mis vídeos → Publicados.</p>
 </div>
 
 <div class="tarjeta">
@@ -20,7 +52,11 @@
     <li>En <a href="{{ url_for('inicio') }}">Crear</a>, elige el tipo, escribe el tema y deja «Solo el guion». Si el tema da para más, elige varias partes.</li>
     <li>En <a href="{{ url_for('mis_videos') }}">Mis vídeos → Por revisar</a>, abre el vídeo. Su página va por pasos: revisa el texto (con las frases dudosas y las fuentes), genera el vídeo y publícalo.</li>
     <li>Si algo no te gusta, cámbialo y pulsa «Rehacer»: solo se rehacen las escenas cambiadas. El gancho, la música y las imágenes están en «Gancho, música e imágenes», dentro del paso del vídeo.</li>
-    <li>Publica con un clic: «Revisado → programar» lo da por bueno y lo programa a su hora recomendada. En TikTok, copia el texto de «Más opciones → Texto para publicar» (incluye los créditos obligatorios de las imágenes).</li>
+    <li>Publica con un clic: «Revisado → programar» lo da por bueno y lo programa a su hora recomendada. Si tienes
+      Instagram activado, sale también allí como Reel a la misma hora. En TikTok, copia el texto de «Más opciones →
+      Texto para publicar» (incluye los créditos obligatorios de las imágenes).</li>
+    <li>Cuando ya sea público, pega y fija el <strong>comentario con la pregunta</strong> (está en el paso «Publica en
+      YouTube» de su página).</li>
   </ol>
 </div>
 
@@ -57,8 +93,9 @@
   </ol>
   <p class="ayuda-campo">Revisa siempre el guion con los artículos antes de publicarlo: las cifras cambian de un día para
     otro y un error en un tema así trae problemas; YouTube además limita los vídeos con violencia. Prográmalo pronto: la
-    hora recomendada para actualidad es la primera franja libre. Las búsquedas usan Bing Noticias (gratis); con una clave
-    de Tavily (Ajustes → Noticias de actualidad) salen más artículos con texto.</p>
+    hora recomendada para actualidad es la primera franja libre. Las búsquedas usan Bing Noticias (gratis, da los grandes
+    medios españoles) y, si pones una clave de Tavily (Ajustes → Noticias de actualidad), también Tavily, que añade más
+    artículos y sustituye a Bing si falla.</p>
 </div>
 
 <div class="tarjeta">
@@ -84,6 +121,16 @@
       motivo. «Programar» lo programa a esa hora; «Otra hora» deja elegirla. «Programar todos» los programa a la vez.</li>
     <li><strong>Programados</strong> y <strong>Publicados</strong>: lo que ya está en la cola o en YouTube.</li>
   </ol>
+  <p>En <strong>Publicados</strong>, cada vídeo lleva sus vistas, «me gusta» y su <strong>retención</strong>:</p>
+  <ul>
+    <li><strong>% se queda:</strong> de cada 100 personas a las que YouTube se lo enseñó, cuántas se quedaron a verlo
+      (el resto deslizó). En verde por encima de 70 %, en rojo por debajo de 50 %.</li>
+    <li><strong>Ve el % (s):</strong> qué parte del vídeo se ve de media. Más de 100 % quiere decir que lo repiten.</li>
+  </ul>
+  <p class="ayuda-campo">Arriba sale la media del canal, y con «Mejor retención primero» ves qué tienen en común los que
+    mejor funcionan. Los datos de YouTube llegan con uno o dos días de retraso. La primera vez hay que volver a conectar
+    YouTube en Ajustes (pide un permiso nuevo, solo de lectura) y, si lo avisa, activar la «YouTube Analytics API» en
+    Google Cloud.</p>
   <p>Las horas recomendadas dependen del tipo de vídeo:</p>
   <ul>
     <li><strong>Efemérides:</strong> el mismo día del aniversario, por la mañana (9:00; 10:30 en fin de semana).</li>
@@ -115,13 +162,25 @@
     publicar uno ya, cambiarle la hora o quitarlo (si ya estaba en YouTube, queda en privado).</p>
   <p class="ayuda-campo">El ordenador tiene que encenderse, con tu sesión iniciada, al menos una vez antes de la hora de
     cada vídeo: una tarea de Windows se encarga sola, y el menú también lo mira cada minuto mientras está abierto. Si un
-    vídeo no llegó a subirse a tiempo, se publica en cuanto se sube.</p>
+    vídeo no llegó a subirse a tiempo, se publica en cuanto se sube. Pulsa «↻ Actualizar» para comprobarlo todo con
+    YouTube al momento.</p>
+</div>
+
+<div class="tarjeta">
+  <h2>Instagram (Reels)</h2>
+  <p>En <a href="{{ url_for('ajustes') }}#instagram">Ajustes → Instagram</a> conectas tu cuenta profesional de
+    Instagram (vinculada a una página de Facebook) una sola vez. Con <strong>«Publicar también en Instagram»</strong>,
+    cada vídeo programado sale también como Reel <strong>a su misma hora</strong>, con el texto de TikTok (pregunta,
+    fuentes, créditos y hashtags). Solo los que se publiquen desde que lo activas, no los anteriores.</p>
+  <p class="ayuda-campo">Instagram no deja programar publicaciones desde fuera, así que las publica el programa: el
+    ordenador tiene que estar encendido a la hora del vídeo; si no, se publica en cuanto se encienda. En Programados ves
+    si cada uno ya salió en Instagram, con su enlace. Si falla 3 veces, te avisa y deja de intentarlo.</p>
 </div>
 
 <div class="tarjeta">
   <h2>Formato «Diario de…»</h2>
   <p>Humor histórico en primera persona: «Día 4 como soldado romano en Vindolanda…». Escribes el personaje, de qué se
-    queja (opcional) y el día (si lo dejas vacío, sigue la numeración sola). La IA escribe un guion de ~45 s sarcástico
+    queja (opcional) y el día (si lo dejas vacío, sigue la numeración sola). La IA escribe un guion de 40-45 s sarcástico
     pero con hechos reales de Wikipedia, y el verificador revisa solo las afirmaciones históricas, no los chistes.</p>
   <p>En la página del guion tienes los <strong>prompts para tu generador de IA</strong> (Sora, Runway, Midjourney…):
     uno del personaje, uno del vídeo y uno por escena. Genera las imágenes en vertical (9:16) y súbelas en
@@ -158,7 +217,9 @@
     <li><code>salida\videos\</code>: una carpeta por tema, p. ej. <code>Guerra-civil\</code>, con cada vídeo (<code>Guerra-civil_pt3.mp4</code>), su texto para publicar en TikTok y YouTube Shorts (<code>Guerra-civil_pt3.txt</code>), su miniatura (<code>Guerra-civil_pt3.jpg</code>) y una subcarpeta <code>guiones\</code> con el texto de cada guion. Los vídeos en inglés llevan «_EN» al final.</li>
     <li><code>salida\_trabajo\</code>: escenas ya montadas (caché para rehacer rápido). Se puede borrar sin problema.</li>
     <li><code>musica\</code>: las pistas de música, incluidas las tuyas.</li>
-    <li><code>.env</code> (carpeta principal): tu clave de Groq, la voz y el contacto para Wikimedia.</li>
+    <li><code>salida\estadisticas_youtube.json</code> y <code>salida\retencion_youtube.json</code>: las vistas y la retención de cada vídeo.</li>
+    <li><code>.env</code> (carpeta principal): tu clave de Groq (y la de Tavily, si la pusiste), la voz y el contacto para Wikimedia.</li>
+    <li><code>credenciales\</code>: las conexiones con YouTube e Instagram. No la compartas con nadie.</li>
   </ul>
   <p class="ayuda-campo">Para apagar el menú, cierra su ventana.</p>
 </div>

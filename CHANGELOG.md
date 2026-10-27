@@ -3,6 +3,37 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.16.0] - 2026-10-27
+
+### Añadido
+- **Instagram (Reels):** en Ajustes → Instagram se conecta la cuenta profesional. Con «Publicar también en Instagram»,
+  cada vídeo programado sale también como Reel a su misma hora, con el texto de TikTok (fuentes, créditos y hashtags).
+  Instagram no deja programar: el programa lo publica a la hora, con el ordenador encendido.
+- **Retención en Publicados:** junto a las vistas, cuánta gente se queda a ver cada vídeo (frente a la que desliza) y
+  qué parte ve de media, la media del canal y el orden «Mejor retención primero». Hay que volver a conectar YouTube una
+  vez (pide un permiso nuevo, solo de lectura).
+- **Pregunta final y comentario para fijar:** cada guion acaba con una pregunta al espectador, que también va en la
+  descripción de YouTube, en el texto de TikTok/Instagram y en la ficha del vídeo, lista para copiarla y fijarla como
+  comentario.
+
+### Cambiado
+- **Vídeos de 40-45 s** (antes 60-75 s): 5-6 escenas, directos al grano. Los Shorts que se ven enteros son los que
+  YouTube reparte.
+- **Gancho más exigente:** además de saludos y fechas sueltas, se rechaza empezar presentando al protagonista como una
+  enciclopedia («X, figura clave de…»).
+- **Series que se entienden solas:** cada parte arranca con su propio gancho y sitúa en media frase de qué va, sin «en
+  la parte anterior».
+- **Temas que funcionan en el canal:** al elegir efemérides pesan más las de España y el mundo hispano y las de
+  deportistas, músicos, actores y científicos.
+- **Noticias con Bing y Tavily juntos:** con la clave de Tavily, antes solo se buscaba en Tavily, y salían medios pequeños
+  y en inglés. Ahora va primero Bing Noticias (ABC, La Vanguardia, elDiario.es…), Tavily añade lo que falte y, si Bing
+  falla, lo sustituye.
+- **Clips elegidos por la IA:** un modelo revisa qué clips de vídeo encajan de verdad con cada escena y la época del
+  vídeo; los que no, se descartan. Si alguno encaja razonablemente, pone al menos uno: los clips retienen más que las fotos.
+- **Ayuda e información al día:** la ayuda de la app (con una sección nueva, «Cómo se hacen para que la gente se
+  quede»), Crear, Ajustes, el LEEME, el README, la web y la política de privacidad (permiso de retención e Instagram)
+  explican cómo son ahora los vídeos.
+
 ## [1.15.0] - 2026-10-27
 
 ### Cambiado

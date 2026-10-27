@@ -52,6 +52,13 @@
           {% elif v.estado == 'error' %}<span class="etiqueta error">error</span>{% endif %}
         </div>
         {% if v.mensaje %}<div class="meta nota">{{ v.mensaje }}</div>{% endif %}
+        {% if v.instagram %}
+          <div class="meta">
+            {% if v.instagram.estado == 'publicado' %}<span class="etiqueta ok">Instagram</span>
+              {% if v.instagram.url %}<a href="{{ v.instagram.url }}" target="_blank" rel="noopener">Ver el Reel</a>{% endif %}
+            {% else %}<span class="etiqueta error">Instagram</span> {{ v.instagram.mensaje }}{% endif %}
+          </div>
+        {% endif %}
 
         <details class="cambiar-hora" id="hora-{{ loop.index }}">
           <summary>Cambiar hora</summary>

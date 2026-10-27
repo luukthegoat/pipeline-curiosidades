@@ -5,8 +5,9 @@
 **De un tema a un vídeo vertical publicado en YouTube Shorts, con IA y sin inventarse la historia.**
 
 Escribes un tema («La caída de Constantinopla»), una fecha o un personaje, y el programa genera un vídeo de
-~1 minuto para Shorts / TikTok / Reels: guion verificado contra Wikipedia, voz, imágenes, subtítulos animados,
-música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo se maneja desde un menú que se abre como aplicación de escritorio.
+40-45 segundos para Shorts / TikTok / Reels: guion verificado contra Wikipedia, voz, clips de vídeo e imágenes de
+archivo, subtítulos animados, música, miniatura, textos para publicar… y lo sube programado a YouTube (y, si quieres,
+a Instagram como Reel). Todo se maneja desde un menú que se abre como aplicación de escritorio.
 
 <p align="center"><img src="docs/demo.png" alt="Fotogramas de un vídeo generado" width="900"></p>
 
@@ -14,10 +15,11 @@ música, miniatura, textos para publicar… y lo sube programado a YouTube. Todo
 
 | Paso | Qué ocurre |
 |---|---|
-| **1 · Guion** | Busca el material en Wikipedia y un LLM (Groq) escribe un guion de 60-75 s en escenas, con gancho, tono musical y nombre corto. Un **segundo LLM verifica cada frase contra la fuente** y marca las que no tienen respaldo. |
+| **1 · Guion** | Busca el material en Wikipedia y un LLM (Groq) escribe un guion de 40-45 s en 5-6 escenas, con gancho en la primera frase, pregunta final, tono musical y nombre corto. Un **segundo LLM verifica cada frase contra la fuente** y marca las que no tienen respaldo. |
 | **2 · Voz** | Cada escena se convierte en voz neuronal (edge-tts) con la duración y el tiempo **de cada palabra**. |
-| **3 · Vídeo** | Imágenes reales de Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago (dominio público) y clips de vídeo de archivo cuando los hay, elegidos por relevancia, con zoom lento, subtítulos palabra a palabra, gancho en grande, música que baja sola cuando habla la voz y una toma final animada de «like y suscríbete». |
-| **4 · Publicar** | Sube a YouTube por la API oficial (título, descripción, etiquetas, aviso de contenido sintético, publicación programada) y prepara el texto de TikTok. |
+| **3 · Vídeo** | Primero, 1-2 clips de vídeo de archivo con licencia libre que una IA comprueba que encajan con la escena y la época; después, imágenes reales de Wikipedia, Wikimedia Commons, The Met y el Art Institute of Chicago (dominio público), con zoom lento, subtítulos palabra a palabra, gancho en grande, música que baja sola cuando habla la voz y una toma final animada de «like y suscríbete». |
+| **4 · Publicar** | Sube a YouTube por la API oficial (título, descripción, etiquetas, aviso de contenido sintético, publicación programada), publica el Reel en Instagram a la misma hora (Graph API) y prepara el texto de TikTok y el comentario para fijar. |
+| **5 · Medir** | Trae de YouTube las vistas y la **retención** de cada vídeo (cuánta gente se queda frente a la que desliza y qué parte ve) para saber qué funciona. |
 
 **Formatos:** tema libre, **series** de varias partes con índice previo (para que no se repitan ni destripen el final),
 **efemérides** («tal día como hoy»), **«Diario de…»** (humor histórico en primera persona con imágenes generadas por IA)
@@ -40,9 +42,13 @@ Lo interesante del proyecto no es llamar a un LLM, sino todo lo que hace falta a
 - **Ser un buen cliente de las APIs.** Un módulo común ([`wikimedia.py`](scripts/wikimedia.py)) da a todas las peticiones
   caché en disco, ritmo máximo por servidor (compartido entre procesos), respeto a `Retry-After`/`maxlag` e
   identificación con contacto, como exige Wikimedia. Esto acabó con los bloqueos temporales.
+- **Hechos para retener.** 40-45 s, gancho comprobado por código (se rechazan saludos, fechas sueltas y arranques de
+  enciclopedia), pregunta final para los comentarios, series cuyas partes se entienden solas y efemérides elegidas
+  dando más peso a lo que funciona en el canal (España, mundo hispano, personajes famosos).
 - **Elegir imágenes que encajen.** Puntuación por palabras clave ponderadas por rareza (tipo IDF), penalización de
-  imágenes de otra época y umbral mínimo: mejor repetir una imagen buena que poner una irrelevante. Se pueden
-  cambiar a mano desde el menú.
+  imágenes de otra época y umbral mínimo: mejor repetir una imagen buena que poner una irrelevante. Los clips de vídeo
+  van primero y los valida un LLM (*LLM-as-a-judge*) para que no entre un vídeo de otra época o de otro suceso. Se
+  pueden cambiar a mano desde el menú.
 - **Rehacer en segundos.** Cada escena es un segmento en caché identificado por una huella de sus entradas; las
   escenas se montan en paralelo y se unen sin recodificar. Un vídeo nuevo tarda ~1 min y rehacerlo tras cambiar una
   imagen, ~8 s (antes, ~3 min).
@@ -56,8 +62,9 @@ flowchart LR
     A[Tema / fecha / personaje] --> B[paso1_guiones.py<br/>Wikipedia + LLM + verificador]
     B --> C[paso2_audio.py<br/>voz y tiempos por palabra]
     C --> D[paso3_video.py<br/>imágenes, subtítulos, música, cierre]
-    D --> E[subir_youtube.py<br/>API de YouTube]
+    D --> E[subir_youtube.py<br/>API de YouTube + retención]
     D --> F[.txt para TikTok]
+    E --> I[instagram.py<br/>Reels a la misma hora]
     W[wikimedia.py<br/>caché y ritmo] -.-> B
     W -.-> D
     M[menu/app.py<br/>menú + cola de tareas] --> B & C & D & E
@@ -73,14 +80,15 @@ flowchart LR
 | [`wikimedia.py`](scripts/wikimedia.py) | Acceso a Wikipedia, Commons y museos: caché, límites, esperas |
 | [`imagenes_ia.py`](scripts/imagenes_ia.py) | Imágenes generadas con IA para el formato «Diario de…» |
 | [`musica.py`](scripts/musica.py) | Pistas de fondo sintetizadas con ffmpeg (épica, misterio, triste, neutra, cómica) |
-| [`subir_youtube.py`](scripts/subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal |
+| [`subir_youtube.py`](scripts/subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal, vistas y retención (YouTube Analytics) |
+| [`instagram.py`](scripts/instagram.py) | Conexión con Instagram (Graph API) y publicación de cada vídeo como Reel |
 | [`video_ia.py`](scripts/video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
-| [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias o Tavily) y su texto, para los vídeos de actualidad |
+| [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias y, con clave, Tavily) y su texto, para los vídeos de actualidad |
 | [`radar.py`](scripts/radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
 | [`piloto_actualidad.py`](scripts/piloto_actualidad.py) | Hace y publica solo el vídeo de la noticia del día, con salvaguarda |
 | [`borrar.py`](scripts/borrar.py) | Borra un vídeo y todo lo generado para él (a la Papelera de reciclaje) |
 | [`horarios.py`](scripts/horarios.py) | Horas recomendadas para publicar según el tipo de vídeo (efeméride, serie, humor…) |
-| [`programados.py`](scripts/programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario |
+| [`programados.py`](scripts/programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario y lo publica en Instagram a su hora |
 | [`menu/`](menu/) | Menú (Flask): Crear, Mis vídeos (por revisar, listos, programados, publicados), Programados con calendario y Ajustes |
 | [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |
 | [`lanzador/`](lanzador/) | Lanzador `Mente Inquieta.exe` (C#), que abre la aplicación sin consola |
@@ -89,7 +97,7 @@ flowchart LR
 
 Python · Groq (gpt-oss-120b / gpt-oss-20b / Qwen) · Wikipedia y Wikimedia API · The Met y Art Institute of Chicago
 APIs · edge-tts · ffmpeg (zoompan, subtítulos ASS, sidechain) · Pillow · Flask · pywebview (WebView2) · C# ·
-YouTube Data API v3 (OAuth 2.0)
+YouTube Data API v3 y YouTube Analytics API (OAuth 2.0) · Instagram Graph API · Tavily
 
 ## Instalación
 
@@ -135,8 +143,8 @@ de verdad.
 
 ## Novedades
 
-Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.2.0**, convierte el menú en
-una aplicación de escritorio con su propio lanzador `.exe`; la 1.1.0 rediseñó el menú con un estilo moderno y minimalista.
+Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.16.0**, hace los vídeos de
+40-45 s con pregunta final y clips de vídeo primero, publica también en Instagram y enseña la retención de cada vídeo.
 
 ## Licencia
 

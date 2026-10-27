@@ -18,7 +18,9 @@ CÓMO ABRIRLO
 QUÉ PUEDES HACER (barra de arriba)
   Crear
     · Elegir el tipo: tema libre (en una o varias partes), efemérides, actualidad,
-      vídeo con IA o «Diario de…».
+      vídeo con IA o «Diario de…». Todos salen de 40-45 s, con gancho en la
+      primera frase, 1-2 clips de vídeo si hay alguno que encaje y una pregunta
+      al final.
     · Rellenar los detalles y elegir idiomas y si quieres solo el guion
       (recomendado, para revisarlo) o guion + audio + vídeo del tirón.
 
@@ -28,6 +30,8 @@ QUÉ PUEDES HACER (barra de arriba)
     · Filtros: Por revisar · Listos · Programados · Publicados.
     · «Revisado → programar»: lo da por bueno y lo programa a su hora
       recomendada con un clic. «Programar todos» programa todos los listos.
+    · En Publicados: vistas, «me gusta» y retención (% que se queda y qué
+      parte del vídeo ve) de cada vídeo, y la media del canal.
 
   Página de cada vídeo (por pasos)
     1. Revisa el texto: frases dudosas del verificador, fuentes y el texto de
@@ -35,15 +39,17 @@ QUÉ PUEDES HACER (barra de arriba)
     2. El vídeo: generar / rehacer audio y vídeo (solo se rehacen las escenas
        cambiadas), verlo con su miniatura, y el gancho, la música y las imágenes.
     3. Publica en YouTube: a la hora recomendada con un clic, a otra hora o ya.
+       Ahí está también el comentario con la pregunta, para fijarlo.
     · Más opciones: texto para publicar (TikTok y YouTube), prompts y borrar.
 
   Programados
     La cola de publicaciones (Lista y Calendario): publicar ya, cambiar la hora,
-    reintentar o quitar.
+    reintentar o quitar. «↻ Actualizar» lo comprueba todo con YouTube. Si
+    Instagram está activado, cada vídeo sale también allí como Reel a su hora.
 
   Ajustes
-    Voz, música, programar solos los vídeos sin avisos, noticias de actualidad,
-    conexión con YouTube y la Ayuda («Cómo funciona la app»).
+    Voz, música, programar solos los vídeos sin avisos, noticias de actualidad
+    (Tavily), conexión con YouTube e Instagram y la Ayuda («Cómo funciona la app»).
 
   Tareas (arriba a la derecha)
     Las tareas se ponen en cola y se hacen una detrás de otra. Muestra en
@@ -53,6 +59,7 @@ SUBIR A YOUTUBE SHORTS AUTOMÁTICAMENTE
   Configuración (una sola vez):
     1. Entra en console.cloud.google.com y crea un proyecto (p. ej. «Mente Inquieta»).
     2. «APIs y servicios → Biblioteca»: busca «YouTube Data API v3» y pulsa «Habilitar».
+       Haz lo mismo con «YouTube Analytics API» (para ver la retención).
     3. «Pantalla de consentimiento de OAuth»: tipo «Externo», un nombre y tu correo.
        En «Usuarios de prueba» añade la cuenta de Google de tu canal.
     4. «Credenciales → Crear credenciales → ID de cliente de OAuth», tipo «App de
@@ -67,7 +74,14 @@ SUBIR A YOUTUBE SHORTS AUTOMÁTICAMENTE
     · Mientras Google no verifique tu proyecto, YouTube deja en privado lo que se
       sube por la API: hazlo público desde YouTube Studio.
     · El cupo gratuito da para unos 6 vídeos al día.
-    · La carpeta «credenciales» da acceso a tu canal: no la compartas.
+    · La carpeta «credenciales» da acceso a tu canal y a Instagram: no la compartas.
+
+INSTAGRAM (REELS)
+  En Ajustes → Instagram: los datos de tu app de Meta y un token del Explorador
+  de la API Graph (los pasos salen allí). La cuenta de Instagram tiene que ser
+  profesional y estar vinculada a una página de Facebook. Después, «Publicar
+  también en Instagram»: cada vídeo programado sale como Reel a su misma hora,
+  con el ordenador encendido (Instagram no deja programar desde fuera).
 
 DÓNDE QUEDAN LOS VÍDEOS
   salida\videos\<tema>\  una carpeta por tema, por ejemplo:

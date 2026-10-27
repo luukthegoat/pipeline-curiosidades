@@ -35,6 +35,7 @@ import borrar  # noqa: E402  (borrar un vídeo y todo lo suyo)
 import actualidad  # noqa: E402  (noticias recientes para los vídeos de actualidad)
 import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
 import piloto_actualidad  # noqa: E402  (vídeo de la noticia del día, solo y con salvaguarda)
+import instagram  # noqa: E402  (publicar los vídeos como Reels)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -236,6 +237,8 @@ def estadisticas_youtube() -> dict:
         mtime = subir_youtube.ESTADISTICAS.stat().st_mtime
     except OSError:
         return {"actualizado": "", "videos": {}}
+    if subir_youtube.RETENCION.exists():
+        mtime = (mtime, subir_youtube.RETENCION.stat().st_mtime)
     if _estadisticas["mtime"] != mtime:
         _estadisticas.update(mtime=mtime, datos=subir_youtube.estadisticas())
     return _estadisticas["datos"]
@@ -397,9 +400,19 @@ def mis_videos():
     lista = [g for g in guiones if ver == "todos" or g["apartado"] == ver]
     if ver == "publicados" and request.args.get("orden") == "vistas":
         lista.sort(key=lambda g: -(g["estadisticas"] or {}).get("vistas", 0))
+    if ver == "publicados" and request.args.get("orden") == "retencion":
+        lista.sort(key=lambda g: -((g["estadisticas"] or {}).get("se_quedan") or -1))
     stats = estadisticas_youtube()
     vistas = {"total": sum(v["vistas"] for v in stats["videos"].values()),
               "actualizado": stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else ""}
+    # Retención media del canal (ponderada por vistas) y si falta permiso o la API para traerla.
+    con_ret = [v for v in stats["videos"].values() if v.get("se_quedan") is not None and v["vistas"]]
+    total_ret = sum(v["vistas"] for v in con_ret)
+    vistas["se_quedan"] = round(sum(v["se_quedan"] * v["vistas"] for v in con_ret) / total_ret) if total_ret else None
+    con_pct = [v for v in stats["videos"].values() if v.get("visto_pct") and v["vistas"]]
+    total_pct = sum(v["vistas"] for v in con_pct)
+    vistas["visto_pct"] = round(sum(v["visto_pct"] * v["vistas"] for v in con_pct) / total_pct) if total_pct else None
+    vistas["error_retencion"] = subir_youtube.retencion().get("error", "")
     sin_youtube = [g["nombre"] for g in lista if g["apartado"] in ("revisar", "listos") and g["video"]]
     return render_template(
         "videos.html", guiones=lista, ver=ver, filtros=FILTROS, cuantos=cuantos, dia=resumen_del_dia(),
@@ -1087,12 +1100,17 @@ def revisar_programados():
 @app.post("/videos/vistas")
 def actualizar_vistas():
     """«↻ Actualizar» en Publicados: trae ya de YouTube las vistas de cada vídeo."""
-    destino = {"ver": "publicados", **({"orden": "vistas"} if request.form.get("orden") == "vistas" else {})}
+    orden = request.form.get("orden")
+    destino = {"ver": "publicados", **({"orden": orden} if orden in ("vistas", "retencion") else {})}
     try:
         cuantos = len(subir_youtube.actualizar_estadisticas())
     except Exception as error:  # noqa: BLE001 — sin conexión o sin YouTube conectado
         return redirect(url_for("mis_videos", error=f"No se han podido traer las vistas de YouTube: {error}", **destino))
-    return redirect(url_for("mis_videos", mensaje=f"Vistas actualizadas ({cuantos} vídeos).", **destino))
+    try:
+        subir_youtube.actualizar_retencion(forzar=True)
+    except Exception as error:  # noqa: BLE001 — las vistas sí se han traído
+        return redirect(url_for("mis_videos", error=f"Vistas actualizadas, pero no la retención: {error}", **destino))
+    return redirect(url_for("mis_videos", mensaje=f"Vistas y retención actualizadas ({cuantos} vídeos).", **destino))
 
 
 @app.post("/youtube/conectar")
@@ -1162,7 +1180,47 @@ def ajustes():
         piloto_tarea=piloto_actualidad.estado_tarea(),
         piloto_contados=list(reversed(piloto_actualidad.contados(2))),
         piloto_registro=piloto_actualidad.ultimas_lineas(25),
+        ig=instagram.leer_config(), ig_conectado=instagram.conectado(),
     )
+
+
+def _ir_a_instagram(mensaje: str):
+    return redirect(url_for("ajustes", mensaje=mensaje) + "#instagram")
+
+
+@app.post("/ajustes/instagram/app")
+def instagram_app():
+    instagram.guardar_app(request.form.get("app_id", ""), request.form.get("app_secreto", ""))
+    return _ir_a_instagram("Datos de la app de Meta guardados.")
+
+
+@app.post("/ajustes/instagram/conectar")
+def instagram_conectar():
+    try:
+        cuenta = instagram.conectar(request.form.get("token", ""))
+    except Exception as error:  # noqa: BLE001 — se muestra en la página
+        return _ir_a_instagram(f"No se ha podido conectar: {error}")
+    return _ir_a_instagram(f"Instagram conectado: @{cuenta['usuario']} (página «{cuenta['pagina']}»).")
+
+
+@app.post("/ajustes/instagram/desconectar")
+def instagram_desconectar():
+    instagram.desconectar()
+    return _ir_a_instagram("Instagram desconectado.")
+
+
+@app.post("/ajustes/instagram/publicar")
+def instagram_publicar():
+    """Activa o desactiva publicar los programados también como Reels (desde ahora: no los ya pasados)."""
+    config = instagram.leer_config()
+    activar = request.form.get("activo") == "1"
+    config["publicar"] = activar
+    if activar:
+        config["desde"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    instagram.CONFIG.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    despertar_programados()
+    return _ir_a_instagram("Desde ahora, cada vídeo programado se publica también en Instagram a su misma hora."
+                           if activar else "Ya no se publica en Instagram.")
 
 
 @app.post("/ajustes")

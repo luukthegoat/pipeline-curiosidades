@@ -1,9 +1,10 @@
 """Noticias de actualidad: busca artículos recientes sobre un tema y extrae su texto.
 
 Wikipedia no sirve para lo que está pasando ahora, así que el material de estos vídeos son artículos de prensa:
-  - Tavily (si hay TAVILY_API_KEY en .env): buscador para IA; devuelve el texto de cada artículo ya limpio.
   - Bing Noticias (gratis, sin clave): su canal RSS da titular, medio, fecha y enlace; el texto se descarga
     de la web de cada medio (los que tienen muro de pago o solo vídeo se descartan solos).
+  - Tavily (si hay TAVILY_API_KEY en .env): buscador para IA; completa lo de Bing (y lo sustituye si Bing falla)
+    con el texto de cada artículo ya limpio.
 Se queda con un artículo por medio, de los últimos días, con texto suficiente, y marca los medios reconocidos.
 
 Uso:
@@ -128,9 +129,24 @@ def extraer_texto(url: str) -> str:
 
 def buscar(tema: str, dias: int = 3, mas_idiomas: bool = False) -> dict:
     """Busca, descarga y ordena los artículos. Guarda el resultado y lo devuelve (con su «id»)."""
+    # Bing primero: da los medios españoles grandes. Tavily (si hay clave) completa con lo que Bing no trae y, si
+    # Bing falla, lo sustituye. Solo con Tavily salían medios pequeños y en inglés.
     clave = os.getenv("TAVILY_API_KEY", "").strip()
-    motor = "Tavily" if clave else "Bing Noticias"
-    encontrados = buscar_tavily(tema, dias, clave) if clave else buscar_bing(tema, dias, mas_idiomas)
+    motores, encontrados = [], []
+    try:
+        encontrados += buscar_bing(tema, dias, mas_idiomas)
+        motores.append("Bing Noticias")
+    except requests.RequestException:
+        if not clave:
+            raise
+    if clave:
+        try:
+            encontrados += buscar_tavily(tema, dias, clave)
+            motores.append("Tavily")
+        except requests.RequestException:
+            if not encontrados:
+                raise
+    motor = " + ".join(motores)
 
     # Un artículo por medio (el primero que da el buscador, que es el más relevante)
     por_medio = {}

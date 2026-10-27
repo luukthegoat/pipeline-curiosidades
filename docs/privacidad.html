@@ -16,10 +16,10 @@
 
 <main>
   <h1>Política de privacidad</h1>
-  <p class="fecha">Última actualización: 23 de octubre de 2026</p>
+  <p class="fecha">Última actualización: 27 de octubre de 2026</p>
 
   <p>Mente Inquieta («la aplicación») es una herramienta de escritorio de código abierto que crea vídeos cortos y los
-    publica en el canal de YouTube de quien la usa. Se ejecuta en el ordenador de su usuario: no hay un servidor de la
+    publica en el canal de YouTube (y, si quien la usa lo activa, en su cuenta de Instagram) de quien la usa. Se ejecuta en el ordenador de su usuario: no hay un servidor de la
     aplicación ni cuentas de usuario, y su autor no recibe ningún dato de quien la use.</p>
 
   <h2>Qué datos de Google usa y para qué</h2>
@@ -31,13 +31,23 @@
       de los vídeos subidos.</li>
     <li><code>youtube</code>: cambiar la fecha de publicación o la visibilidad de los vídeos que subió la aplicación,
       borrar un vídeo cuando tú lo pides y actualizar la descripción y las palabras clave del canal cuando tú lo pides.</li>
+    <li><code>yt-analytics.readonly</code>: leer las estadísticas de retención de tus vídeos (cuánta gente se queda a
+      verlos y qué parte ven) para enseñártelas en la aplicación. Solo se guardan en tu ordenador.</li>
   </ul>
   <p>La aplicación solo hace estas acciones cuando tú las pides o las programas. No lee tus correos, contactos, historial
     ni ningún otro dato de tu cuenta de Google.</p>
 
+  <h2>Instagram (opcional)</h2>
+  <p>Si conectas Instagram, la aplicación usa la API de Instagram de Meta (con inicio de sesión de Facebook) y los
+    permisos <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>pages_show_list</code>,
+    <code>pages_read_engagement</code> y <code>business_management</code>, solo para encontrar tu cuenta profesional
+    de Instagram vinculada a tu página de Facebook, leer su nombre y número de seguidores y publicar como Reels los
+    vídeos que tú programas. No lee mensajes, comentarios ni datos de otras personas.</p>
+
   <h2>Dónde se guardan</h2>
-  <p>La autorización de Google (el «token») se guarda únicamente en tu ordenador, en la carpeta <code>credenciales</code>
-    de la aplicación. Nunca se envía a ningún servidor que no sea de Google, ni al autor de la aplicación ni a terceros.</p>
+  <p>Las autorizaciones de Google y de Meta (los «tokens») se guardan únicamente en tu ordenador, en la carpeta
+    <code>credenciales</code> de la aplicación. Nunca se envían a ningún servidor que no sea el de su servicio (Google o
+    Meta), ni al autor de la aplicación ni a terceros.</p>
 
   <h2>Con quién se comparten</h2>
   <p>Con nadie. Los datos de tu cuenta de Google no se venden, no se ceden, no se usan para publicidad ni para entrenar
@@ -57,9 +67,10 @@
 
   <h2>Cómo retirar el acceso y borrar los datos</h2>
   <ul>
-    <li>Desde la aplicación: Ajustes → YouTube → Desconectar (borra la autorización guardada en tu ordenador).</li>
+    <li>Desde la aplicación: Ajustes → YouTube → Desconectar, o Ajustes → Instagram → Desconectar (borran la
+      autorización guardada en tu ordenador).</li>
     <li>Desde Google, en cualquier momento: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>
-      → Mente Inquieta → Quitar acceso.</li>
+      → Mente Inquieta → Quitar acceso. Para Meta: Facebook → Configuración → Integraciones comerciales → Quitar.</li>
     <li>Borrando la carpeta <code>credenciales</code> de la aplicación.</li>
   </ul>
   <p>Los vídeos, guiones y demás archivos que crea la aplicación se guardan en tu ordenador (carpeta <code>salida</code>)

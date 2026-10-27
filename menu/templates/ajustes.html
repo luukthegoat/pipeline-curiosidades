@@ -5,7 +5,7 @@
   <h1>Ajustes</h1>
   <a class="boton secundario pequeno" href="{{ url_for('ayuda') }}">Cómo funciona la app</a>
 </div>
-<p class="sub">Voz, música, programación automática y conexión con YouTube.</p>
+<p class="sub">Voz, música, programación automática y conexión con YouTube e Instagram.</p>
 {% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
 
 {% if not voces %}
@@ -129,7 +129,7 @@
 <div class="tarjeta" id="actualidad">
   <h2>Noticias de actualidad</h2>
   {% if tavily %}
-    <p><span class="etiqueta ok">Tavily conectado</span> Las búsquedas de actualidad usan Tavily.</p>
+    <p><span class="etiqueta ok">Tavily conectado</span> Las búsquedas de actualidad juntan Bing Noticias (los grandes medios españoles) y Tavily (más artículos, y de respaldo si Bing falla).</p>
   {% else %}
     <p><span class="etiqueta">Bing Noticias</span> Las búsquedas usan Bing Noticias (gratis, sin clave). Funciona bien,
       pero algunos medios no dejan descargar el texto y se descartan.</p>
@@ -152,11 +152,71 @@
   {% endif %}
   <p class="ayuda-campo">Opcional: con una clave gratuita de <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">Pexels</a>
     (crea una cuenta y pide tu «API key») se añaden planos de ambiente sin época: nunca personas, ciudades ni coches.
-    No se usan en las noticias de actualidad ni en los «Diario de…».</p>
+    No se usan en las noticias de actualidad ni en los «Diario de…». Es opcional: si Pexels no te deja crear la clave,
+    no pasa nada, los clips de vídeo se siguen buscando en Wikimedia Commons.</p>
   <form method="post" action="{{ url_for('guardar_pexels') }}" class="programar-uno" style="max-width: 560px;">
     <input type="password" name="clave" placeholder="{{ 'Clave guardada (escribe otra para cambiarla, o vacío para quitarla)' if pexels else 'Clave de Pexels' }}" autocomplete="off" style="flex: 1;">
     <button class="secundario" type="submit">Guardar</button>
   </form>
+</div>
+
+<div class="tarjeta" id="instagram">
+  <h2>Instagram (Reels)</h2>
+  {% if ig_conectado %}
+    <p><span class="etiqueta ok">conectado</span> <strong>@{{ ig.usuario }}</strong> · página «{{ ig.pagina }}»</p>
+    {% if ig.publicar %}
+      <p><span class="etiqueta ok">publicando</span> Cada vídeo programado se publica también como Reel a su misma hora
+        (desde el {{ ig.desde.replace('T', ' a las ') }}). Instagram no deja programar: el programa lo publica a la hora,
+        así que el ordenador tiene que estar encendido; si no, se publica en cuanto se encienda.</p>
+    {% else %}
+      <p class="ayuda-campo">Conectado, pero aún no se publica nada en Instagram.</p>
+    {% endif %}
+    <div class="acciones">
+      <form method="post" action="{{ url_for('instagram_publicar') }}">
+        <input type="hidden" name="activo" value="{{ '0' if ig.publicar else '1' }}">
+        <button class="{{ 'secundario' if ig.publicar }}" type="submit">{{ 'Dejar de publicar en Instagram' if ig.publicar else 'Publicar también en Instagram' }}</button>
+      </form>
+      <form method="post" action="{{ url_for('instagram_desconectar') }}">
+        <button class="secundario" type="submit">Desconectar</button>
+      </form>
+    </div>
+  {% else %}
+    <p><span class="etiqueta mal">sin conectar</span></p>
+    <ol class="pasos">
+      <li>
+        <strong>Datos de tu app de Meta</strong> (developers.facebook.com → tu app → Configuración de la app → Básica):
+        <form method="post" action="{{ url_for('instagram_app') }}" style="margin-top: 8px;">
+          <div class="fila">
+            <div><label for="app_id">Identificador de la app</label>
+              <input type="text" id="app_id" name="app_id" value="{{ ig.app_id or '' }}" autocomplete="off"></div>
+            <div><label for="app_secreto">Clave secreta de la app</label>
+              <input type="password" id="app_secreto" name="app_secreto" autocomplete="off"
+                     placeholder="{{ 'Guardada (escribe otra para cambiarla)' if ig.app_secreto else '' }}"></div>
+          </div>
+          <div class="acciones"><button class="secundario" type="submit">Guardar</button>
+            {% if ig.app_id and ig.app_secreto %}<span class="etiqueta ok">guardados</span>{% endif %}</div>
+        </form>
+      </li>
+      <li>
+        <strong>Un token para conectar.</strong> En developers.facebook.com → <em>Herramientas</em> →
+        <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener">Explorador de la API Graph</a>:
+        <ul>
+          <li>Arriba a la derecha, en «Aplicación de Meta», elige <strong>tu app</strong>.</li>
+          <li>En «Usuario o página», <strong>Obtener token de acceso de usuario</strong>.</li>
+          <li>En «Permisos», añade: <code>instagram_basic</code>, <code>instagram_content_publish</code>,
+            <code>pages_show_list</code>, <code>pages_read_engagement</code> y <code>business_management</code>.</li>
+          <li>Pulsa <strong>Generate Access Token</strong>, acepta y elige tu página y tu cuenta de Instagram.</li>
+          <li>Copia el token que sale y pégalo aquí (caduca en una hora: el programa lo cambia por uno que no caduca).</li>
+        </ul>
+        <form method="post" action="{{ url_for('instagram_conectar') }}" class="programar-uno" style="margin-top: 8px;">
+          <input type="password" name="token" placeholder="Pega aquí el token" autocomplete="off" style="flex: 1;" required>
+          <button type="submit" {% if not (ig.app_id and ig.app_secreto) %}disabled title="Guarda antes los datos de la app"{% endif %}>Conectar Instagram</button>
+        </form>
+      </li>
+    </ol>
+  {% endif %}
+  <p class="ayuda-campo" style="margin-top: 12px;">Se publica el mismo vídeo con el texto de TikTok de su .txt (con
+    fuentes y hashtags). Los datos se guardan en la carpeta <code>credenciales</code>: no los compartas con nadie.</p>
 </div>
 
 <div class="tarjeta" id="youtube">
