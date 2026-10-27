@@ -61,9 +61,9 @@ ANCHO_DESCARGA = 1280  # tamaño estándar de Wikimedia: los no estándar tienen
 PUNTUACION_MINIMA = 0.45  # por debajo, la imagen apenas tiene que ver con la escena: se repite una buena
 MAX_COMMONS = 25       # imágenes extra buscadas en Wikimedia Commons
 MAX_VIDEOS_COMMONS = 20         # vídeos buscados en Wikimedia Commons (en español y en inglés)
-MAX_CLIPS_POR_VIDEO = 3         # escenas con vídeo como mucho: el resto, fotos
+MAX_CLIPS_POR_VIDEO = 2         # clips de vídeo libres por vídeo: se reservan antes que las fotos (1-2 por vídeo)
 PUNTUACION_MINIMA_VIDEO = 0.8   # un vídeo tiene que encajar mejor que una foto para usarse
-VENTAJA_VIDEO = 0.3             # a igual relevancia, mejor en movimiento
+VENTAJA_VIDEO = 0.6             # los clips libres van primero: ganan a una foto que encaje algo mejor
 MAX_AMBIENTE_POR_VIDEO = 2      # planos de ambiente de Pexels como mucho (son genéricos: solo rellenan)
 PUNTUACION_AMBIENTE = 0.8       # si la mejor foto nueva encaja menos que esto, mejor un plano de ambiente
 DURACION_CLIP = 12.0            # s que se descargan de cada vídeo (las escenas duran menos)
@@ -333,7 +333,7 @@ def imagenes_del_art_institute(busqueda: str) -> list:
     return imagenes
 
 
-VERSION_CANDIDATAS = 8  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
+VERSION_CANDIDATAS = 10  # súbela si cambian las fuentes de imágenes: se vuelven a buscar
 
 
 def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
@@ -393,7 +393,8 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
                 print(f"  aviso: no se pudieron buscar vídeos en {donde}")
                 continue
             if buscar is videos_de_commons:
-                encontrados = [v for v in encontrados if len(set(v["claves"]) & tema) >= min(2, len(tema))]
+                encontrados = [{**v, "del_tema": True} for v in encontrados
+                               if len(set(v["claves"]) & tema) >= min(2, len(tema))]
             imagenes += encontrados
             print(f"  {donde}: {len(encontrados)} vídeos de «{argumentos[0]}»")
     # Planos de ambiente de Pexels (mar, humo, mapas…) para lo que pidan las escenas: solo rellenan huecos.
@@ -429,6 +430,19 @@ def imagenes_de_archivo(datos: dict) -> list:
     derechos). Se buscan en Wikimedia Commons con las búsquedas que propuso el guion."""
     busquedas = (datos.get("actualidad") or {}).get("busquedas_imagenes") or [nombre_corto(datos)]
     imagenes = []
+    # Clips con licencia libre de Commons: del propio suceso (por si alguien lo grabó y lo compartió con licencia
+    # libre) y de los lugares de la noticia. Nunca vídeo de televisiones o agencias: tiene derechos.
+    tema = (datos.get("actualidad") or {}).get("tema") or ""
+    for busqueda in [b for b in dict.fromkeys([tema, *busquedas[:5]]) if b]:
+        try:
+            encontrados = [{**v, "del_tema": True} for v in videos_de_commons(busqueda)
+                           if set(v["claves"]) & palabras_clave(busqueda)]
+            print(f"  Commons: {len(encontrados)} vídeos libres para «{busqueda}»")
+            imagenes += encontrados
+        except wikimedia.WikimediaEnEspera:
+            raise
+        except requests.RequestException:
+            print(f"  aviso: no se pudieron buscar vídeos de «{busqueda}» en Wikimedia Commons")
     for busqueda in busquedas[:5]:
         try:
             encontradas = imagenes_de_commons(busqueda)
@@ -471,6 +485,7 @@ class SelectorImagenes:
         self.usadas, self.fallidas, self.descargadas = set(), set(), {}
         self.bloqueados = set()  # grupos de servidores que nos han pedido esperar
         self.anterior = None  # para no repetir la misma imagen en dos escenas seguidas
+        self.reservadas = set()  # clips apartados para una escena concreta (reservar_clips)
 
     def puntuacion(self, indice: int, claves: set) -> float:
         imagen = self.imagenes[indice]
@@ -527,6 +542,36 @@ class SelectorImagenes:
             self.fallidas.add(indice)
         return None
 
+    def reservar_clips(self, escenas: list) -> dict:
+        """{número de escena: índice del clip}: hasta MAX_CLIPS_POR_VIDEO clips, cada uno en la escena donde mejor
+        encaja, decididos antes que las fotos para que siempre que haya un clip que encaje, salga."""
+        libres = [e for e in escenas if not e.get("imagen")]
+        clips_ya = sum(1 for i in self.usadas if self.imagenes[i].get("video"))  # elegidos a mano
+        parejas = []
+        for escena in libres:
+            claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
+            for indice, imagen in enumerate(self.imagenes):
+                if not imagen.get("video") or imagen.get("ambiente") or indice in self.usadas:
+                    continue
+                # Ya son del tema (del artículo, o de una búsqueda del tema o sus lugares que lo nombran): basta con
+                # que tengan algo que ver con la escena. Los demás, la exigencia normal de los vídeos.
+                del_tema = imagen.get("del_articulo") or imagen.get("del_tema")
+                if (del_tema and self.puntuacion(indice, claves) > 0) or self._vale(indice, claves):
+                    parejas.append((self.puntuacion(indice, claves), -escena["numero"], indice))
+        reservas = {}
+        for _, numero, indice in sorted(parejas, reverse=True):  # a igualdad, la escena más temprana
+            numero = -numero
+            if len(reservas) + clips_ya >= MAX_CLIPS_POR_VIDEO:
+                break
+            if numero not in reservas and indice not in reservas.values():
+                reservas[numero] = indice
+        self.reservadas = set(reservas.values())  # nadie más los coge
+        return reservas
+
+    def usar(self, indice: int):
+        """Descarga una candidata concreta (p. ej. un clip reservado); None si no se puede."""
+        return self._descargar(indice)
+
     def _ambiente(self, escena: dict):
         """Un plano de ambiente de Pexels de lo que pide el «visual» de la escena (fuego, mar, mapa…), si queda cupo."""
         if sum(1 for i in self.usadas if self.imagenes[i].get("ambiente")) >= MAX_AMBIENTE_POR_VIDEO:
@@ -543,7 +588,8 @@ class SelectorImagenes:
         """Devuelve (imagen, ruta) de la mejor imagen disponible, o (None, None)."""
         claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
         ranking = self.ranking(escena)
-        nuevas = [i for i in ranking if i not in self.usadas and i not in self.fallidas and self._vale(i, claves)]
+        nuevas = [i for i in ranking if i not in self.usadas and i not in self.fallidas and i not in self.reservadas
+                  and self._vale(i, claves)]
         nuevas = [i for i in nuevas if not self._bloqueada(i)]
         if not nuevas or self.puntuacion(nuevas[0], claves) < PUNTUACION_AMBIENTE:
             if resultado := self._ambiente(escena):  # nada que encaje bien: un plano de ambiente de lo que se cuenta
@@ -620,19 +666,24 @@ def componer_fotograma(ruta_imagen, destino: Path, etiqueta: str = "") -> Path:
     return destino
 
 
-def poner_etiqueta(imagen, texto: str, x: int, y: int) -> None:
-    """Rótulo pequeño y legible sobre cualquier foto: texto blanco en una pastilla oscura."""
+def capa_etiqueta(tamano: tuple, texto: str, x: int, y: int) -> Image.Image:
+    """Capa transparente con el rótulo: texto blanco en una pastilla oscura, legible sobre cualquier imagen."""
     try:
         fuente = ImageFont.truetype("arialbd.ttf", 30)
     except OSError:
         fuente = ImageFont.load_default()
-    capa = Image.new("RGBA", imagen.size, (0, 0, 0, 0))
+    capa = Image.new("RGBA", tamano, (0, 0, 0, 0))
     dibujo = ImageDraw.Draw(capa)
     caja = dibujo.textbbox((0, 0), texto, font=fuente)
     ancho, alto = caja[2] - caja[0], caja[3] - caja[1]
     dibujo.rounded_rectangle((x, y, x + ancho + 32, y + alto + 22), radius=12, fill=(0, 0, 0, 170))
     dibujo.text((x + 16, y + 11 - caja[1]), texto, font=fuente, fill=(255, 255, 255, 235))
-    imagen.paste(Image.alpha_composite(imagen.convert("RGBA"), capa).convert("RGB"))
+    return capa
+
+
+def poner_etiqueta(imagen, texto: str, x: int, y: int) -> None:
+    """Rótulo pequeño y legible sobre cualquier foto."""
+    imagen.paste(Image.alpha_composite(imagen.convert("RGBA"), capa_etiqueta(imagen.size, texto, x, y)).convert("RGB"))
 
 
 # --- Subtítulos (ASS) -----------------------------------------------------------
@@ -799,16 +850,25 @@ def segmento_video(trabajo: Path, numero: int, clip, audio: Path, util: float, t
     salida = trabajo / f"seg_{numero:02d}.mp4"
     clave = trabajo / f"seg_{numero:02d}.clave"
     firma = huella(VERSION_ESCENA, "video", info_archivo(clip), info_archivo(audio), round(util, 3),
-                   round(total, 3), subtitulos)
+                   round(total, 3), subtitulos, etiqueta)
     if salida.exists() and clave.exists() and clave.read_text() == firma:
         return salida
     (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
+    entradas, rotulo = [], ""
+    if etiqueta:  # «IMÁGENES DE ARCHIVO»…: en la esquina del clip, como en las fotos
+        ancho, alto = dimensiones_video(clip)
+        escala = min(ANCHO / ancho, int(ALTO * ALTO_IMAGEN) / alto)
+        x = (ANCHO - int(ancho * escala)) // 2
+        y = int(ALTO * CENTRO_IMAGEN) - int(alto * escala) // 2
+        capa_etiqueta((ANCHO, ALTO), etiqueta, x + 24, y + 24).save(trabajo / f"rotulo_{numero:02d}.png")
+        entradas = ["-i", f"rotulo_{numero:02d}.png"]
+        rotulo = "[vc][2:v]overlay=0:0[vc];"
     # Si el clip es más corto que la escena, se queda congelado en su último fotograma.
-    video = (f"{_filtro_clip_vertical('0:v', 'vc')};"
+    video = (f"{_filtro_clip_vertical('0:v', 'vc')};{rotulo}"
              f"[vc]tpad=stop_mode=clone:stop_duration={total:.3f},ass=sub_{numero:02d}.ass,format=yuv420p[v]")
     ffmpeg(
         [
-            "-i", str(Path(clip).resolve()), "-i", str(audio.resolve()),
+            "-i", str(Path(clip).resolve()), "-i", str(audio.resolve()), *entradas,
             "-filter_complex", f"{video};[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
@@ -819,6 +879,15 @@ def segmento_video(trabajo: Path, numero: int, clip, audio: Path, util: float, t
     )
     clave.write_text(firma)
     return salida
+
+
+def dimensiones_video(clip) -> tuple:
+    """(ancho, alto) de un vídeo, leídos de lo que dice ffmpeg al abrirlo."""
+    salida = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(Path(clip).resolve())],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace",
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr
+    medida = re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", salida)
+    return (int(medida[1]), int(medida[2])) if medida else (ANCHO, int(ALTO * ALTO_IMAGEN))
 
 
 def fotograma_de_video(clip, destino: Path) -> Path:
@@ -1090,6 +1159,7 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         if escena.get("imagen"):
             selector.marcar_usada(escena["imagen"])
     elegidas, creditos = {}, []
+    reservas = selector.reservar_clips(datos["escenas"])  # 1-2 clips de vídeo libres, en sus mejores escenas
     for escena in datos["escenas"]:
         imagen, ruta = escena.get("imagen"), None
         if imagen:
@@ -1098,6 +1168,8 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
             except (WikimediaBloqueado, requests.RequestException):
                 print(f"    no se pudo descargar la imagen elegida de la escena {escena['numero']}; elijo otra")
                 imagen = None
+        if not imagen and escena["numero"] in reservas:
+            imagen, ruta = selector.usar(reservas[escena["numero"]]) or (None, None)
         if not imagen:
             imagen, ruta = selector.para_escena(escena)
         elegidas[escena["numero"]] = {"imagen": imagen, "ruta": str(ruta) if ruta else None,
@@ -1126,10 +1198,15 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         if datos.get("actualidad") and eleccion["ruta"] and not (eleccion["imagen"] or {}).get("ruta"):
             # Foto de este año (puede ser del propio suceso, con licencia libre): se dice de dónde es.
             # Si es anterior, se avisa de que es de archivo y no muestra los hechos.
+            ingles = datos.get("idioma") == "en"
+            es_video = (eleccion["imagen"] or {}).get("video")
             if (eleccion["imagen"] or {}).get("anio") == datetime.now().year:
-                etiqueta = "FOTO: WIKIMEDIA COMMONS"
+                etiqueta = ("VIDEO" if es_video else "PHOTO" if ingles else "FOTO") + ": WIKIMEDIA COMMONS"
+                etiqueta = etiqueta.replace("VIDEO", "VÍDEO") if es_video and not ingles else etiqueta
+            elif es_video:
+                etiqueta = "ARCHIVE FOOTAGE" if ingles else "IMÁGENES DE ARCHIVO"
             else:
-                etiqueta = "ARCHIVE IMAGE" if datos.get("idioma") == "en" else "IMAGEN DE ARCHIVO"
+                etiqueta = "ARCHIVE IMAGE" if ingles else "IMAGEN DE ARCHIVO"
         imagen = eleccion["imagen"]
         hacer = segmento_video if (imagen or {}).get("video") and eleccion["ruta"] else segmento_escena
         trabajos.append((hacer, trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],

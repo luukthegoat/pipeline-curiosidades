@@ -3,6 +3,16 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.15.0] - 2026-10-27
+
+### Cambiado
+- **Los clips de vídeo libres van primero:** antes de elegir las fotos se reservan 1-2 clips por vídeo (los de los
+  artículos de Wikipedia y los de Commons que nombran el tema) en las escenas donde mejor encajan. Antes podían
+  quedarse fuera aunque fueran del tema, por pesar poco frente a las fotos.
+- **También en las noticias:** se buscan clips con licencia libre del propio suceso y de sus lugares (nunca vídeo de
+  televisiones o agencias, que tiene derechos), con el rótulo «IMÁGENES DE ARCHIVO» (o «VÍDEO: WIKIMEDIA COMMONS» si
+  son de este año), igual que las fotos.
+
 ## [1.14.2] - 2026-10-26
 
 ### Cambiado
