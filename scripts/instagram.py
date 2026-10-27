@@ -1,7 +1,8 @@
 """Publicar los vídeos como Reels en Instagram (API de Instagram con inicio de sesión de Facebook).
 
 Requisitos (una vez): cuenta de Instagram profesional, conectada a una página de Facebook, y una app de Meta con los
-permisos instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement y business_management.
+permisos instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement, business_management y
+pages_manage_posts (este último, para el plan B: subir el vídeo sin publicar a la página cuando falla la subida directa).
 
 Conexión: el identificador y la clave secreta de la app y un token de usuario (del Explorador de la API Graph). El
 token se cambia por uno de larga duración y, con él, por el de la página, que no caduca: es el que se guarda.
@@ -132,19 +133,8 @@ def texto_desde_txt(ruta_txt: Path) -> str:
     return " ".join(palabras)[:LIMITE_TEXTO]
 
 
-def publicar_reel(video: Path, texto: str) -> dict:
-    """Sube y publica un Reel. Devuelve {"id", "url"}."""
-    c = leer_config()
-    if not conectado():
-        raise ErrorInstagram("Instagram no está conectado (Ajustes → Instagram)")
-    token, ig = c["token_pagina"], c["ig_id"]
-    contenedor = _json(requests.post(f"{GRAPH}/{ig}/media", data={
-        "media_type": "REELS", "upload_type": "resumable", "caption": texto, "share_to_feed": "true",
-        "access_token": token}, timeout=60))["id"]
-    tamano = video.stat().st_size
-    with open(video, "rb") as archivo:
-        _json(requests.post(f"{RUPLOAD}/{contenedor}", data=archivo, timeout=600, headers={
-            "Authorization": f"OAuth {token}", "offset": "0", "file_size": str(tamano)}))
+def _esperar_y_publicar(contenedor: str, token: str, ig: str) -> dict:
+    """Espera a que Instagram procese el contenedor y lo publica. Devuelve {"id", "url"}."""
     inicio = time.time()
     while True:
         estado = _json(requests.get(f"{GRAPH}/{contenedor}", params={
@@ -161,6 +151,69 @@ def publicar_reel(video: Path, texto: str) -> dict:
     enlace = _json(requests.get(f"{GRAPH}/{publicado}", params={
         "fields": "permalink", "access_token": token}, timeout=30)).get("permalink", "")
     return {"id": publicado, "url": enlace}
+
+
+def _subida_directa(video: Path, texto: str, token: str, ig: str) -> str:
+    """Contenedor con subida reanudable a rupload.facebook.com. Devuelve el id del contenedor."""
+    creado = _json(requests.post(f"{GRAPH}/{ig}/media", data={
+        "media_type": "REELS", "upload_type": "resumable", "caption": texto, "share_to_feed": "true",
+        "access_token": token}, timeout=60))
+    # Se sube a la dirección que da Instagram (con su versión de la API).
+    with open(video, "rb") as archivo:
+        _json(requests.post(creado.get("uri") or f"{RUPLOAD}/{creado['id']}", data=archivo, timeout=600, headers={
+            "Authorization": f"OAuth {token}", "offset": "0", "file_size": str(video.stat().st_size)}))
+    return creado["id"]
+
+
+def _subida_por_facebook(video: Path, texto: str, token: str, ig: str) -> tuple:
+    """Plan B: el vídeo se sube a la página de Facebook SIN publicar y el Reel se crea con su dirección (así no hace
+    falta servidor propio). Necesita el permiso pages_manage_posts. Devuelve (contenedor, id del vídeo de Facebook)."""
+    pagina = _json(requests.get(f"{GRAPH}/me", params={"fields": "id", "access_token": token}, timeout=30))["id"]
+    with open(video, "rb") as archivo:
+        id_fb = _json(requests.post(f"https://graph-video.facebook.com/{VERSION}/{pagina}/videos", timeout=900, data={
+            "published": "false", "access_token": token}, files={"source": (video.name, archivo, "video/mp4")}))["id"]
+    fuente = ""
+    for _ in range(40):  # Facebook tarda un poco en tener el archivo listo
+        datos = _json(requests.get(f"{GRAPH}/{id_fb}", params={"fields": "source,status", "access_token": token},
+                                   timeout=30))
+        fuente = datos.get("source", "")
+        if fuente:
+            break
+        time.sleep(15)
+    if not fuente:
+        raise ErrorInstagram("Facebook no ha terminado de procesar el vídeo; se reintentará")
+    contenedor = _json(requests.post(f"{GRAPH}/{ig}/media", data={
+        "media_type": "REELS", "video_url": fuente, "caption": texto, "share_to_feed": "true",
+        "access_token": token}, timeout=60))["id"]
+    return contenedor, id_fb
+
+
+def publicar_reel(video: Path, texto: str) -> dict:
+    """Sube y publica un Reel. Devuelve {"id", "url"}.
+
+    Primero con la subida directa; si Meta la rechaza (a veces da un error 500 sin motivo), pasando por la página.
+    """
+    c = leer_config()
+    if not conectado():
+        raise ErrorInstagram("Instagram no está conectado (Ajustes → Instagram)")
+    token, ig = c["token_pagina"], c["ig_id"]
+    try:
+        return _esperar_y_publicar(_subida_directa(video, texto, token, ig), token, ig)
+    except ErrorInstagram as error_directa:
+        try:
+            contenedor, id_fb = _subida_por_facebook(video, texto, token, ig)
+        except ErrorInstagram as error:
+            if "permission" in str(error).lower():
+                raise ErrorInstagram(f"{error_directa}. Para el plan B falta el permiso pages_manage_posts: vuelve a "
+                                     "conectar Instagram con un token nuevo que lo incluya (Ajustes → Instagram)")
+            raise
+        try:
+            return _esperar_y_publicar(contenedor, token, ig)
+        finally:  # el vídeo de la página solo hacía falta para que Instagram lo descargara
+            try:
+                requests.delete(f"{GRAPH}/{id_fb}", params={"access_token": token}, timeout=30)
+            except requests.RequestException:
+                pass
 
 
 def publicar_guion(nombre: str) -> dict:

@@ -126,7 +126,9 @@ def proxima_subida_libre() -> datetime:
 _cerrojo_tarea = threading.Lock()
 
 
-INTENTOS_INSTAGRAM = 3
+# Meta a veces falla durante horas sin motivo (errores 500 o 2207076): se reintenta cada vez más espaciado.
+ESPERAS_INSTAGRAM_MIN = (10, 30, 90, 240, 480)
+INTENTOS_INSTAGRAM = len(ESPERAS_INSTAGRAM_MIN) + 1
 
 
 def instagram_activo() -> dict:
@@ -147,10 +149,16 @@ def pendiente_instagram(video: dict, config: dict = None) -> bool:
                 and ig.get("intentos", 0) < INTENTOS_INSTAGRAM)
 
 
+def momento_instagram(video: dict):
+    """Cuándo toca publicarlo en Instagram: a su hora o, tras un fallo, cuando toque reintentar."""
+    reintento = (video.get("instagram") or {}).get("reintentar")
+    return max(_hora(video["hora"]), _hora(reintento)) if reintento else _hora(video["hora"])
+
+
 def proxima_instagram():
     """Hora de la próxima publicación en Instagram pendiente, o None."""
     config = instagram_activo()
-    horas = [_hora(v["hora"]) for v in leer()["videos"] if pendiente_instagram(v, config)]
+    horas = [momento_instagram(v) for v in leer()["videos"] if pendiente_instagram(v, config)]
     return min(horas) if horas else None
 
 
@@ -498,7 +506,7 @@ def toca_revisar() -> bool:
            and (v.get("forzar") or not esperando) for v in datos["videos"]):
         return True
     config = instagram_activo()
-    return any(pendiente_instagram(v, config) and _hora(v["hora"]) <= datetime.now() for v in datos["videos"])
+    return any(pendiente_instagram(v, config) and momento_instagram(v) <= datetime.now() for v in datos["videos"])
 
 
 # --- Subida -----------------------------------------------------------------------------
@@ -637,7 +645,7 @@ def _revisar() -> int:
             siguiente = max(min(momento_de_subida(v) for v in pendientes), datetime.now() + timedelta(minutes=1))
     proxima_ig = proxima_instagram()
     if proxima_ig:
-        proxima_ig = max(proxima_ig, datetime.now() + timedelta(minutes=5))  # tras un fallo, se reintenta en 5 min
+        proxima_ig = max(proxima_ig, datetime.now() + timedelta(minutes=1))
         siguiente = min(siguiente, proxima_ig) if siguiente else proxima_ig
     datos["siguiente_intento"] = siguiente.isoformat(timespec="seconds") if siguiente else None
     guardar(datos)
@@ -654,14 +662,17 @@ def _publicar_en_instagram() -> None:
         return
     import instagram
     for v in sorted(leer()["videos"], key=lambda v: v["hora"]):
-        if not pendiente_instagram(v, config) or _hora(v["hora"]) > datetime.now():
+        if not pendiente_instagram(v, config) or momento_instagram(v) > datetime.now():
             continue
         ig = dict(v.get("instagram") or {})
         _log(f"Instagram: publicando «{v['titulo']}»")
         try:
             resultado = instagram.publicar_guion(v["nombre"])
         except Exception as error:  # noqa: BLE001 — se apunta y se reintenta en la siguiente revisión
-            ig.update(estado="error", intentos=ig.get("intentos", 0) + 1, mensaje=str(error)[:200])
+            intentos = ig.get("intentos", 0) + 1
+            espera = ESPERAS_INSTAGRAM_MIN[min(intentos, len(ESPERAS_INSTAGRAM_MIN)) - 1]
+            ig.update(estado="error", intentos=intentos, mensaje=str(error)[:200],
+                      reintentar=(datetime.now() + timedelta(minutes=espera)).strftime("%Y-%m-%dT%H:%M"))
             _actualizar(v["nombre"], instagram=ig)
             _log(f"  error en Instagram: {error}")
             if ig["intentos"] >= INTENTOS_INSTAGRAM:
@@ -707,6 +718,7 @@ def programar_tarea_windows(cuando) -> None:
     if cuando is None:
         _powershell(_BORRAR, T_NOMBRE=TAREA)
         return
+    cuando = max(cuando, datetime.now() + timedelta(minutes=1))  # una hora ya pasada no saltaría nunca
     ejecutable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
     resultado = _powershell(
         _REGISTRAR, T_EXE=ejecutable, T_SCRIPT=Path(__file__).resolve(), T_DIR=RAIZ,

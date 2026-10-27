@@ -1218,6 +1218,10 @@ def instagram_publicar():
     if activar:
         config["desde"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
     instagram.CONFIG.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:  # que la tarea de Windows también se despierte a la hora del próximo Reel (aunque el menú esté cerrado)
+        programados.programar_tarea_windows(programados.proxima_revision())
+    except Exception as error:  # noqa: BLE001 — el menú lo mira igualmente cada minuto mientras está abierto
+        print(f"[instagram] {error}", file=sys.stderr)
     despertar_programados()
     return _ir_a_instagram("Desde ahora, cada vídeo programado se publica también en Instagram a su misma hora."
                            if activar else "Ya no se publica en Instagram.")

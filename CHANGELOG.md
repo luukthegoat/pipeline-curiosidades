@@ -3,6 +3,18 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.16.1] - 2026-10-27
+
+### Arreglado
+- **Instagram, plan B:** si Meta rechaza la subida directa del vídeo (a veces da un error 500 sin motivo), se sube sin
+  publicar a la página de Facebook, se crea el Reel desde ahí y se borra de la página. Necesita el permiso
+  `pages_manage_posts` en el token (los pasos de Ajustes ya lo incluyen).
+- **Reintentos de Instagram más pacientes:** tras un fallo se reintenta a los 10 min, 30 min, 1 h y media, 4 h y 8 h,
+  en vez de 3 veces seguidas cada 5 minutos.
+- **La tarea de Windows se prepara para la hora del Reel** al activar Instagram (antes solo se despertaba para la
+  siguiente subida a YouTube, y con el menú cerrado el Reel se retrasaba), y nunca se queda con una hora ya pasada,
+  que no llegaba a saltar.
+
 ## [1.16.0] - 2026-10-27
 
 ### Añadido
