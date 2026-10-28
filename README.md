@@ -1,8 +1,9 @@
-<p align="center"><img src="docs/banner.png" alt="Mente Inquieta" width="720"></p>
+<p align="center"><img src="docs/banner.png" alt="MenteInquieta67" width="720"></p>
 
-# pipeline-curiosidades
+# MenteInquieta67 (pipeline-curiosidades)
 
-**De un tema a un vídeo vertical publicado en YouTube Shorts, con IA y sin inventarse la historia.**
+**De un tema a un vídeo publicado en YouTube (Shorts verticales y vídeos largos explicados con dibujos), con IA y sin
+inventarse la historia.**
 
 Escribes un tema («La caída de Constantinopla»), una fecha o un personaje, y el programa genera un vídeo de
 40-45 segundos para Shorts / TikTok / Reels: guion verificado contra Wikipedia, voz, clips de vídeo e imágenes de
@@ -30,7 +31,11 @@ clips que generas con ella.
 **Vídeos largos:** de unos 10 minutos, horizontales y por capítulos, al estilo «X en 10 minutos». Las escenas no usan
 fotos: las dibuja la propia app en SVG con un estilo de rotulador (el narrador Bonesy, vestido según la época del tema, mapas de España y del mundo con
 las zonas de colores, calendarios, cifras, personajes y líneas de tiempo), y cada elemento aparece cuando la voz lo
-nombra. El guion se revisa escena a escena en el menú antes de dibujarlo, y solo se rehace lo que cambia.
+nombra. El guion se revisa escena a escena en el menú antes de dibujarlo, y solo se rehace lo que cambia. Cada vídeo
+largo sale con tres miniaturas para probar, una pantalla final y tres Shorts verticales que llevan a él.
+
+**Para crecer:** el menú enseña el **camino a monetizar** (suscriptores, horas de vídeos largos y vistas de Shorts
+frente a lo que pide YouTube, al ritmo actual) y mete cada vídeo en su lista de reproducción.
 
 ## Decisiones técnicas
 
@@ -73,7 +78,7 @@ flowchart LR
     W[wikimedia.py<br/>caché y ritmo] -.-> B
     W -.-> D
     M[menu/app.py<br/>menú + cola de tareas] --> B & C & D & E
-    X[Mente Inquieta.exe<br/>menu/aplicacion.py] --> M
+    X[MenteInquieta67.exe<br/>menu/aplicacion.py] --> M
 ```
 
 | Archivo | Función |
@@ -89,6 +94,7 @@ flowchart LR
 | [`instagram.py`](scripts/instagram.py) | Conexión con Instagram (Graph API) y publicación de cada vídeo como Reel |
 | [`video_ia.py`](scripts/video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
 | [`video_largo.py`](scripts/video_largo.py) | Vídeos largos: índice y capítulos con el LLM, voz, dibujos, montaje por escenas en caché, miniatura y capítulos de YouTube |
+| [`shorts_largo.py`](scripts/shorts_largo.py) | Shorts verticales sacados de un vídeo largo (fragmentos elegidos por el LLM, subtítulos ASS) |
 | [`dibujos.py`](scripts/dibujos.py) | Escenas dibujadas en SVG (Bonesy, mapas, fechas, cifras, personajes…) y su captura con Edge (Playwright) |
 | [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias y, con clave, Tavily) y su texto, para los vídeos de actualidad |
 | [`radar.py`](scripts/radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
@@ -98,7 +104,7 @@ flowchart LR
 | [`programados.py`](scripts/programados.py) | Cola de publicaciones programadas: sube cada vídeo antes de su hora sin pasarse del límite diario y lo publica en Instagram a su hora |
 | [`menu/`](menu/) | Menú (Flask): Crear, Mis vídeos (por revisar, listos, programados, publicados), Programados con calendario y Ajustes |
 | [`menu/aplicacion.py`](menu/aplicacion.py) | Abre el menú como aplicación de escritorio, en su propia ventana (pywebview) |
-| [`lanzador/`](lanzador/) | Lanzador `Mente Inquieta.exe` (C#), que abre la aplicación sin consola |
+| [`lanzador/`](lanzador/) | Lanzador `MenteInquieta67.exe` (C#), que abre la aplicación sin consola |
 
 ## Tecnologías
 
@@ -119,7 +125,7 @@ copy .env.example .env      # y pon tu clave gratuita de Groq (console.groq.com/
 ```
 
 Abre el menú como aplicación de escritorio, en su propia ventana: `pythonw menu\aplicacion.py`, o crea el
-lanzador `Mente Inquieta.exe` con `lanzador\crear_exe.bat`. También funciona en el navegador con
+lanzador `MenteInquieta67.exe` con `lanzador\crear_exe.bat`. También funciona en el navegador con
 `menu\Abrir menu.bat`. Después, sigue la ayuda integrada.
 Para subir a YouTube hace falta crear unas credenciales OAuth en Google Cloud: la guía está en
 [`menu/LEEME.txt`](menu/LEEME.txt) y en el propio menú (Ajustes → YouTube).
@@ -151,8 +157,9 @@ de verdad.
 
 ## Novedades
 
-Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.19.0**, añade los vídeos largos
-de unos 10 minutos explicados con dibujos, con su apartado en el menú para revisarlos y subirlos.
+Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **2.0.0**, renombra la aplicación a
+MenteInquieta67 y añade el camino a monetizar, los Shorts sacados de los vídeos largos, las tres miniaturas, la
+pantalla final y las listas de reproducción automáticas.
 
 ## Licencia
 

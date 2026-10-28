@@ -3,6 +3,36 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [2.0.0] - 2026-10-28
+
+La aplicación pasa a llamarse **MenteInquieta67**, como el canal. Mejoras a partir de lo que recomiendan creadores de
+YouTube (Edu Serrano, vidIQ, Wacco…) y de un dato clave: desde el 1 de febrero de 2027 YouTube pedirá el doble para
+monetizar (8.000 horas o 20 millones de vistas de Shorts), y las horas de los Shorts no cuentan.
+
+### Añadido
+- **Camino a monetizar** (Estadísticas): suscriptores, horas de vídeos largos (12 meses) y vistas de Shorts (90 días)
+  frente a lo que pide YouTube, lo que hace falta al día, la fecha a la que se llegaría al ritmo de los últimos 28 días
+  y los días que quedan para el cambio de 2027. Datos de YouTube Analytics (dimensión `creatorContentType`).
+- **Shorts sacados de cada vídeo largo** (`scripts/shorts_largo.py`): el LLM elige 3 fragmentos de 25-50 s que se
+  entienden solos y empiezan con gancho; se montan en vertical con la voz y los dibujos ya hechos (gancho arriba,
+  escena en medio, subtítulos grandes y «Vídeo completo en el canal»), y se suben como Shorts con el enlace al vídeo
+  completo.
+- **Tres miniaturas por vídeo largo** con colores vivos y 2-3 palabras, para «Probar y comparar» en YouTube Studio; se
+  elige cuál se sube con el vídeo.
+- **Pantalla final**: 12 segundos al final de cada vídeo largo con huecos para el vídeo y el botón de suscribirse de
+  YouTube, y una lista de lo que hay que hacer a mano en YouTube Studio tras subirlo.
+- **«Mira también»** en la descripción de los vídeos largos, con los otros vídeos largos del canal.
+- **Listas de reproducción automáticas**: cada vídeo que se sube va a su lista (por tipo, una por serie y otra para los
+  vídeos largos); en Ajustes se activa o se ordenan de una vez los vídeos ya subidos.
+- **El ordenador no se suspende** mientras la app trabaja (tareas de la cola y subidas programadas).
+- Vistas, «me gusta» y tiempo medio de visionado de los vídeos largos en su lista y en su página.
+
+### Cambiado
+- **Nombre**: MenteInquieta67 en el menú, la ventana, el lanzador (`MenteInquieta67.exe`), los avisos, la toma final
+  de los Shorts, los créditos de los vídeos largos y la web del proyecto.
+- **Guiones largos que retienen más**: un ángulo con una pregunta que se plantea al principio y se responde al final,
+  una intriga al acabar cada capítulo y nada de presentaciones en los primeros 30 segundos.
+
 ## [1.21.0] - 2026-10-28
 
 ### Añadido

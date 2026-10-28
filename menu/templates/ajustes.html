@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Ajustes · Mente Inquieta{% endblock %}
+{% block titulo %}Ajustes · MenteInquieta67{% endblock %}
 {% block contenido %}
 <div class="cabecera-pagina">
   <h1>Ajustes</h1>
@@ -239,7 +239,7 @@
       <strong>Crea las credenciales (una sola vez, ~10 minutos).</strong> En
       <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>:
       <ul>
-        <li>Crea un proyecto nuevo (p. ej. «Mente Inquieta»).</li>
+        <li>Crea un proyecto nuevo (p. ej. «MenteInquieta67»).</li>
         <li>En «APIs y servicios → Biblioteca», busca <strong>YouTube Data API v3</strong> y pulsa «Habilitar».</li>
         <li>En «Pantalla de consentimiento de OAuth»: tipo <strong>Externo</strong>, pon un nombre y tu correo, y en
           «Usuarios de prueba» añade <strong>la cuenta de Google de tu canal</strong>.</li>
@@ -280,6 +280,18 @@
       <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
       <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
     </select>
+  </form>
+  <form method="post" action="{{ url_for('listas_youtube') }}" style="margin-top: 16px;">
+    <div class="opciones"><label><input type="checkbox" name="activadas" value="1" onchange="this.form.submit()"
+      {{ 'checked' if listas_auto }}> Meter cada vídeo que se sube en su lista de reproducción</label></div>
+    <p class="ayuda-campo">Una por tipo (Tal día como hoy, Actualidad explicada…), una por serie y otra para los vídeos
+      largos. Las listas ayudan a que YouTube entienda de qué va el canal y a que la gente vea un vídeo detrás de otro.</p>
+  </form>
+  <form method="post" action="{{ url_for('listas_youtube') }}">
+    <input type="hidden" name="accion" value="ordenar">
+    <button class="secundario" type="submit" {{ 'disabled' if not yt_token }}
+            onclick="return confirm('Se crearán listas públicas en tu canal y se meterán en ellas los vídeos ya subidos. ¿Seguir?')">
+      Ordenar en listas los vídeos ya subidos</button>
   </form>
   <p class="ayuda-campo" style="margin-top: 12px;">
     Importante: mientras Google no verifique tu proyecto, YouTube deja en <strong>privado</strong> todo lo que se sube

@@ -200,16 +200,16 @@ def crear_video(config: dict, forzar: bool = False) -> bool:
     nuevos = sorted(r for r in paso3_video.CARPETA_GUIONES.glob("*.json") if r.stat().st_mtime >= inicio)
     if codigo == 1 or not nuevos:
         registrar("No se ha podido escribir el guion (¿cupo de Groq agotado?).")
-        avisos.notificar("Mente Inquieta · piloto de actualidad",
+        avisos.notificar("MenteInquieta67 · piloto de actualidad",
                          "No se pudo escribir el guion de la noticia del día. Mira el registro en Ajustes.")
         return False
     ruta = nuevos[0]
     nombre = ruta.stem
     if ejecutar("paso2_audio.py", str(ruta)) == 1:
-        avisos.notificar("Mente Inquieta · error en la voz", "No se pudo generar el audio. Mira el registro.")
+        avisos.notificar("MenteInquieta67 · error en la voz", "No se pudo generar el audio. Mira el registro.")
         return False
     if ejecutar("paso3_video.py", str(paso3_video.CARPETA_AUDIO / nombre), "--forzar") != 0:
-        avisos.notificar("Mente Inquieta · error en el vídeo", "No se pudo montar el vídeo. Mira el registro.")
+        avisos.notificar("MenteInquieta67 · error en el vídeo", "No se pudo montar el vídeo. Mira el registro.")
         return False
 
     guion = json.loads(ruta.read_text(encoding="utf-8"))
@@ -226,7 +226,7 @@ def publicar(nombre: str, ruta: Path, guion: dict) -> bool:
         registrar(f"NO se publica: el verificador marcó {len(dudas)} frase(s) sin respaldo en los artículos:")
         for d in dudas:
             registrar(f"    escena {d.get('escena')}: «{d.get('frase', '')}» ({d.get('motivo', '')})")
-        avisos.notificar("Mente Inquieta · revisa la noticia de hoy",
+        avisos.notificar("MenteInquieta67 · revisa la noticia de hoy",
                          f"«{titulo}» tiene {len(dudas)} frase(s) dudosa(s): está en Mis vídeos esperando tu revisión.")
         return False
 
@@ -240,7 +240,7 @@ def publicar(nombre: str, ruta: Path, guion: dict) -> bool:
         programados.revisar()
     except Exception as error:  # noqa: BLE001 — el vídeo está hecho: se publica a mano desde el menú
         registrar(f"No se pudo publicar: {error}")
-        avisos.notificar("Mente Inquieta · no se pudo publicar la noticia",
+        avisos.notificar("MenteInquieta67 · no se pudo publicar la noticia",
                          "El vídeo está hecho; publícalo desde Mis vídeos. Detalle en el registro.")
         return False
     video = programados.buscar(programados.leer(), nombre) or {}
@@ -276,7 +276,7 @@ def activar() -> str:
     ejecutable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
     resultado = _powershell(_REGISTRAR, T_EXE=ejecutable, T_SCRIPT=Path(__file__).resolve(), T_DIR=RAIZ,
                             T_HORAS=",".join(horas), T_NOMBRE=TAREA,
-                            T_DESC="Hace y publica el vídeo de la noticia del día de Mente Inquieta.")
+                            T_DESC="Hace y publica el vídeo de la noticia del día de MenteInquieta67.")
     return resultado.stderr.strip()[-300:] if resultado.returncode != 0 else ""
 
 
@@ -327,7 +327,7 @@ def main(argv=None) -> int:
         return 0 if crear_video(config, forzar=args.ahora) else 2
     except Exception:  # que cualquier fallo quede registrado y avisado
         registrar("Error inesperado:\n" + traceback.format_exc())
-        avisos.notificar("Mente Inquieta · error del piloto de actualidad", "Mira el registro en Ajustes.")
+        avisos.notificar("MenteInquieta67 · error del piloto de actualidad", "Mira el registro en Ajustes.")
         return 2
 
 

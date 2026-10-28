@@ -1,4 +1,4 @@
-/* Mente Inquieta · menú
+/* MenteInquieta67 · menú
    Tema Índigo: neutros con un toque violeta y un solo color de acento. Todo en una columna, de arriba abajo. */
 
 :root {
@@ -833,6 +833,16 @@ main > * { animation: aparecer .3s ease both; }
 .barrita.grande { max-width: 420px; }
 .fila-stats .tenue { color: var(--tenue); }
 
+/* ---------- Camino a monetizar ---------- */
+
+.meta-ypp { margin-top: 14px; }
+.meta-ypp .cabecera-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px;
+  margin-bottom: 6px; }
+.meta-ypp .cabecera-meta span { color: var(--suave); font-variant-numeric: tabular-nums; }
+.meta-ypp .barrita { max-width: none; }
+.meta-ypp p { margin: 6px 0 0; }
+.meta-ypp.conseguida .barrita span { background: var(--ok-fondo); border-right-color: var(--ok); }
+
 /* ---------- Vídeos largos ---------- */
 
 .temas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -868,6 +878,23 @@ main > * { animation: aparecer .3s ease both; }
 .vista-largo figure { margin: 0; width: 240px; max-width: 100%; }
 .vista-largo figcaption { margin-top: 6px; }
 .portada-ancha { width: 100%; border-radius: var(--radio-sm); display: block; border: 1px solid var(--borde); }
+.miniaturas-largo { margin-top: 16px; }
+.tres-miniaturas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.miniatura-opcion { display: grid; gap: 6px; cursor: pointer; font-size: 13px; color: var(--suave); }
+.miniatura-opcion input { position: absolute; opacity: 0; pointer-events: none; }
+.miniatura-opcion img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px;
+  border: 3px solid transparent; }
+.miniatura-opcion:has(input:checked) img { border-color: var(--acento); }
+.miniatura-opcion:has(input:checked) span { color: var(--acento-tinta); font-weight: 600; }
+.pasos-studio { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+.shorts-largo { display: grid; gap: 12px; }
+.short-largo { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 14px; padding: 12px;
+  border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-2); }
+.short-largo video { width: 170px; aspect-ratio: 9 / 16; border-radius: 10px; background: #000; }
+.short-largo p { margin: 4px 0 8px; }
+@media (max-width: 600px) { .short-largo { grid-template-columns: 1fr; } }
+.pasos-studio li { margin-bottom: 6px; }
+@media (max-width: 600px) { .tres-miniaturas { grid-template-columns: 1fr; } }
 @media (max-width: 720px) {
   .escena-larga, .dos-campos, .tres-campos { grid-template-columns: 1fr; }
   .escena-larga .dibujo { max-width: 320px; }

@@ -2,7 +2,7 @@ MENÚ · MENTE INQUIETA
 =====================
 
 CÓMO ABRIRLO
-  Como aplicación: doble clic en «Mente Inquieta.exe» (carpeta principal) o en
+  Como aplicación: doble clic en «MenteInquieta67.exe» (carpeta principal) o en
   su acceso directo del escritorio. El menú se abre en su propia ventana, sin
   navegador ni consola; al cerrar la ventana se apaga (si hay tareas en marcha,
   pregunta antes). El .exe se crea con lanzador\crear_exe.bat. Si algo falla,
@@ -43,6 +43,8 @@ QUÉ PUEDES HACER (barra de arriba)
     · Más opciones: texto para publicar (TikTok y YouTube), prompts y borrar.
 
   Estadísticas
+    Camino a monetizar (suscriptores, horas de vídeos largos y vistas de Shorts
+    frente a lo que pide YouTube, y cuánto queda para el 1 de febrero de 2027).
     Vistas, retención (meta: más del 70 % se queda), comparación por tipo y
     duración, y «No arrancan»: los Shorts con muy pocas vistas a las 48 h, con
     un botón para rehacerlos con otro gancho (queda por revisar).
@@ -54,7 +56,9 @@ QUÉ PUEDES HACER (barra de arriba)
     2. Revisa el guion escena a escena: la IA se equivoca más en los vídeos
        largos. Corrige y «Marcar como revisado».
     3. «Hacer el vídeo» (~8-10 min la primera vez; luego solo lo que cambia).
-    4. «Subir a YouTube», ya o programado, con miniatura y capítulos.
+    4. «Subir a YouTube», ya o programado, con miniatura y capítulos (hay 3
+       miniaturas para «Probar y comparar» en YouTube Studio).
+    5. «Sacar 3 Shorts»: anticipos verticales que llevan al vídeo completo.
 
   Programados
     La cola de publicaciones (Lista y Calendario): publicar ya, cambiar la hora,
@@ -71,7 +75,7 @@ QUÉ PUEDES HACER (barra de arriba)
 
 SUBIR A YOUTUBE SHORTS AUTOMÁTICAMENTE
   Configuración (una sola vez):
-    1. Entra en console.cloud.google.com y crea un proyecto (p. ej. «Mente Inquieta»).
+    1. Entra en console.cloud.google.com y crea un proyecto (p. ej. «MenteInquieta67»).
     2. «APIs y servicios → Biblioteca»: busca «YouTube Data API v3» y pulsa «Habilitar».
        Haz lo mismo con «YouTube Analytics API» (para ver la retención).
     3. «Pantalla de consentimiento de OAuth»: tipo «Externo», un nombre y tu correo.
@@ -107,7 +111,7 @@ DÓNDE QUEDAN LOS VÍDEOS
 
 ARCHIVOS DE ESTA CARPETA
   Abrir menu.bat    abre el menú en el navegador (doble clic)
-  aplicacion.py     abre el menú en su propia ventana (lo usa «Mente Inquieta.exe»)
+  aplicacion.py     abre el menú en su propia ventana (lo usa «MenteInquieta67.exe»)
   app.py            el servidor del menú
   templates\        las páginas HTML
   static\           los estilos (CSS)

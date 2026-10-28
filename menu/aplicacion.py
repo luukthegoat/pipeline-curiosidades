@@ -3,7 +3,7 @@
 Arranca el servidor del menú dentro de este mismo proceso y lo muestra con pywebview (el motor
 WebView2 de Edge que trae Windows). Al cerrar la ventana se apaga todo.
 
-    .venv\\Scripts\\pythonw.exe menu\\aplicacion.py      (o doble clic en «Mente Inquieta.exe»)
+    .venv\\Scripts\\pythonw.exe menu\\aplicacion.py      (o doble clic en «MenteInquieta67.exe»)
 
 - La ventana aparece al momento con una pantalla de carga; el menú se carga mientras tanto.
 - Solo hay una copia abierta: si ya lo estaba (o se está abriendo), se trae al frente esa ventana.
@@ -33,7 +33,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(RAIZ / ".env")
 import webview  # noqa: E402
 
-TITULO = "Mente Inquieta"
+TITULO = "MenteInquieta67"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
 URL = f"http://127.0.0.1:{PUERTO}"
 ESTATICOS = Path(__file__).resolve().parent / "static"
@@ -89,7 +89,7 @@ def pantalla_de_carga() -> str:
       @keyframes latido {{ 50% {{ transform: scale(1.05); filter: brightness(1.15); }} }}
       @keyframes carga {{ from {{ transform: translateX(-100%); }} to {{ transform: translateX(250%); }} }}
     </style></head><body><div class="caja">
-      <img src="data:image/png;base64,{logo}" alt=""><div class="barra"></div><div>Abriendo Mente Inquieta…</div>
+      <img src="data:image/png;base64,{logo}" alt=""><div class="barra"></div><div>Abriendo MenteInquieta67…</div>
     </div></body></html>"""
 
 

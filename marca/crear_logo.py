@@ -1,4 +1,4 @@
-"""Foto de perfil de «Mente Inquieta»: bombilla dorada con una chispa dentro, sobre fondo oscuro.
+"""Foto de perfil de «MenteInquieta67»: bombilla dorada con una chispa dentro, sobre fondo oscuro.
 
 Crea en esta carpeta:
   - perfil_1080.png          : foto de perfil para TikTok / Instagram (1080x1080)

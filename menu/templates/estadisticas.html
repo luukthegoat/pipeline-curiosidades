@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Estadísticas · Mente Inquieta{% endblock %}
+{% block titulo %}Estadísticas · MenteInquieta67{% endblock %}
 {% block contenido %}
 <div class="cabecera-pagina">
   <h1>Estadísticas</h1>
@@ -34,6 +34,32 @@
   <div class="cifra"><span class="valor">{{ totales.visto_pct if totales.visto_pct is not none else '—' }}{% if totales.visto_pct is not none %} %{% endif %}</span>
     <span class="nombre">del vídeo se ve</span><span class="detalle">más de 100 % = lo repiten</span></div>
 </div>
+
+{# ---------------------------------------------------------------- Camino a monetizar #}
+{% if camino.filas %}
+<div class="tarjeta camino">
+  <h2>Camino a monetizar</h2>
+  <p class="ayuda-campo" style="margin-top: 0;">Para entrar en el Programa de Partners de YouTube (anuncios) hacen falta
+    1.000 suscriptores y, además, {{ camino.filas[1].meta | miles }} horas de vídeos largos en 12 meses
+    <strong>o</strong> {{ camino.filas[2].meta | miles }} vistas de Shorts en 90 días. Las horas de los Shorts no cuentan.
+    {% if camino.dias_cambio %}<strong>Quedan {{ camino.dias_cambio }} días</strong> para el 1 de febrero de 2027: desde
+      entonces hará falta el doble (8.000 horas o 20 millones de vistas).{% endif %}</p>
+  {% for f in camino.filas %}
+    <div class="meta-ypp {{ 'conseguida' if f.pct >= 100 }}">
+      <div class="cabecera-meta"><strong>{{ f.nombre }}</strong>
+        <span>{{ f.valor | miles }} de {{ f.meta | miles }}</span></div>
+      <div class="barrita grande"><span style="width: {{ [f.pct, 0.6] | max | round(1) }}%"></span>
+        <b>{{ '%.1f' % f.pct if f.pct < 10 else f.pct | round | int }} %</b></div>
+      <p class="ayuda-campo">{{ f.nota }}</p>
+    </div>
+  {% endfor %}
+  <p class="ayuda-campo">Datos de YouTube Analytics del {{ camino.actualizado }} (llegan con 1-2 días de retraso; son
+    aproximados: YouTube solo cuenta las horas de los vídeos públicos).</p>
+</div>
+{% elif camino.error == 'sin_permiso' %}
+  <div class="aviso">Para ver el camino a monetizar, vuelve a conectar YouTube en Ajustes (pide un permiso de solo
+    lectura) y pulsa «Actualizar».</div>
+{% endif %}
 
 {% if error_retencion == 'sin_permiso' %}
   <div class="aviso">Para ver cuánta gente se queda y cuánto ve, <a href="{{ url_for('ajustes') }}#youtube">vuelve a conectar

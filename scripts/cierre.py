@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 import paso2_audio
 
 ANCHO, ALTO, FPS = 1080, 1920, 30
-VERSION = "3"  # súbela si cambias el diseño: se rehacen los cierres en caché
+VERSION = "4"  # súbela si cambias el diseño: se rehacen los cierres en caché
 DORADO = (255, 196, 0)
 ROJO = (204, 0, 0)
 GRIS = (60, 60, 64)
@@ -182,7 +182,7 @@ class Dibujante:
             img.paste(self.mano, (int(ANCHO / 2 + 40), int(y)), self.mano)
 
         # Pie: la marca del canal
-        pie = "Mente Inquieta"
+        pie = "MenteInquieta67"
         d.text(((ANCHO - d.textlength(pie, font=self.f_texto)) / 2, 1560), pie, font=self.f_texto, fill=(255, 255, 255))
         return img
 

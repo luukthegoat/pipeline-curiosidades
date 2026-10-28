@@ -29,7 +29,7 @@ load_dotenv(RAIZ / ".env")
 
 CARPETA = RAIZ / "salida" / "_trabajo" / "actualidad"
 URL_TAVILY = "https://api.tavily.com/search"
-AGENTE = "MenteInquieta/1.0 (+https://github.com/luukthegoat/pipeline-curiosidades)"
+AGENTE = "MenteInquieta67/2.0 (+https://github.com/luukthegoat/pipeline-curiosidades)"
 MIN_CARACTERES = 1200      # menos texto suele ser un muro de pago, un vídeo o un resumen de agencia
 MAX_ARTICULOS = 10         # los que se enseñan para elegir
 MAX_POR_ARTICULO = 3200    # lo que entra de cada uno en el material del guion

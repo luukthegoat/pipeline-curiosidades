@@ -30,7 +30,7 @@ load_dotenv(RAIZ / ".env")
 
 URL_TENDENCIAS = "https://trends.google.com/trending/rss?geo=ES"
 URL_BING = "https://www.bing.com/news/search"
-AGENTE = "Mozilla/5.0 MenteInquieta/1.0 (+https://github.com/luukthegoat/pipeline-curiosidades)"
+AGENTE = "Mozilla/5.0 MenteInquieta67/2.0 (+https://github.com/luukthegoat/pipeline-curiosidades)"
 # Búsquedas fijas en Bing Noticias: cubren lo que se discute aunque no sea lo más buscado.
 BUSQUEDAS_FIJAS = ["Gobierno España polémica", "Congreso", "PP PSOE Vox", "disturbios", "sucesos España",
                    "Sánchez", "Feijóo", "Abascal", "okupas", "inmigración España"]

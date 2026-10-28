@@ -43,6 +43,7 @@ PASOS = ("guion", "audio", "dibujos", "video")
 VELOCIDAD = "+4%"              # algo más pausado que en los Shorts: es un vídeo para escuchar
 PAUSA_ESCENA = 0.45           # s de silencio tras cada escena
 DURACION_CAPITULO = 2.2       # s de la tarjeta de capítulo (sin voz)
+DURACION_FINAL = 12           # s del final con huecos para la pantalla final de YouTube (vídeo y suscribirse)
 FUNDIDO = 0.25                # s del fundido cuando aparece un elemento nuevo
 PALABRAS_INTRO = (55, 90)
 PALABRAS_CAPITULO = (170, 260)
@@ -56,7 +57,9 @@ PROMPT_INDICE = """Eres guionista de un canal de divulgación de historia en esp
 
 Devuelve SOLO un JSON:
 {"titulo": "título de YouTube, máx. 70 caracteres, que despierte curiosidad (ej.: «La Guerra Civil española en 10 minutos»)",
- "miniatura": "2-4 palabras ENORMES para la miniatura (ej.: «ESPAÑA PARTIDA EN DOS»)",
+ "miniatura": "2-3 palabras ENORMES para la miniatura que despierten curiosidad (ej.: «PARTIDA EN DOS»)",
+ "miniaturas_extra": ["otras 2 frases de 2-3 palabras, distintas, para probar otras miniaturas"],
+ "pregunta_final": "la pregunta intrigante que el vídeo plantea al principio y solo responde al final",
  "iconos_miniatura": ["1 o 2 emojis que resuman el tema"],
  "tono": "uno de: epico, misterio, triste, neutro",
  "gancho": "la pregunta o el dato sorprendente con el que arranca el vídeo (1 frase)",
@@ -70,7 +73,9 @@ Reglas:
 - Cada capítulo usa 1-4 secciones del índice: las que contienen SUS hechos (si habla de una batalla, la sección de esa
   batalla). El guionista solo podrá usar lo que haya en ellas.
 - Rigor y neutralidad: los temas políticos se cuentan con hechos, sin tomar partido.
-- "anio" sirve para vestir al narrador como uno más de aquella época."""
+- "anio" sirve para vestir al narrador como uno más de aquella época.
+- Busca un ÁNGULO que enganche (una paradoja, una pregunta, algo que casi nadie sabe del tema) y conviértelo en la
+  "pregunta_final": se plantea al principio y se responde en el último capítulo, para que la gente aguante hasta el final."""
 
 PROMPT_CAPITULO = """Eres guionista de un canal de divulgación de historia en español, al estilo «X explicado en 10 minutos».
 El vídeo se titula «{titulo}». Los capítulos son: {indice}.
@@ -83,6 +88,8 @@ Reglas del texto:
 - {palabras} palabras de narración en total, en {escenas} escenas de 12-30 palabras cada una.
 - Español de España, cercano y claro, como si se lo contaras a un amigo curioso: frases cortas, nada de jerga.
 - Cada escena empuja a la siguiente: preguntas, giros, «pero…», «y entonces…». Nada de relleno.
+- Si no es el último capítulo, su última escena deja una intriga para el siguiente («pero lo peor aún estaba por
+  llegar…», «y entonces apareció alguien con el que nadie contaba»): así la gente no se va al acabar un capítulo.
 - Rigor: fechas, cifras y nombres exactos del MATERIAL. Si hay cifras discutidas, dilo («según las estimaciones…»).
 - Neutralidad: hechos, no opiniones; no tomes partido en temas políticos.
 {extra}
@@ -98,8 +105,9 @@ Tipos de "visual" (elige el que mejor ENSEÑE lo que dice la narración; varía,
   (usa mapas siempre que haya lugares, territorios, avances o frentes; lat/lon de los puntos con 2 decimales)
 - {{"tipo": "personajes", "personas": [{{"nombre": "Nombre Apellido", "rol": "quién es (3-5 palabras)",
      "aspecto": {{"pelo": "corto|calvo|canoso|largo", "bigote": true/false, "barba": true/false, "gafas": true/false,
-                  "ropa": "traje|uniforme|obrero|vestido|sotana", "color_ropa": "gris|azul|negro|caqui|marron|rojo|verde",
-                  "sombrero": "ninguno|corona|gorra_militar|casco|boina|chistera|sombrero|mitra"}}}}],
+                  "ropa": "traje|uniforme|obrero|vestido|sotana|toga|armadura|capa_real",
+                  "color_ropa": "gris|azul|negro|caqui|marron|rojo|verde|morado",
+                  "sombrero": "ninguno|corona|gorra_militar|casco|boina|chistera|sombrero|tricornio|morrion|casco_romano|mitra"}}}}],
    "bocadillo": "frase corta que dice el primero (opcional)", "habla": 0}}   (1-3 personas, con su aspecto real aproximado)
 - {{"tipo": "iconos", "texto": "título corto", "elementos": [{{"icono": "emoji", "texto": "2-4 palabras"}}]}}   (1-3 elementos)
 - {{"tipo": "linea", "hitos": [{{"fecha": "1931", "texto": "2-5 palabras", "icono": "emoji opcional"}}], "actual": 2}}   (3-5 hitos)
@@ -110,9 +118,12 @@ Los emojis tienen que ser emojis estándar (🏰 ⚔️ 👑 🚢 💣 ✈️ �
 Responde SOLO con un JSON: {{"escenas": [{{"narracion": "...", "visual": {{...}}}}]}}"""
 
 EXTRA_INTRO = """- Es la INTRODUCCIÓN del vídeo (antes del capítulo 1): engancha en la primera frase con este gancho:
-  «{gancho}». Luego cuenta en 1-2 frases qué vamos a ver, sin destripar el final. Nada de «hola» ni presentaciones.
+  «{gancho}». Plantea la pregunta «{pregunta}» y promete que al final se responde («y al final verás por qué…»), y
+  cuenta en 1 frase qué vamos a ver, sin destripar nada. Nada de «hola» ni presentaciones: en los primeros 30 segundos
+  se decide si la gente se queda.
 - La primera escena es un "narrador" con pose "sorpresa" o "piensa"."""
-EXTRA_FINAL = """- Es el ÚLTIMO capítulo: termina con una conclusión de 1-2 frases y luego una escena "narrador" que haga una
+EXTRA_FINAL = """- Es el ÚLTIMO capítulo: antes de cerrar, responde por fin a la pregunta del principio: «{pregunta}».
+- Termina con una conclusión de 1-2 frases y luego una escena "narrador" que haga una
   pregunta a los espectadores para que comenten (sobre el tema, sin pedir opiniones políticas) y les pida que se suscriban
   para más historia explicada así."""
 
@@ -223,8 +234,9 @@ def hacer_guion(tema: str, carpeta: Path) -> dict:
             que="la introducción del vídeo" if es_intro else f"el capítulo {parte['numero']}, «{parte['titulo']}» "
                                                                f"({parte.get('idea', '')})",
             palabras=f"Entre {minimo} y {maximo}", escenas="3-4" if es_intro else "9-12",
-            extra=(EXTRA_INTRO.format(gancho=plan.get("gancho", "")) if es_intro else "")
-                  + (EXTRA_FINAL if ultimo else ""))
+            extra=(EXTRA_INTRO.format(gancho=plan.get("gancho", ""), pregunta=plan.get("pregunta_final", ""))
+                   if es_intro else "")
+                  + (EXTRA_FINAL.format(pregunta=plan.get("pregunta_final", "")) if ultimo else ""))
         material = material_de(parte.get("secciones") or [0])
         for intento in range(2):
             escenas = _escenas_validas(_llamar(sistema, f"MATERIAL:\n{material}"))
@@ -246,7 +258,8 @@ def hacer_guion(tema: str, carpeta: Path) -> dict:
               f"{len(dudas)} dudas", flush=True)
         for d in dudas:
             print(f"      ¿{d['frase']}? → {d['motivo']}", flush=True)
-    guion = {"tema": tema, **{k: plan.get(k) for k in ("titulo", "miniatura", "iconos_miniatura", "tono", "gancho")},
+    guion = {"tema": tema, **{k: plan.get(k) for k in ("titulo", "miniatura", "iconos_miniatura", "tono", "gancho",
+                                                        "miniaturas_extra", "pregunta_final")},
              "bonesy": vestuario(plan.get("anio"), tema),
              "fuente": f"https://es.wikipedia.org/wiki/{tema.replace(' ', '_')}", "revisado": False,
              "partes": partes}
@@ -369,22 +382,64 @@ def hacer_dibujos(guion: dict, carpeta: Path) -> None:
             escena = item["escena"]
             escena["imagenes"] = rutas
             escena["momentos"] = [0.0] + _momentos(claves, escena.get("palabras", []), escena.get("duracion", 6))
-    _limpiar(destino, "*.png", usados)
     mapa_miniatura = guion.get("miniatura_mapa") or next(
         (e["visual"] for p in guion["partes"] for e in p["escenas"]
          if e["visual"].get("tipo") == "mapa" and e["visual"].get("resaltar")), None)
-    html = dibujos.documento(dibujos.miniatura(guion.get("miniatura") or guion["titulo"], guion.get("iconos_miniatura"),
-                                               mapa_miniatura, guion.get("bonesy")), ancho=1280, alto=720)
-    miniatura = carpeta / "miniatura.png"
-    if guion.get("miniatura_hecha") != _huella(html) or not miniatura.exists():
-        trabajos["miniatura"] = (html, miniatura, 1280, 720)
+    frases = [guion.get("miniatura") or guion["titulo"], *(guion.get("miniaturas_extra") or [])]
+    hechas = guion.get("miniatura_hecha") if isinstance(guion.get("miniatura_hecha"), dict) else {}
+    for indice, variante in enumerate(dibujos.MINIATURAS):
+        html = dibujos.documento(dibujos.miniatura(frases[indice] if indice < len(frases) else frases[0],
+                                                   guion.get("iconos_miniatura"), mapa_miniatura, guion.get("bonesy"),
+                                                   variante), ancho=1280, alto=720)
+        ruta = carpeta / ruta_miniatura(variante)
+        if hechas.get(variante) != _huella(html) or not ruta.exists():
+            trabajos[f"miniatura_{variante}"] = (html, ruta, 1280, 720)
+        hechas[variante] = _huella(html)
+    html = dibujos.documento(dibujos.pantalla_final(guion.get("bonesy")))
+    final = _huella(html) + ".png"
+    usados.add(final)
+    guion["imagen_final"] = str(destino / final)
+    if not (destino / final).exists():
+        trabajos[final] = (html, destino / final, 1920, 1080)
+    _limpiar(destino, "*.png", usados)
     inicio = time.time()
-    print(f"  dibujando {len(trabajos)} de {len(usados) + 1} imágenes (las demás ya estaban)…", flush=True)
+    print(f"  dibujando {len(trabajos)} de {len(usados) + 3} imágenes (las demás ya estaban)…", flush=True)
     if trabajos:
         dibujos.renderizar(list(trabajos.values()), progreso=_avisar_cada(20, "dibujos"))
-    guion["miniatura_hecha"] = _huella(html)
+    guion["miniatura_hecha"] = hechas
     print(f"  dibujos hechos en {time.time() - inicio:.0f} s", flush=True)
     _guardar(guion, carpeta)
+
+
+def ruta_miniatura(variante: str = "a") -> str:
+    """miniatura.png (la principal, a), miniatura_b.png y miniatura_c.png."""
+    return "miniatura.png" if variante == "a" else f"miniatura_{variante}.png"
+
+
+def _nombre_clip(imagenes: list, momentos: list, duracion: float, audio) -> str:
+    """El clip de una escena se llama por su contenido: si nada cambia, se reutiliza (también para los Shorts)."""
+    return _huella([Path(i).name for i in imagenes], momentos, duracion, Path(audio).name if audio else "") + ".mp4"
+
+
+def clip_de_escena(carpeta: Path, escena: dict) -> Path:
+    """El clip horizontal (dibujos + voz) de una escena, hecho si aún no existe."""
+    duracion = round(escena["duracion"] + PAUSA_ESCENA, 3)
+    audio = str(carpeta / "audio" / escena["audio"])
+    salida = carpeta / "clips" / _nombre_clip(escena["imagenes"], escena["momentos"], duracion, audio)
+    if not salida.exists():
+        salida.parent.mkdir(exist_ok=True)
+        _clip(escena["imagenes"], escena["momentos"], duracion, audio, salida)
+    return salida
+
+
+def _mira_tambien(guion: dict) -> list:
+    """Líneas «Mira también» con los otros vídeos largos ya subidos (lo que más lleva a ver otro vídeo del canal)."""
+    otros = []
+    for ruta in sorted(CARPETA.glob("*/guion.json"), key=lambda r: -r.stat().st_mtime):
+        otro = json.loads(ruta.read_text(encoding="utf-8"))
+        if otro.get("tema") != guion.get("tema") and (otro.get("youtube") or {}).get("url"):
+            otros.append(f"▶ {otro['titulo']}: {otro['youtube']['url']}")
+    return ["Mira también:", *otros[:3], ""] if otros else []
 
 
 def _clip(imagenes: list, momentos: list, duracion: float, audio, salida: Path) -> None:
@@ -445,9 +500,12 @@ def hacer_video(guion: dict, carpeta: Path) -> None:
             imagenes, momentos = escena["imagenes"], escena["momentos"]
             duracion = round(escena["duracion"] + PAUSA_ESCENA, 3)
             audio = str(carpeta / "audio" / escena["audio"])
-        nombre = _huella([Path(i).name for i in imagenes], momentos, duracion, Path(audio).name if audio else "")
-        plan.append((imagenes, momentos, duracion, audio, clips / f"{nombre}.mp4"))
+        plan.append((imagenes, momentos, duracion, audio, clips / _nombre_clip(imagenes, momentos, duracion, audio)))
         transcurrido += duracion
+    if guion.get("imagen_final"):  # huecos para la pantalla final de YouTube
+        nombre = _huella([Path(guion["imagen_final"]).name], [0.0], DURACION_FINAL, "")
+        plan.append(([guion["imagen_final"]], [0.0], DURACION_FINAL, None, clips / f"{nombre}.mp4"))
+        transcurrido += DURACION_FINAL
     _limpiar(clips, "*.mp4", {p[-1].name for p in plan})
     inicio = time.time()
     pendientes = [p for p in plan if not p[-1].exists()]
@@ -478,8 +536,9 @@ def hacer_video(guion: dict, carpeta: Path) -> None:
              "-b:a", "192k", "-t", f"{transcurrido:.2f}", final])
     sin_musica.unlink()
     descripcion = [guion.get("gancho") or "", "", "Capítulos:", *[f"{t} {n}" for t, n in capitulos], "",
+                   *_mira_tambien(guion),
                    f"Fuente: Wikipedia ({guion['fuente']}).",
-                   "Dibujos y animación: Mente Inquieta. Iconos: Twemoji (CC-BY 4.0). Mapas: Natural Earth y "
+                   "Dibujos y animación: MenteInquieta67. Iconos: Twemoji (CC-BY 4.0). Mapas: Natural Earth y "
                    "click_that_hood.", "", "#historia #historiadeespaña #explicado"]
     (carpeta / "descripcion.txt").write_text("\n".join(descripcion), encoding="utf-8")
     print(f"  vídeo: {final} ({_tiempo(transcurrido)})", flush=True)

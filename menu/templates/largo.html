@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}{{ guion.titulo }} · Mente Inquieta{% endblock %}
+{% block titulo %}{{ guion.titulo }} · MenteInquieta67{% endblock %}
 {% block contenido %}
 {% set yt = guion.get('youtube') %}
 <a class="volver" href="{{ url_for('ver_largos') }}">← Vídeos largos</a>
@@ -120,14 +120,23 @@
   <h2><span class="numero"></span>{{ 'El vídeo' if info.video else 'Haz el vídeo' }}</h2>
   {% if info.video %}
     <div class="vista-largo">
-      <video src="{{ url_for('archivo_video_largo', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
-      {% if info.miniatura %}
-        <figure>
-          <img class="portada-ancha" src="{{ url_for('miniatura_largo', nombre=nombre) }}?v={{ info.modificado }}" alt="Miniatura">
-          <figcaption class="ayuda-campo">Miniatura</figcaption>
-        </figure>
-      {% endif %}
+      <video src="{{ url_for('archivo_video_largo', nombre=nombre) }}?v={{ info.modificado }}#t=2" controls preload="metadata"></video>
     </div>
+    {% if miniaturas %}
+      <form method="post" action="{{ url_for('elegir_miniatura_largo', nombre=nombre) }}" class="miniaturas-largo">
+        <label>Miniaturas <span class="ayuda-campo">— la elegida se sube con el vídeo; sube las tres en YouTube Studio →
+          el vídeo → Miniatura → «Probar y comparar», y YouTube se queda sola con la que más clics consigue</span></label>
+        <div class="tres-miniaturas">
+          {% for v in miniaturas %}
+            <label class="miniatura-opcion">
+              <input type="radio" name="variante" value="{{ v }}" {{ 'checked' if elegida == v }} onchange="this.form.submit()">
+              <img src="{{ url_for('miniatura_largo', nombre=nombre, variante=v) }}&v={{ info.modificado }}" alt="Miniatura {{ v | upper }}">
+              <span>{{ v | upper }}{% if elegida == v %} · principal{% endif %}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </form>
+    {% endif %}
   {% else %}
     <p class="ayuda-campo" style="margin-top: 0;">Graba la voz, dibuja las escenas, lo monta con música y hace la
       miniatura. La primera vez tarda unos 8-10 minutos; después, al corregir algo, solo se rehace lo que cambia.</p>
@@ -150,18 +159,83 @@
   {% endif %}
 </section>
 
+{# ================================================================ Shorts del vídeo #}
+<section class="tarjeta paso {{ 'hecho' if shorts and shorts | selectattr('youtube') | list }}" id="shorts">
+  <h2><span class="numero"></span>Shorts que llevan a este vídeo</h2>
+  <p class="ayuda-campo" style="margin-top: 0;">Tres trozos de 25-50 segundos del vídeo, en vertical, que se entienden
+    solos y acaban con «Vídeo completo en el canal». Usan la misma voz y los mismos dibujos: no cuestan casi nada.
+    Súbelos en días distintos y, en YouTube Studio, pon este vídeo como su <strong>«Vídeo relacionado»</strong>: es el
+    enlace que lleva a la gente del Short al vídeo largo.</p>
+  {% if not info.video %}
+    <p class="ayuda-campo">Primero haz el vídeo (paso 2).</p>
+  {% else %}
+    {% if shorts %}
+      <div class="shorts-largo">
+        {% for s in shorts %}
+          <div class="short-largo">
+            {% if s.existe %}<video src="{{ url_for('archivo_short_largo', nombre=nombre, indice=s.indice) }}#t=1" controls preload="metadata"></video>{% endif %}
+            <div>
+              <strong>{{ s.titulo }}</strong>
+              <p class="ayuda-campo">Escenas {{ s.escenas[0] }}-{{ s.escenas[-1] }} · {{ '%.0f' % s.duracion }} s</p>
+              {% if s.youtube %}
+                <p><span class="etiqueta ok">subido</span> {{ s.youtube.privacidad }}{% if s.youtube.publicar_el %} · se
+                  publica el {{ s.youtube.publicar_el.replace('T', ' a las ') }}{% endif %} ·
+                  <a href="{{ s.youtube.url }}" target="_blank" rel="noopener">verlo ↗</a></p>
+              {% elif not yt_conectado %}
+                <p class="ayuda-campo">Conecta tu canal en Ajustes para subirlo.</p>
+              {% elif not info.revisado %}
+                <p class="ayuda-campo">Para subirlo, marca el guion como revisado.</p>
+              {% else %}
+                <form method="post" action="{{ url_for('subir_short_largo', nombre=nombre, indice=s.indice) }}">
+                  <label for="pub{{ s.indice }}">Publicar el <span class="ayuda-campo">(vacío = subirlo ya)</span></label>
+                  <input type="datetime-local" id="pub{{ s.indice }}" name="publicar_el" class="medio">
+                  <select name="privacidad" class="medio" aria-label="Visibilidad si se sube ya">
+                    <option value="private">Privado</option><option value="unlisted">Oculto</option>
+                    <option value="public">Público</option>
+                  </select>
+                  <div class="acciones"><button class="secundario" type="submit" {{ 'disabled' if info.ocupado }}>Subir este Short</button></div>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="acciones">
+      <form method="post" action="{{ url_for('shorts_largo', nombre=nombre) }}">
+        <button class="{{ 'secundario' if shorts }}" type="submit" {{ 'disabled' if info.ocupado }}>
+          {{ 'Sacar otros Shorts' if shorts else 'Sacar 3 Shorts' }}</button>
+      </form>
+      <span class="ayuda-campo">Tarda 1-2 minutos. Los que ya estén subidos se quedan como están.</span>
+    </div>
+  {% endif %}
+</section>
+
 {# ================================================================ Publicar #}
 <section class="tarjeta paso {{ 'hecho' if yt }}" id="publicar">
   <h2><span class="numero"></span>Publica en YouTube</h2>
   {% if yt %}
     <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el
       {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %} · <a href="{{ yt.url }}" target="_blank" rel="noopener">verlo en YouTube ↗</a></p>
+    {% if info.stats %}
+      <p class="reproducciones"><b>{{ info.stats.vistas | miles }}</b> vista{{ 's' if info.stats.vistas != 1 }} ·
+        {{ info.stats.me_gusta | miles }} me gusta · {{ info.stats.comentarios | miles }} comentarios
+        {% if info.stats.segundos %} · se ve una media de {{ (info.stats.segundos // 60) }} min {{ info.stats.segundos % 60 }} s{% endif %}</p>
+    {% endif %}
     {% if pregunta %}
       <label>Comentario para fijar</label>
       <div class="copiable"><textarea readonly rows="2">{{ pregunta }} 👇</textarea>
         <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
-      <p class="ayuda-campo">Cuando ya sea público, pégalo como comentario y fíjalo (⋮ → Fijar).</p>
     {% endif %}
+    <label style="margin-top: 14px;">En YouTube Studio, a mano (la API no deja hacerlo)</label>
+    <ol class="pasos-studio">
+      <li><strong>Pantalla final:</strong> en los últimos 12 segundos hay dos huecos dibujados: pon ahí «Vídeo» (el más
+        adecuado para el espectador) y «Suscribirse».</li>
+      <li><strong>Probar y comparar:</strong> sube las tres miniaturas (paso 2) para que YouTube elija la mejor.</li>
+      <li><strong>Comentario fijado:</strong> cuando sea público, pega el de arriba y fíjalo (⋮ → Fijar).</li>
+      <li><strong>Vídeo relacionado en tus Shorts del tema:</strong> en cada Short, «Vídeo relacionado» → este vídeo.
+        Es lo que más lleva a la gente de un Short al vídeo largo.</li>
+    </ol>
   {% elif not yt_conectado %}
     <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
   {% elif not info.video %}

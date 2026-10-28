@@ -1,4 +1,4 @@
-"""Banner (imagen de cabecera) del canal de YouTube «Mente Inquieta».
+"""Banner (imagen de cabecera) del canal de YouTube «MenteInquieta67».
 
 YouTube pide 2048x1152 y enseña un trozo distinto en cada pantalla:
   - TV: la imagen entera
@@ -24,7 +24,7 @@ CARPETA = Path(__file__).resolve().parent
 ANCHO, ALTO = 2048, 1152
 SEGURA = (1235, 338)        # zona visible en todos los dispositivos
 ESCRITORIO = (2048, 338)    # franja que suele verse en ordenador
-NOMBRE = "Mente Inquieta"
+NOMBRE = "MenteInquieta67"
 LEMA = "Curiosidades en 1 minuto · historia, ciencia y misterios"
 
 

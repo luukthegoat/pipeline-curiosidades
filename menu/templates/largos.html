@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Vídeos largos · Mente Inquieta{% endblock %}
+{% block titulo %}Vídeos largos · MenteInquieta67{% endblock %}
 {% block contenido %}
 <h1>Vídeos largos</h1>
 <p class="sub">Vídeos de unos 10 minutos, en horizontal, explicados con dibujos: un mapa cuando se habla de lugares, un
@@ -48,6 +48,7 @@
             {% if l.dudas and not l.revisado %}<span class="etiqueta mal">{{ l.dudas }} duda{{ 's' if l.dudas > 1 }}</span>{% endif %}
             <span class="etiqueta {{ 'ok' if l.video }}">{{ 'vídeo hecho' if l.video else 'sin vídeo' }}</span>
             {% if l.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+            {% if l.stats %}<span><strong>{{ l.stats.vistas | miles }}</strong> vista{{ 's' if l.stats.vistas != 1 }}</span>{% endif %}
             <span>{{ l.capitulos }} capítulos · {{ l.escenas }} escenas · {{ l.duracion }}</span>
           </div>
         </div>

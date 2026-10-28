@@ -323,6 +323,7 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
         print("  aviso: YouTube lo ha dejado en privado porque tu proyecto de Google Cloud aún no está verificado. "
               "Cámbialo a público en YouTube Studio (o solicita la verificación del proyecto).")
 
+    _poner_en_lista(youtube, id_video, datos_guion)
     miniatura = paso3_video.ruta_miniatura(video)
     if miniatura.exists():
         try:
@@ -335,7 +336,97 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
     return resultado
 
 
-ETIQUETAS_LARGOS = ["historia", "historia de España", "explicado", "documental", "en 10 minutos", "Mente Inquieta"]
+# --- Listas de reproducción: cada vídeo a la suya desde el principio (ayuda a que YouTube entienda el canal) ---
+
+LISTAS = Path("salida/listas_youtube.json")
+NOMBRES_LISTAS = {
+    "largos": ("Historia explicada en 10 minutos", "Vídeos largos de historia explicados con dibujos."),
+    "efemeride": ("Tal día como hoy", "Lo que pasó un día como hoy, contado en menos de un minuto."),
+    "actualidad": ("Actualidad explicada", "Las noticias de España contadas con calma y con las fuentes citadas."),
+    "humor": ("Diarios de la historia", "La historia contada en primera persona y con humor."),
+    "ingles": ("History in English", "History shorts in English."),
+    "otros": ("Curiosidades de historia", "Historias curiosas en menos de un minuto."),
+}
+
+
+def listas_activadas() -> bool:
+    return os.getenv("LISTAS_AUTO", "1") == "1"
+
+
+def _lista_de(guion: dict, largo: bool = False) -> tuple:
+    """(clave, título, descripción) de la lista de reproducción que le toca a un vídeo."""
+    if largo:
+        return ("largos", *NOMBRES_LISTAS["largos"])
+    import horarios
+    tipo = horarios.tipo_de(guion)
+    if tipo == "serie" and guion.get("nombre_corto"):
+        nombre = guion["nombre_corto"]
+        return (f"serie:{nombre}", f"{nombre} (serie)", f"La serie sobre {nombre}, parte a parte.")
+    clave = tipo if tipo in NOMBRES_LISTAS else "otros"
+    return (clave, *NOMBRES_LISTAS[clave])
+
+
+def anadir_a_lista(youtube, id_video: str, guion: dict, largo: bool = False) -> str:
+    """Añade el vídeo a su lista (la crea, pública, si aún no existe). Devuelve el título de la lista o ""."""
+    clave, titulo, descripcion = _lista_de(guion, largo)
+    datos = json.loads(LISTAS.read_text(encoding="utf-8")) if LISTAS.exists() else {"listas": {}, "videos": {}}
+    if id_video in datos["videos"]:
+        return ""
+    for intento in range(2):
+        id_lista = datos["listas"].get(clave)
+        if not id_lista:
+            nueva = youtube.playlists().insert(part="snippet,status", body={
+                "snippet": {"title": titulo, "description": descripcion, "defaultLanguage": "es"},
+                "status": {"privacyStatus": "public"}}).execute()
+            id_lista = datos["listas"][clave] = nueva["id"]
+        try:
+            youtube.playlistItems().insert(part="snippet", body={"snippet": {
+                "playlistId": id_lista, "resourceId": {"kind": "youtube#video", "videoId": id_video}}}).execute()
+            break
+        except HttpError as error:
+            if error.resp.status != 404 or intento:  # 404: la lista se borró en YouTube Studio → se crea otra
+                raise
+            datos["listas"].pop(clave, None)
+    datos["videos"][id_video] = clave
+    LISTAS.parent.mkdir(parents=True, exist_ok=True)
+    LISTAS.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    return titulo
+
+
+def _poner_en_lista(youtube, id_video: str, guion: dict, largo: bool = False) -> None:
+    """Tras subir: a su lista, si está activado. Un fallo aquí no estropea la subida."""
+    if not listas_activadas():
+        return
+    try:
+        titulo = anadir_a_lista(youtube, id_video, guion, largo)
+        if titulo:
+            print(f"  añadido a la lista «{titulo}»", flush=True)
+    except Exception as error:  # noqa: BLE001
+        print(f"  aviso: no se ha podido añadir a su lista de reproducción ({error})", flush=True)
+
+
+def ordenar_en_listas() -> int:
+    """Pone en su lista cada vídeo ya subido que aún no esté en ninguna. Devuelve cuántos ha añadido."""
+    youtube = _youtube_con_limite()
+    vistos = json.loads(LISTAS.read_text(encoding="utf-8"))["videos"] if LISTAS.exists() else {}
+    hechos = 0
+    rutas = [(r, False) for r in sorted(paso3_video.CARPETA_GUIONES.glob("*.json"))]
+    rutas += [(r, True) for r in sorted(Path("salida/largos").glob("*/guion.json"))]
+    # Las series, por orden de parte
+    rutas.sort(key=lambda par: ((json.loads(par[0].read_text(encoding="utf-8")).get("serie") or {}).get("parte", 0),))
+    for ruta, largo in rutas:
+        guion = json.loads(ruta.read_text(encoding="utf-8"))
+        id_video = (guion.get("youtube") or {}).get("id")
+        if not id_video or id_video in vistos:
+            continue
+        titulo = anadir_a_lista(youtube, id_video, guion, largo)
+        if titulo:
+            hechos += 1
+            print(f"  «{guion.get('titulo', ruta.stem)}» → «{titulo}»", flush=True)
+    return hechos
+
+
+ETIQUETAS_LARGOS = ["historia", "historia de España", "explicado", "documental", "en 10 minutos", "MenteInquieta67"]
 
 
 def subir_largo(carpeta, privacidad: str = "private", publicar_el: str = "") -> dict:
@@ -392,7 +483,9 @@ def subir_largo(carpeta, privacidad: str = "private", publicar_el: str = "") -> 
     if privacidad_final != estado["privacyStatus"]:
         print("  aviso: YouTube lo ha dejado en privado porque tu proyecto de Google Cloud aún no está verificado. "
               "Cámbialo a público en YouTube Studio.", flush=True)
-    miniatura = carpeta / "miniatura.png"
+    _poner_en_lista(youtube, id_video, guion, largo=True)
+    elegida = guion.get("miniatura_elegida", "a")
+    miniatura = carpeta / ("miniatura.png" if elegida not in ("b", "c") else f"miniatura_{elegida}.png")
     if miniatura.exists():
         try:
             youtube.thumbnails().set(videoId=id_video, media_body=MediaFileUpload(str(miniatura))).execute()
@@ -400,6 +493,53 @@ def subir_largo(carpeta, privacidad: str = "private", publicar_el: str = "") -> 
         except HttpError:
             print("  aviso: YouTube no ha aceptado la miniatura. Para poner miniaturas propias hay que verificar el "
                   "canal por teléfono (youtube.com/verify); después puedes subirla a mano en YouTube Studio.", flush=True)
+    return resultado
+
+
+def subir_short_de_largo(carpeta, indice: int, privacidad: str = "private", publicar_el: str = "") -> dict:
+    """Sube como Short uno de los anticipos de un vídeo largo, con el enlace al vídeo completo en la descripción."""
+    carpeta = Path(carpeta)
+    ruta = carpeta / "guion.json"
+    guion = json.loads(ruta.read_text(encoding="utf-8"))
+    if not guion.get("revisado"):
+        raise ValueError("el guion del vídeo largo no está revisado: revísalo y márcalo como revisado antes de subirlo")
+    shorts = guion.get("shorts") or []
+    if not 0 <= indice < len(shorts):
+        raise ValueError("ese Short no existe: hazlos primero")
+    short = shorts[indice]
+    if short.get("youtube"):
+        print(f"  ya estaba subido: {short['youtube']['url']}", flush=True)
+        return short["youtube"]
+    video = carpeta / short["archivo"]
+    if not video.exists():
+        raise ValueError("no encuentro el vídeo del Short: vuelve a hacer los Shorts")
+    completo = (guion.get("youtube") or {}).get("url")
+    descripcion = [short["titulo"], "",
+                   f"▶ El vídeo completo, «{guion['titulo']}»: {completo}" if completo else
+                   f"▶ El vídeo completo, «{guion['titulo']}», en el canal.",
+                   "", "#Shorts #historia #historiadeespaña"]
+    estado = {"privacyStatus": "private" if publicar_el else privacidad, "selfDeclaredMadeForKids": False,
+              "containsSyntheticMedia": True}
+    if publicar_el:
+        estado["publishAt"] = _hora_utc(publicar_el)
+    cuerpo = {"snippet": {"title": f"{short['titulo'][:88]} #Shorts", "description": "\n".join(descripcion),
+                          "tags": [e for e in dict.fromkeys([guion.get("tema", ""), *ETIQUETAS_LARGOS[:4]]) if e],
+                          "categoryId": CATEGORIA_EDUCACION, "defaultLanguage": "es", "defaultAudioLanguage": "es"},
+              "status": estado}
+    youtube = _youtube_con_limite()
+    respuesta = _enviar(youtube, video, cuerpo)
+    id_video = respuesta["id"]
+    resultado = {"id": id_video, "url": f"https://youtube.com/shorts/{id_video}",
+                 "privacidad": respuesta.get("status", {}).get("privacyStatus", estado["privacyStatus"]),
+                 "publicar_el": publicar_el or None, "subido": datetime.now().isoformat(timespec="seconds")}
+    guion = json.loads(ruta.read_text(encoding="utf-8"))  # releer por si cambió mientras subía
+    guion["shorts"][indice]["youtube"] = resultado
+    ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"  ✔ subido: {resultado['url']} ({resultado['privacidad']})", flush=True)
+    _poner_en_lista(youtube, id_video, {})  # «Curiosidades de historia»
+    if not completo:
+        print("  aviso: el vídeo largo aún no está en YouTube; cuando lo esté, pon el enlace en la descripción.",
+              flush=True)
     return resultado
 
 
@@ -431,7 +571,7 @@ def actualizar_estadisticas() -> dict:
     """Pide a YouTube las vistas, «me gusta» y comentarios de todos los vídeos subidos (1 unidad de cuota por
     cada 50) y los guarda en salida/estadisticas_youtube.json. Devuelve {id: {vistas, me_gusta, comentarios}}."""
     ids = []
-    for ruta in paso3_video.CARPETA_GUIONES.glob("*.json"):
+    for ruta in [*paso3_video.CARPETA_GUIONES.glob("*.json"), *CARPETA_LARGOS.glob("*/guion.json")]:
         try:
             id_video = (json.loads(ruta.read_text(encoding="utf-8")).get("youtube") or {}).get("id")
         except (OSError, ValueError):
@@ -454,9 +594,61 @@ def actualizar_estadisticas() -> dict:
                                         "videos": estadisticas}, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         actualizar_retencion()  # cada pocas horas como mucho
+        actualizar_monetizacion()
     except Exception as error:  # noqa: BLE001 — la retención es un extra: que no impida tener las vistas
         print(f"  aviso: no se ha podido traer la retención: {error}")
     return estadisticas
+
+
+CARPETA_LARGOS = Path("salida/largos")
+MONETIZACION = Path("salida/monetizacion_youtube.json")
+
+
+def actualizar_monetizacion(forzar: bool = False) -> dict:
+    """Lo que cuenta para entrar en el Programa de Partners: suscriptores, horas de vídeos largos (12 meses) y vistas
+    de Shorts (90 días), con el ritmo de los últimos 28 días. Se guarda en salida/monetizacion_youtube.json."""
+    anterior = monetizacion()
+    if not forzar and anterior.get("actualizado") and datetime.now() - datetime.fromisoformat(
+            anterior["actualizado"]) < timedelta(hours=HORAS_RETENCION):
+        return anterior
+    resultado = {"actualizado": datetime.now().isoformat(timespec="seconds")}
+    if not tiene_analitica():
+        resultado["error"] = "sin_permiso"
+    else:
+        canal = build("youtube", "v3", credentials=credenciales(), cache_discovery=False).channels().list(
+            part="statistics", mine=True).execute()["items"][0]["statistics"]
+        resultado["suscriptores"] = int(canal.get("subscriberCount", 0))
+        analitica = build("youtubeAnalytics", "v2", credentials=credenciales(), cache_discovery=False)
+        hoy = datetime.now().date()
+
+        def consulta(dias: int, metricas: str, por_tipo: bool = True) -> list:
+            extra = {"dimensions": "creatorContentType"} if por_tipo else {}
+            respuesta = analitica.reports().query(ids="channel==MINE", startDate=(hoy - timedelta(days=dias)).isoformat(),
+                                                  endDate=hoy.isoformat(), metrics=metricas, **extra).execute()
+            columnas = [c["name"] for c in respuesta.get("columnHeaders", [])]
+            return [dict(zip(columnas, fila)) for fila in respuesta.get("rows", [])]
+
+        def horas_largos(filas):  # las de los Shorts no cuentan para monetizar
+            return round(sum(f["estimatedMinutesWatched"] for f in filas if f["creatorContentType"] != "shorts") / 60, 1)
+
+        def vistas_shorts(filas):
+            return int(sum(f["views"] for f in filas if f["creatorContentType"] == "shorts"))
+
+        ano, mes = consulta(365, "views,estimatedMinutesWatched"), consulta(28, "views,estimatedMinutesWatched")
+        resultado.update(horas_largos=horas_largos(ano), horas_largos_28=horas_largos(mes),
+                         vistas_shorts_90=vistas_shorts(consulta(90, "views")), vistas_shorts_28=vistas_shorts(mes))
+        altas = consulta(28, "subscribersGained,subscribersLost", por_tipo=False)
+        resultado["suscriptores_28"] = int(altas[0]["subscribersGained"] - altas[0]["subscribersLost"]) if altas else 0
+    MONETIZACION.parent.mkdir(parents=True, exist_ok=True)
+    MONETIZACION.write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
+    return resultado
+
+
+def monetizacion() -> dict:
+    try:
+        return json.loads(MONETIZACION.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 RETENCION = Path("salida/retencion_youtube.json")
@@ -551,6 +743,8 @@ def main(argv=None) -> int:
     parser.add_argument("--cada", type=float, default=0,
                         help="con varios guiones y --publicar-el: horas entre la publicación de uno y el siguiente")
     parser.add_argument("--forzar", action="store_true", help="súbelo aunque ya se hubiera subido")
+    parser.add_argument("--ordenar-listas", action="store_true",
+                        help="pone en su lista de reproducción cada vídeo ya subido que aún no esté en ninguna")
     parser.add_argument("--perfil", action="store_true",
                         help="pone en el canal la descripción y palabras clave de la carpeta marca/")
     parser.add_argument("--borrador", action="store_true",
@@ -566,6 +760,9 @@ def main(argv=None) -> int:
                 return 0
             print(f"⚠ {AVISO_SIN_CANAL}" if info else "⚠ Conectado, pero no he podido comprobar el canal.")
             return 2
+        if args.ordenar_listas:
+            print(f"✔ {ordenar_en_listas()} vídeo(s) añadidos a sus listas de reproducción.")
+            return 0
         if args.perfil:
             try:
                 nombre = actualizar_perfil()

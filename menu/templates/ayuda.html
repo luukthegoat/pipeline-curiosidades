@@ -1,9 +1,30 @@
 {% extends "base.html" %}
-{% block titulo %}Ayuda · Mente Inquieta{% endblock %}
+{% block titulo %}Ayuda · MenteInquieta67{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('ajustes') }}">← Ajustes</a>
 <h1>Cómo funciona</h1>
-<p class="sub">El programa convierte un tema o una fecha histórica en vídeos verticales para Shorts, TikTok o Reels.</p>
+<p class="sub">MenteInquieta67 · versión {{ version_app }}. Convierte un tema, una fecha o una noticia en Shorts
+  verticales de 40-45 segundos y en vídeos largos de unos 10 minutos explicados con dibujos.</p>
+
+<div class="tarjeta">
+  <h2>Novedades de la 2.0</h2>
+  <ul>
+    <li><strong>Camino a monetizar</strong> (Estadísticas): suscriptores, horas de vídeos largos y vistas de Shorts frente
+      a lo que pide YouTube, al ritmo de los últimos 28 días, y los días que quedan para el 1 de febrero de 2027 (desde
+      entonces piden el doble). Las horas de los Shorts no cuentan: solo las de vídeos largos públicos.</li>
+    <li><strong>Shorts sacados de cada vídeo largo</strong>: 3 trozos en vertical que se entienden solos y llevan al vídeo
+      completo (paso «Shorts que llevan a este vídeo»). En YouTube Studio, pon el vídeo largo como «Vídeo relacionado»
+      de cada uno.</li>
+    <li><strong>Vídeos largos que retienen más</strong>: una pregunta al principio que se responde al final, una intriga
+      al acabar cada capítulo, 12 segundos finales con huecos para la pantalla final de YouTube y «Mira también» en la
+      descripción.</li>
+    <li><strong>Tres miniaturas de colores vivos</strong> por vídeo largo, para «Probar y comparar» en YouTube Studio.</li>
+    <li><strong>Listas de reproducción automáticas</strong>: cada vídeo que se sube va a la suya (por tipo, por serie y
+      vídeos largos). Ajustes → YouTube.</li>
+    <li>Mientras la app trabaja (tareas y subidas programadas), el ordenador <strong>no se suspende</strong>; la pantalla
+      sí puede apagarse.</li>
+  </ul>
+</div>
 
 <div class="tarjeta">
   <h2>Los tres pasos</h2>

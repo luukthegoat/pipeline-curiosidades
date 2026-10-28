@@ -916,26 +916,54 @@ def escena(visual: dict, capitulo: str = "", bonesy=None) -> list:
     return resultado, claves
 
 
-def miniatura(frase: str, iconos=None, mapa_visual=None, bonesy=None) -> list:
-    """Capas de la miniatura (se dibuja en 1920×1080 y se captura a 1280×720): frase enorme, Bonesy y un dibujo."""
-    capas = []
-    if mapa_visual:
+# Tres miniaturas para «Probar y comparar» de YouTube Studio: colores vivos (los pastel se pierden entre las demás),
+# pocas palabras enormes y una sola figura con una emoción clara.
+MINIATURAS = {
+    "a": {"fondo": "#ffd23f", "texto": TINTA, "realce": COLORES["rojo"], "borde": "white", "pose": "sorpresa"},
+    "b": {"fondo": "#e8432f", "texto": "white", "realce": "#ffd23f", "borde": TINTA, "pose": "sorpresa"},
+    "c": {"fondo": "#1d3557", "texto": "white", "realce": "#ffd23f", "borde": TINTA, "pose": "piensa"},
+}
+
+
+def miniatura(frase: str, iconos=None, mapa_visual=None, bonesy=None, variante: str = "a") -> list:
+    """Capas de una miniatura (se dibuja en 1920×1080 y se captura a 1280×720): fondo de color vivo, la frase en
+    enorme y Bonesy con un mapa (a, c) o grande junto a un dibujo (b)."""
+    estilo = MINIATURAS.get(variante, MINIATURAS["a"])
+    capas = [f'<rect width="{ANCHO}" height="{ALTO}" fill="{estilo["fondo"]}"/>',
+             f'<rect width="{ANCHO}" height="{ALTO}" fill="url(#grano)"/>']
+    if mapa_visual and variante != "b":
         fondo, pasos, _ = mapa(mapa_visual, (980, 60, 900, 960))
         capas += [fondo, *pasos]
+        capas.append(figura(1680, 1060, 640, estilo["pose"], None, "izquierda", bonesy))
     else:
-        lista = iconos_validos(iconos)[:2]
-        for j, e in enumerate(lista):
-            capas.append(icono(e, 1450 + (j - (len(lista) - 1) / 2) * 330, 560, 380))
-    capas.append(figura(1680 if mapa_visual else 1700, 1060, 640, "sorpresa", None, "izquierda", bonesy))
-    lineas = partir(frase.upper(), 11, 3)
-    tam = 190 if len(lineas) <= 2 else 160
+        lista = iconos_validos(iconos)[:1]
+        if lista:
+            capas.append(icono(lista[0], 1130, 700, 360))
+        capas.append(figura(1560, 1075, 900, estilo["pose"], None, "izquierda", bonesy))
+    # El texto no puede pisar el mapa ni a Bonesy: la letra se ajusta al hueco libre de la izquierda
+    hueco = 860 if mapa_visual and variante != "b" else 1000
+    lineas = partir(frase.upper(), 10 if hueco < 900 else 12, 3)
+    tam = min(200 if len(lineas) <= 2 else 165, hueco / (0.58 * max(len(l) for l in lineas)))
     y = 540 - (len(lineas) - 1) * tam * 0.55
     for i, linea in enumerate(lineas):
-        relleno = COLORES["rojo"] if i == len(lineas) - 1 else TINTA
+        relleno = estilo["realce"] if i == len(lineas) - 1 else estilo["texto"]
         capas.append(f'<text x="70" y="{y + i * tam * 1.08:.0f}" font-family="Lilita" font-size="{tam}" fill="{relleno}" '
-                     f'stroke="white" stroke-width="22" paint-order="stroke" stroke-linejoin="round" '
+                     f'stroke="{estilo["borde"]}" stroke-width="24" paint-order="stroke" stroke-linejoin="round" '
                      f'dominant-baseline="middle">{esc(linea)}</text>')
     return capas
+
+
+def pantalla_final(bonesy=None) -> list:
+    """Los últimos segundos del vídeo: huecos para la pantalla final de YouTube (un vídeo y el botón de suscribirse),
+    que se ponen en YouTube Studio encima de este dibujo."""
+    hueco = f'stroke="{TINTA}" stroke-width="6" stroke-dasharray="22 16" fill="white" fill-opacity="0.55"'
+    return [texto(ANCHO / 2, 150, "¿Seguimos?", 120, fuente="titulo"),
+            subrayado(ANCHO / 2 - 330, ANCHO / 2 + 330, 230),
+            f'<g filter="url(#mano)"><rect x="150" y="320" width="880" height="495" rx="30" {hueco}/>'
+            f'<circle cx="1390" cy="567" r="170" {hueco}/></g>',
+            texto(590, 567, "El siguiente vídeo", 56, relleno="#5b554e"),
+            texto(1390, 567, "Suscríbete", 50, relleno="#5b554e"),
+            figura(1760, 1050, 430, "saluda", None, "izquierda", bonesy)]
 
 
 # ------------------------------------------------------------------ HTML y renderizado
@@ -945,14 +973,17 @@ def _fuente_base64(nombre: str) -> str:
     return base64.b64encode((DATOS / "fuentes" / nombre).read_bytes()).decode()
 
 
-def documento(capas: list, ancho=ANCHO, alto=ALTO, semilla=3) -> str:
-    """HTML con el SVG de la escena (fuentes incrustadas: no depende de nada externo)."""
+def documento(capas: list, ancho=ANCHO, alto=ALTO, semilla=3, vista=(ANCHO, ALTO)) -> str:
+    """HTML con el SVG de la escena (fuentes incrustadas: no depende de nada externo).
+
+    `vista` es el lienzo en el que se dibuja (1920×1080; los Shorts, 1080×1920); `ancho`×`alto`, el tamaño de la imagen.
+    """
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face {{ font-family: Mano; src: url(data:font/ttf;base64,{_fuente_base64("PatrickHand-Regular.ttf")}); }}
 @font-face {{ font-family: Lilita; src: url(data:font/ttf;base64,{_fuente_base64("LilitaOne-Regular.ttf")}); }}
 html, body {{ margin: 0; padding: 0; overflow: hidden; background: {PAPEL}; }}
 </style></head><body>
-<svg xmlns="http://www.w3.org/2000/svg" width="{ancho}" height="{alto}" viewBox="0 0 {ANCHO} {ALTO}">
+<svg xmlns="http://www.w3.org/2000/svg" width="{ancho}" height="{alto}" viewBox="0 0 {vista[0]} {vista[1]}">
 <defs>
   <filter id="mano" x="-5%" y="-5%" width="110%" height="110%">
     <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="{semilla}" result="ruido"/>
@@ -963,8 +994,8 @@ html, body {{ margin: 0; padding: 0; overflow: hidden; background: {PAPEL}; }}
   <pattern id="grano" width="320" height="320" patternUnits="userSpaceOnUse">
     <rect width="320" height="320" filter="url(#papel)"/></pattern>
 </defs>
-<rect width="{ANCHO}" height="{ALTO}" fill="{PAPEL}"/>
-<rect width="{ANCHO}" height="{ALTO}" fill="url(#grano)"/>
+<rect width="{vista[0]}" height="{vista[1]}" fill="{PAPEL}"/>
+<rect width="{vista[0]}" height="{vista[1]}" fill="url(#grano)"/>
 {"".join(capas)}
 </svg></body></html>"""
 

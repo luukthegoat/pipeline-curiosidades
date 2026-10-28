@@ -723,7 +723,7 @@ def programar_tarea_windows(cuando) -> None:
     resultado = _powershell(
         _REGISTRAR, T_EXE=ejecutable, T_SCRIPT=Path(__file__).resolve(), T_DIR=RAIZ,
         T_HORA=cuando.strftime("%Y-%m-%dT%H:%M:%S"), T_NOMBRE=TAREA,
-        T_DESC="Sube a YouTube los vídeos programados de Mente Inquieta (se reprograma sola).")
+        T_DESC="Sube a YouTube los vídeos programados de MenteInquieta67 (se reprograma sola).")
     if resultado.returncode != 0:
         _log(f"no he podido programar la tarea de Windows: {resultado.stderr.strip()[-300:]}")
 

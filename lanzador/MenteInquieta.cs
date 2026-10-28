@@ -1,4 +1,4 @@
-// Lanzador de «Mente Inquieta.exe»: abre el menú (menu\aplicacion.py) en su propia ventana,
+// Lanzador de «MenteInquieta67.exe»: abre el menú (menu\aplicacion.py) en su propia ventana,
 // con el Python del entorno .venv y sin consola. Se compila con lanzador\crear_exe.bat.
 //
 // - Si la aplicación ya está abierta, solo trae su ventana al frente.
@@ -12,7 +12,7 @@ using System.Windows.Forms;
 
 static class MenteInquieta
 {
-    const string Titulo = "Mente Inquieta";
+    const string Titulo = "MenteInquieta67";
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string clase, string titulo);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr ventana, int modo);
@@ -23,7 +23,7 @@ static class MenteInquieta
     static void Main()
     {
         // ¿Ya está abierta? Lo dice el mutex que crea la aplicación (menu\aplicacion.py), no el título de una
-        // ventana: una pestaña del navegador con el menú también se llama «Mente Inquieta».
+        // ventana: una pestaña del navegador con el menú también se llama «MenteInquieta67».
         System.Threading.Mutex abierta;
         if (System.Threading.Mutex.TryOpenExisting("MenteInquieta.Menu", out abierta))
         {
@@ -44,7 +44,7 @@ static class MenteInquieta
         {
             MessageBox.Show(
                 "No encuentro el programa junto a este .exe.\n\n" +
-                "«Mente Inquieta.exe» tiene que estar en la carpeta principal del proyecto, con el entorno creado:\n" +
+                "«MenteInquieta67.exe» tiene que estar en la carpeta principal del proyecto, con el entorno creado:\n" +
                 "    python -m venv .venv\n" +
                 "    .venv\\Scripts\\pip install -r requirements.txt",
                 Titulo, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -97,7 +97,7 @@ static class MenteInquieta
 
             Controls.Add(new Label
             {
-                Text = "Abriendo Mente Inquieta…",
+                Text = "Abriendo MenteInquieta67…",
                 ForeColor = Color.FromArgb(155, 161, 174),
                 Font = new Font("Segoe UI", 10f),
                 TextAlign = ContentAlignment.MiddleCenter,

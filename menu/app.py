@@ -48,6 +48,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
+VERSION = "2.0.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -55,6 +56,18 @@ app.config["MAX_CONTENT_LENGTH"] = 400 * 1024 * 1024  # imágenes y clips de ví
 
 
 # --- Cola de tareas: se ejecutan una detrás de otra --------------------------------------
+
+def mantener_despierto(activo: bool) -> None:
+    """Que Windows no se suspenda mientras este hilo trabaja (la pantalla sí puede apagarse).
+
+    Vale para el hilo que lo llama y se quita solo cuando el hilo termina, así que nunca se queda puesto.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    continuo, sistema = 0x80000000, 0x00000001  # ES_CONTINUOUS, ES_SYSTEM_REQUIRED
+    ctypes.windll.kernel32.SetThreadExecutionState(continuo | sistema if activo else continuo)
+
 
 class Trabajo:
     """Una tarea (generar guiones, audio, vídeo…) con su salida para mostrarla en la web."""
@@ -115,11 +128,13 @@ class Cola:
         return trabajo
 
     def _trabajar(self) -> None:
+        mantener_despierto(True)  # con tareas en marcha el ordenador no se suspende
         while True:
             with self.cerrojo:
                 trabajo = next((t for t in self.trabajos if t.estado == "en cola"), None)
                 if trabajo is None:
                     self.hilo = None
+                    mantener_despierto(False)
                     return
                 trabajo.estado = "en curso"
             try:
@@ -186,7 +201,8 @@ def contexto_global():
             "num_pendientes": contar_pendientes(),
             "errores_programados": [v for v in programados.leer()["videos"] if v["estado"] == "error"],
             # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
-            "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime)}
+            "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime),
+            "version_app": VERSION}
 
 
 def producir(t: Trabajo, nombres: list) -> bool:
@@ -1016,12 +1032,14 @@ def vigilar_programados() -> None:
                 print(f"[programados] {error}", file=sys.stderr)
             try:
                 if programados.toca_revisar():
+                    mantener_despierto(True)  # que no se suspenda a mitad de una subida
                     subprocess.run([sys.executable, str(SCRIPTS / "programados.py")], cwd=RAIZ, timeout=3 * 3600,
                                    env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as error:  # noqa: BLE001 — la vigilancia no debe caerse nunca
                 print(f"[programados] {error}", file=sys.stderr)
+            mantener_despierto(False)
             _despertador.wait(60)
             _despertador.clear()
 
@@ -1101,6 +1119,51 @@ def revisar_programados():
     mensaje = ("Actualizado con YouTube: " + "; ".join(cambios) + "." if cambios
                else "Actualizado: todo coincide con YouTube.")
     return redirect(url_for(destino, mensaje=mensaje, **extra))
+
+
+FECHA_CAMBIO_YPP = date(2027, 2, 1)  # desde entonces YouTube pide el doble de horas o de vistas de Shorts
+
+
+def _fecha_bonita(dia: date) -> str:
+    meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+             "noviembre", "diciembre")
+    return f"{dia.day} de {meses[dia.month - 1]} de {dia.year}"
+
+
+def _numero(valor: float) -> str:
+    """12345.6 → «12.346»; 0.35 → «0,4» (con decimal solo si es pequeño)."""
+    return f"{valor:.1f}".replace(".", ",") if valor < 10 and round(valor, 1) != int(valor) else miles(round(valor))
+
+
+def camino_monetizar() -> dict:
+    """Cuánto falta para entrar en el Programa de Partners y a qué ritmo se va (con los datos de los últimos 28 días)."""
+    datos = subir_youtube.monetizacion()
+    if not datos.get("actualizado") or datos.get("error"):
+        return {"error": datos.get("error", "sin_datos")}
+    hoy = date.today()
+    antes = hoy < FECHA_CAMBIO_YPP
+    filas = []
+    for nombre, valor, meta, ritmo, ventana, unidad in (
+            ("Suscriptores", datos["suscriptores"], 1000, datos.get("suscriptores_28", 0), None, "suscriptores"),
+            ("Horas de vídeos largos (12 meses)", datos["horas_largos"], 4000 if antes else 8000,
+             datos.get("horas_largos_28", 0), 365, "horas"),
+            ("Vistas de Shorts (90 días)", datos["vistas_shorts_90"], 10_000_000 if antes else 20_000_000,
+             datos.get("vistas_shorts_28", 0), 90, "vistas")):
+        por_dia = ritmo / 28
+        if valor >= meta:
+            nota = "¡Conseguido!"
+        elif ventana:  # cuenta móvil: lo que hace falta es un ritmo diario
+            falta_dia = meta / ventana
+            nota = f"Hacen falta unas {_numero(falta_dia)} {unidad} al día; ahora llevas {_numero(por_dia)} al día."
+        elif por_dia > 0:
+            dias = (meta - valor) / por_dia
+            nota = ("A este ritmo, más de 5 años." if dias > 5 * 365 else
+                    f"A este ritmo, el {_fecha_bonita(hoy + timedelta(days=round(dias)))}.")
+        else:
+            nota = "En los últimos 28 días no ha subido."
+        filas.append({"nombre": nombre, "valor": valor, "meta": meta, "pct": min(100, 100 * valor / meta), "nota": nota})
+    return {"filas": filas, "dias_cambio": (FECHA_CAMBIO_YPP - hoy).days if antes else 0,
+            "actualizado": datos["actualizado"][:16].replace("T", " a las ")}
 
 
 TIPOS_VIDEO = {"efemeride": "Efeméride", "serie": "Serie", "humor": "Humor", "serio": "Serio / misterio",
@@ -1203,6 +1266,7 @@ def ver_estadisticas():
         "estadisticas.html", videos=videos, totales=totales, por_tipo=por_tipo, maximo_tipo=maximo_tipo,
         por_duracion=por_duracion, conclusiones=conclusiones, orden=orden,
         no_arrancan=no_arrancan(videos, totales["media"]), horas_juzgar=HORAS_PARA_JUZGAR,
+        camino=camino_monetizar(),
         maximo_vistas=max((v["stats"]["vistas"] for v in videos), default=0) or 1,
         min_vistas=MIN_VISTAS_RETENCION,
         actualizado=stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else "",
@@ -1339,6 +1403,7 @@ def refrescar_estadisticas():
         return redirect(url_for("ver_estadisticas", error=f"No se han podido traer las vistas de YouTube: {error}", **orden))
     try:
         subir_youtube.actualizar_retencion(forzar=True)
+        subir_youtube.actualizar_monetizacion(forzar=True)
     except Exception as error:  # noqa: BLE001 — las vistas sí se han traído
         return redirect(url_for("ver_estadisticas", error=f"Vistas actualizadas, pero no la retención: {error}", **orden))
     return redirect(url_for("ver_estadisticas", mensaje=f"Actualizado con YouTube ({cuantos} vídeos).", **orden))
@@ -1355,6 +1420,7 @@ def actualizar_vistas():
         return redirect(url_for("mis_videos", error=f"No se han podido traer las vistas de YouTube: {error}", **destino))
     try:
         subir_youtube.actualizar_retencion(forzar=True)
+        subir_youtube.actualizar_monetizacion(forzar=True)
     except Exception as error:  # noqa: BLE001 — las vistas sí se han traído
         return redirect(url_for("mis_videos", error=f"Vistas actualizadas, pero no la retención: {error}", **destino))
     return redirect(url_for("mis_videos", mensaje=f"Vistas y retención actualizadas ({cuantos} vídeos).", **destino))
@@ -1394,6 +1460,18 @@ def subir_credenciales():
     return redirect(url_for("ajustes", mensaje="Credenciales guardadas. Ahora pulsa «Conectar con YouTube».") + "#youtube")
 
 
+@app.post("/youtube/listas")
+def listas_youtube():
+    """Ajustes → YouTube: activar las listas automáticas o meter en sus listas los vídeos ya subidos."""
+    if request.form.get("accion") == "ordenar":
+        def trabajo(t: Trabajo) -> bool:
+            return t.ejecutar("subir_youtube.py", "--ordenar-listas") == 0
+        nuevo = cola.anadir("Ordenar en listas de reproducción los vídeos ya subidos", trabajo)
+        return redirect(url_for("ver_tarea", id=nuevo.id))
+    guardar_env({"LISTAS_AUTO": "1" if request.form.get("activadas") == "1" else "0"})
+    return redirect(url_for("ajustes", mensaje="Listas de reproducción guardadas.") + "#youtube")
+
+
 @app.post("/youtube/privacidad")
 def privacidad_youtube():
     privacidad = request.form.get("privacidad", "private")
@@ -1420,6 +1498,7 @@ def ajustes():
         yt_canal=canal_youtube(),
         yt_token=subir_youtube.TOKEN.exists(),
         yt_privacidad=env.get("YT_PRIVACIDAD") or "private",
+        listas_auto=subir_youtube.listas_activadas(),
         tavily=bool(os.getenv("TAVILY_API_KEY")),
         pexels=bool(os.getenv("PEXELS_API_KEY")),
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
@@ -1569,6 +1648,7 @@ def resumen_largo(carpeta: Path) -> dict:
         "youtube": guion.get("youtube"),
         "creado": (carpeta / "guion.json").stat().st_ctime,
         "ocupado": largo_ocupado(carpeta.name),
+        "stats": estadisticas_youtube()["videos"].get((guion.get("youtube") or {}).get("id")),
     }
 
 
@@ -1650,6 +1730,10 @@ def ver_largo(nombre):
         tipos=dibujos_tipos(), ropas=dibujos.ROPAS, sombreros=dibujos.SOMBREROS,
         colores=[c for c in dibujos.COLORES if c not in ("blanco", "celeste", "dorado")],
         bonesy={"ropa": "sudadera", "color_ropa": "", "sombrero": "", **(guion.get("bonesy") or {})},
+        miniaturas=[v for v in dibujos.MINIATURAS if (carpeta / video_largo.ruta_miniatura(v)).exists()],
+        shorts=[{**s, "indice": i, "existe": (carpeta / s["archivo"]).exists()}
+                for i, s in enumerate(guion.get("shorts") or [])],
+        elegida=guion.get("miniatura_elegida", "a"),
         mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
     )
 
@@ -1786,6 +1870,69 @@ def subir_largo(nombre):
     return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
+@app.post("/largo/<nombre>/shorts")
+def shorts_largo(nombre):
+    """Saca 3 Shorts del vídeo largo (con su voz y sus dibujos) para llevar gente al vídeo completo."""
+    carpeta = ruta_largo(nombre)
+    if largo_ocupado(nombre):
+        return redirect(url_for("ver_largo", nombre=nombre, error="Ya hay una tarea en marcha con este vídeo."))
+    enlace = {"titulo": "Ver los Shorts", "url": url_for("ver_largo", nombre=nombre, _anchor="shorts"),
+              "etiqueta": "vídeo largo"}
+
+    def trabajo(t: Trabajo) -> bool:
+        codigo = t.ejecutar("shorts_largo.py", carpeta.relative_to(RAIZ).as_posix())
+        if codigo == 0:
+            t.enlaces = [enlace]
+        return codigo == 0
+
+    nuevo = cola.anadir(f"Shorts de «{leer_largo(nombre)['titulo']}»", trabajo)
+    nuevo.largo = nombre
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.route("/largo/<nombre>/short/<int:indice>.mp4")
+def archivo_short_largo(nombre, indice):
+    shorts = leer_largo(nombre).get("shorts") or []
+    if not 0 <= indice < len(shorts):
+        abort(404)
+    ruta = ruta_largo(nombre) / shorts[indice]["archivo"]
+    if not ruta.exists():
+        abort(404)
+    return send_file(ruta, mimetype="video/mp4", conditional=True)
+
+
+@app.post("/largo/<nombre>/short/<int:indice>/subir")
+def subir_short_largo(nombre, indice):
+    guion = leer_largo(nombre)
+    if not guion.get("revisado"):
+        return redirect(url_for("ver_largo", nombre=nombre, error="Antes de subir sus Shorts, marca el guion como revisado.",
+                                _anchor="shorts"))
+    privacidad = request.form.get("privacidad", "private")
+    argumentos = [ruta_largo(nombre).relative_to(RAIZ).as_posix(), "--subir", str(indice), "--privacidad",
+                  privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
+    publicar_el = request.form.get("publicar_el", "")
+    if publicar_el:
+        try:
+            if datetime.fromisoformat(publicar_el) <= datetime.now():
+                raise ValueError
+        except ValueError:
+            return redirect(url_for("ver_largo", nombre=nombre, error="Elige una fecha de publicación futura.",
+                                    _anchor="shorts"))
+        argumentos += ["--publicar-el", publicar_el]
+    enlace = {"titulo": "Ver los Shorts", "url": url_for("ver_largo", nombre=nombre, _anchor="shorts"),
+              "etiqueta": "vídeo largo"}
+
+    def trabajo(t: Trabajo) -> bool:
+        codigo = t.ejecutar("shorts_largo.py", *argumentos)
+        if codigo == 0:
+            t.enlaces = [enlace]
+        return codigo == 0
+
+    nuevo = cola.anadir(f"Subir el Short {indice + 1} de «{guion['titulo']}»", trabajo)
+    nuevo.largo = nombre
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
 @app.route("/largo/<nombre>/video.mp4")
 def archivo_video_largo(nombre):
     ruta = ruta_largo(nombre) / "video.mp4"
@@ -1796,10 +1943,21 @@ def archivo_video_largo(nombre):
 
 @app.route("/largo/<nombre>/miniatura.png")
 def miniatura_largo(nombre):
-    ruta = ruta_largo(nombre) / "miniatura.png"
+    variante = request.args.get("variante", "a")
+    ruta = ruta_largo(nombre) / video_largo.ruta_miniatura(variante if variante in dibujos.MINIATURAS else "a")
     if not ruta.exists():
         abort(404)
     return send_file(ruta, mimetype="image/png", max_age=0)
+
+
+@app.post("/largo/<nombre>/miniatura")
+def elegir_miniatura_largo(nombre):
+    """La miniatura que se sube con el vídeo (las otras dos, para «Probar y comparar» en YouTube Studio)."""
+    guion = leer_largo(nombre)
+    variante = request.form.get("variante", "a")
+    guion["miniatura_elegida"] = variante if variante in dibujos.MINIATURAS else "a"
+    escribir_largo(nombre, guion)
+    return redirect(url_for("ver_largo", nombre=nombre, mensaje="Miniatura principal elegida.", _anchor="video"))
 
 
 @app.route("/largo/<nombre>/dibujo/<archivo>")
