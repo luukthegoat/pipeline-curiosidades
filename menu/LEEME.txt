@@ -42,6 +42,11 @@ QUÉ PUEDES HACER (barra de arriba)
        Ahí está también el comentario con la pregunta, para fijarlo.
     · Más opciones: texto para publicar (TikTok y YouTube), prompts y borrar.
 
+  Estadísticas
+    Vistas, retención (meta: más del 70 % se queda), comparación por tipo y
+    duración, y «No arrancan»: los Shorts con muy pocas vistas a las 48 h, con
+    un botón para rehacerlos con otro gancho (queda por revisar).
+
   Vídeos largos
     Vídeos horizontales de unos 10 minutos por capítulos, explicados con dibujos
     que hace la propia app (Bonesy, mapas, fechas, cifras, personajes…).

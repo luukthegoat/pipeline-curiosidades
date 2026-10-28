@@ -92,6 +92,35 @@
     tiene datos de {{ min_vistas }} vistas o más (con menos es puro azar).</p>
 </div>
 
+{# ---------------------------------------------------------------- No arrancan #}
+{% if no_arrancan %}
+<div class="tarjeta">
+  <h2>No arrancan</h2>
+  <p class="ayuda-campo" style="margin-top: 0;">Shorts publicados hace más de {{ horas_juzgar }} horas con muy pocas
+    vistas: casi todo el mundo los desliza al empezar. No los borres (alguno despega semanas después): haz una versión
+    con <strong>otro gancho</strong>. La IA reescribe solo la primera escena con lo que ya cuenta el guion, se rehace el
+    vídeo con las mismas imágenes y queda por revisar para que lo programes.</p>
+  <div class="lista">
+    {% for v in no_arrancan %}
+      <div class="fila-video compacta">
+        <div class="cuerpo">
+          <a class="titulo" href="{{ url_for('ver_guion', nombre=v.nombre) }}">{{ v.titulo }}</a>
+          <div class="meta"><span>{{ v.stats.vistas | miles }} vista{{ 's' if v.stats.vistas != 1 }} en {{ v.dias }} días</span>
+            <span class="etiqueta">{{ v.tipo_bonito }}</span>
+            {% if v.duracion and v.duracion > 55 %}<span class="etiqueta mal" title="Es de antes de los 40-45 s: cambiar
+              solo el gancho no basta; mejor un vídeo nuevo sobre el tema">dura {{ '%.0f' % v.duracion }} s: mejor uno nuevo</span>{% endif %}</div>
+        </div>
+        <div class="botones">
+          <form method="post" action="{{ url_for('otro_gancho', nombre=v.nombre) }}">
+            <button class="secundario" type="submit">Rehacer con otro gancho</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {# ---------------------------------------------------------------- Vídeo a vídeo #}
 <div class="cabecera-seccion">
   <h2>Vídeo a vídeo</h2>

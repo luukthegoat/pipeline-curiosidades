@@ -65,6 +65,9 @@ Estilo:
   El gancho tiene que ser cierto según el MATERIAL.
 - Frases cortas, fáciles de narrar en voz alta. Tono curioso y cercano, sin exagerar.
 - Ve al grano: nada de introducciones ni de contexto que no sea imprescindible. Cada escena aporta un dato nuevo.
+- A MITAD del vídeo (escena 3 o 4) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
+  frase tipo «pero lo raro no fue eso…», «y entonces pasó algo que nadie esperaba». Mucha gente desliza cuando cree que
+  ya lo ha entendido todo: deja la mejor respuesta para el final. El giro también tiene que ser cierto.
 - La ÚLTIMA escena termina con una PREGUNTA directa al espectador, corta y fácil de contestar en los comentarios
   (una opinión o una apuesta: «¿Tú habrías firmado?», «¿Héroe o traidor?»). Nunca «¿Lo sabías?» ni «Comenta abajo».
 - Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (40-45 segundos). Apunta a unas {objetivo}.
@@ -126,6 +129,8 @@ Los VALORES de "titulo", "nombre_corto", "gancho", "narracion", "palabras_clave"
 "personaje_visual", "prompt_video" y "visual" van SIEMPRE en inglés."""
 
 PALABRAS_DIARIO = (95, 115, 105)  # mínimo, máximo y objetivo: unos 40-45 s
+# Noticias: lo que pida cada una (un Short sin relleno retiene más que uno largo): unos 30-45 s.
+PALABRAS_ACTUALIDAD = (70, 112, 85)
 
 PROMPT_ACTUALIDAD = """Eres guionista de vídeos cortos de ACTUALIDAD (YouTube Shorts, TikTok) para un canal de divulgación.
 Recibirás un MATERIAL con varios artículos de prensa recientes, cada uno con su medio y su fecha. Hoy es {hoy}.
@@ -155,8 +160,12 @@ Estilo:
 - La ÚLTIMA escena, después de la fecha, lanza al espectador una pregunta abierta sobre la polémica para que opine
   en los comentarios («¿Quién crees que tiene razón?», «¿Tú qué harías?»), sin sugerir la respuesta.
 - Ve al grano: lo esencial de la noticia, sin rodeos.
-- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (40-45 segundos). Apunta a unas {objetivo}.
-- Entre 5 y 6 escenas, de 17 a 22 palabras de narración cada una.
+- A MITAD del vídeo (escena 3 o 4) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
+  frase tipo «pero lo raro no fue eso…», «y entonces pasó algo que nadie esperaba». Mucha gente desliza cuando cree que
+  ya lo ha entendido todo: deja la mejor respuesta para el final. El giro tiene que salir del MATERIAL.
+- Longitud: lo que pida la noticia, ni una palabra de relleno. Una noticia sencilla se cuenta en unas {min_palabras}
+  palabras (30 segundos); una con varias partes o posturas, hasta {max_palabras} (45 segundos).
+- Entre 4 y 6 escenas, de 15 a 22 palabras de narración cada una.
 
 Responde SOLO con un objeto JSON con esta forma:
 {{
@@ -1128,9 +1137,9 @@ def main(argv=None) -> int:
                     hoy = date.today()
                     sistema = PROMPT_ACTUALIDAD.format(
                         hoy=hoy.isoformat(), hoy_corto=f"{hoy.day} de {MESES_ES[hoy.month - 1]}" if idioma == "es"
-                        else hoy.strftime("%B %d"), min_palabras=PALABRAS_MIN, max_palabras=PALABRAS_MAX,
-                        objetivo=PALABRAS_OBJETIVO, idioma=IDIOMAS[idioma])
-                    guion = generar_guion(api_key, modelo, material, idioma, "", sistema)
+                        else hoy.strftime("%B %d"), min_palabras=PALABRAS_ACTUALIDAD[0],
+                        max_palabras=PALABRAS_ACTUALIDAD[1], objetivo=PALABRAS_ACTUALIDAD[2], idioma=IDIOMAS[idioma])
+                    guion = generar_guion(api_key, modelo, material, idioma, "", sistema, *PALABRAS_ACTUALIDAD)
                 else:
                     indicaciones = indicaciones_serie(evento, titulos_previos[idioma])
                     guion = generar_guion(api_key, modelo, material, idioma, indicaciones)

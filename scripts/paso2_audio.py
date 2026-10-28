@@ -34,7 +34,7 @@ VOCES = {
 }
 VELOCIDAD = os.getenv("VELOCIDAD") or "+8%"   # algo más rápido: ritmo de vídeo corto
 PAUSA_ENTRE_ESCENAS = 0.25                     # segundos de silencio que el paso 3 pondrá entre escenas
-DURACION_MIN, DURACION_MAX = 55, 80            # aviso si el vídeo queda fuera de este rango
+DURACION_MIN, DURACION_MAX = 28, 55            # aviso si queda fuera: noticias de ~30 s, el resto 40-45 s
 
 PALABRAS_POR_SUBTITULO = 4
 CORTE_POR_SILENCIO = 0.35  # s: una pausa larga en la voz también cierra el subtítulo
@@ -221,7 +221,7 @@ async def procesar_guion(ruta_guion: Path, forzar: bool) -> Path:
     ruta_salida.write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
     escribir_srt(carpeta / "subtitulos.srt", bloques_subtitulos(todas_las_palabras))
 
-    minimo, maximo = (40, 60) if guion.get("diario") else (DURACION_MIN, DURACION_MAX)  # el diario es más corto
+    minimo, maximo = DURACION_MIN, DURACION_MAX
     aviso = "" if minimo <= duracion_total <= maximo else f"  ← fuera de {minimo}-{maximo} s"
     print(f"  total: {duracion_total:.1f} s{aviso}")
     return ruta_salida

@@ -1582,7 +1582,7 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
         lineas.append(f"{'Music' if ingles else 'Música'}: {pista}")
     lineas += [_linea_video_ia(datos) if datos.get("video_ia") else ("Synthetic voice (AI)." if ingles
                                                                        else "Voz sintética (IA)."),
-               "", _hashtags(datos, 8)]
+               "", _hashtags(datos, 4)]  # 3-5 en total con el #Shorts del título: más parece spam
     # YouTube rechaza «<» y «>» en título y descripción, y corta la descripción a 5.000 caracteres.
     descripcion = "\n".join(lineas).replace("<", "‹").replace(">", "›")[:4900]
     etiquetas, largo = [], 0

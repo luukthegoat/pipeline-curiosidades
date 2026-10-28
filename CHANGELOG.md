@@ -3,6 +3,24 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.20.0] - 2026-10-28
+
+Mejoras de los Shorts a partir de los consejos de creadores de YouTube (lo primero es que no deslicen; después, que
+nada sobre).
+
+### Añadido
+- **Rehacer con otro gancho** (Estadísticas → «No arrancan»): los Shorts publicados hace más de 48 h con muy pocas
+  vistas (menos de 150 o de un tercio de la media) salen con un botón que hace una versión nueva: la IA reescribe solo
+  la primera escena con lo que ya cuenta el guion, se rehace el vídeo con las mismas imágenes y queda por revisar (no
+  se programa sola). Las noticias no salen, y los vídeos de más de 55 s llevan el aviso «mejor uno nuevo».
+
+### Cambiado
+- **Giro a mitad del vídeo:** los guiones de historia y de actualidad meten en la escena 3 o 4 algo que reabre la
+  intriga («pero lo raro no fue eso…»), para que no deslicen al creer que ya lo saben todo.
+- **Noticias con lo justo:** de 30 a 45 s según lo que tenga la noticia (antes siempre 40-45 s).
+- **3-5 hashtags** en la descripción de YouTube (antes 8): más parecen spam.
+- El aviso de duración de la voz usa el rango actual (28-55 s) en vez del antiguo (55-80 s).
+
 ## [1.19.0] - 2026-10-28
 
 ### Añadido

@@ -16,7 +16,7 @@ import threading
 import time
 import webbrowser
 from urllib.parse import urlparse
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, url_for
@@ -283,6 +283,8 @@ def resumen(ruta: Path) -> dict:
         "serie": datos.get("serie"),
         "programado": programados.por_guion().get(nombre),
         "tipo": horarios.tipo_de(datos),
+        "rehecho_de": datos.get("rehecho_de"),
+        "video_ia": bool(datos.get("video_ia")),
     }
 
 
@@ -1199,12 +1201,131 @@ def ver_estadisticas():
     return render_template(
         "estadisticas.html", videos=videos, totales=totales, por_tipo=por_tipo, maximo_tipo=maximo_tipo,
         por_duracion=por_duracion, conclusiones=conclusiones, orden=orden,
+        no_arrancan=no_arrancan(videos, totales["media"]), horas_juzgar=HORAS_PARA_JUZGAR,
         maximo_vistas=max((v["stats"]["vistas"] for v in videos), default=0) or 1,
         min_vistas=MIN_VISTAS_RETENCION,
         actualizado=stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else "",
         error_retencion=ret.get("error", ""), yt_conectado=subir_youtube.TOKEN.exists(),
         mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
     )
+
+
+# --- Rehacer con otro gancho los Shorts que no arrancan ------------------------------------------
+
+HORAS_PARA_JUZGAR = 48     # antes de eso un Short aún puede estar arrancando
+MIN_VISTAS_ARRANQUE = 150  # por debajo de esto (o de un tercio de la media del canal) no ha arrancado
+MAX_NO_ARRANCAN = 6
+
+PROMPT_OTRO_GANCHO = """Eres guionista de YouTube Shorts. Este Short NO arrancó: casi todo el mundo lo deslizó en el
+primer segundo. Escribe una ESCENA 1 nueva con OTRO ÁNGULO para el gancho.
+
+- Usa SOLO datos que ya aparecen en el GUION. No añadas fechas, cifras, nombres ni detalles nuevos.
+- La primera frase es el gancho: como mucho {max_gancho} palabras, concreta y sorprendente (un dato chocante, una
+  contradicción o una pregunta que el espectador necesite resolver). Tiene que ser DISTINTA del gancho anterior.
+- Nunca empieces con «¿Sabías que…?», «Hoy te voy a contar», una fecha suelta ni presentando al protagonista
+  («X, figura clave de…»).
+- La escena 1 entera tiene entre {minimo} y {maximo} palabras y enlaza con la escena 2 tal y como está.
+
+Responde SOLO con un JSON: {{"escena1": "la narración nueva de la escena 1", "titulo": "título nuevo, atractivo y
+cierto", "gancho": "1 a 4 palabras que se verán en grande en el primer segundo"}}. Todo en {idioma}."""
+
+
+def publicado_en(youtube: dict):
+    """Cuándo se publicó (o se publicará) un vídeo subido, o None."""
+    for clave in ("publicar_el", "subido"):
+        try:
+            return datetime.fromisoformat(youtube[clave])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def no_arrancan(videos: list, media: int) -> list:
+    """Shorts publicados hace más de 48 h con muy pocas vistas que aún no tienen versión con otro gancho."""
+    umbral = max(MIN_VISTAS_ARRANQUE, media // 3)
+    rehechos = {g["rehecho_de"] for g in todos() if g.get("rehecho_de")}
+    candidatos = []
+    for v in videos:
+        cuando = publicado_en(v["youtube"])
+        if (not cuando or datetime.now() - cuando < timedelta(hours=HORAS_PARA_JUZGAR)
+                or v["stats"]["vistas"] >= umbral or v["tipo"] == "actualidad"  # una noticia vieja no se repite
+                or v.get("rehecho_de") or v["nombre"] in rehechos or v.get("video_ia")):
+            continue
+        candidatos.append({**v, "dias": (datetime.now() - cuando).days})
+    candidatos.sort(key=lambda v: v["stats"]["vistas"])
+    return candidatos[:MAX_NO_ARRANCAN]
+
+
+def rehacer_con_otro_gancho(t: Trabajo, nombre: str) -> str:
+    """Copia del guion con la escena 1 (el gancho), el título y el texto grande nuevos. Devuelve el nombre de la copia."""
+    datos = leer(nombre)
+    escenas = datos["escenas"]
+    palabras = len(escenas[0]["narracion"].split())
+    sistema = PROMPT_OTRO_GANCHO.format(max_gancho=paso1_guiones.MAX_PALABRAS_GANCHO, minimo=max(10, palabras - 4),
+                                        maximo=palabras + 4, idioma=paso1_guiones.IDIOMAS.get(datos.get("idioma"), "español"))
+    usuario = (f"GANCHO ANTERIOR (no funcionó): {escenas[0]['narracion']}\nTÍTULO ANTERIOR: {datos.get('titulo')}\n\n"
+               "GUION:\n" + "\n".join(f"{e['numero']}. {e['narracion']}" for e in escenas))
+    api_key = leer_env().get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
+    modelo = leer_env().get("MODELO") or paso1_guiones.MODELO_POR_DEFECTO
+    propuesta = {}
+    for intento in range(3):
+        try:
+            propuesta = json.loads(paso1_guiones.llamar_groq(api_key, modelo, sistema, usuario))
+        except ValueError:
+            continue
+        escena1 = " ".join(str(propuesta.get("escena1", "")).split())
+        problema = paso1_guiones.problema_gancho(escena1) if escena1 else "está vacía"
+        if escena1 and escena1 != escenas[0]["narracion"] and not problema:
+            break
+        t.escribir(f"  propuesta descartada ({problema or 'es igual que la anterior'}); pido otra…")
+        usuario += f"\n\nTu propuesta anterior no vale: {problema or 'es igual que el gancho anterior'}. Escribe otra."
+    else:
+        t.escribir("No se ha conseguido un gancho mejor. Prueba más tarde.")
+        return ""
+    copia = json.loads(json.dumps(datos))
+    for clave in ("youtube", "video", "instagram", "editado_a_mano"):
+        copia.pop(clave, None)
+    copia["escenas"][0]["narracion"] = escena1
+    serie = datos["titulo"][datos["titulo"].rfind(" ("):] if (datos.get("serie") or {}).get("total", 1) > 1 else ""
+    copia["titulo"] = (" ".join(str(propuesta.get("titulo") or "").split()) or datos["titulo"].replace(serie, "")) + serie
+    copia["gancho"] = " ".join(str(propuesta.get("gancho") or "").split())[:40] or datos.get("gancho", "")
+    copia["rehecho_de"] = nombre
+    copia["verificado"] = False
+    # Que no se programe solo: el gancho lo ha escrito la IA y hay que comprobar que es cierto.
+    copia["sin_respaldo"] = [{"escena": 1, "frase": escena1,
+                              "motivo": "Gancho nuevo para la versión que sustituye a un vídeo que no arrancó: "
+                                        "comprueba que es cierto antes de publicarlo."}]
+    numero = 2
+    while (GUIONES / f"{nombre}_v{numero}.json").exists():
+        numero += 1
+    nuevo = f"{nombre}_v{numero}"
+    (GUIONES / f"{nuevo}.json").write_text(json.dumps(copia, ensure_ascii=False, indent=2), encoding="utf-8")
+    elegidas = paso3_video.elegidas_path(nombre)
+    if elegidas.exists():  # las mismas imágenes y clips: solo cambia el principio
+        paso3_video.elegidas_path(nuevo).parent.mkdir(parents=True, exist_ok=True)
+        paso3_video.elegidas_path(nuevo).write_bytes(elegidas.read_bytes())
+    t.escribir(f"Gancho nuevo: «{escena1}»")
+    t.escribir(f"Título nuevo: «{copia['titulo']}»\n")
+    return nuevo
+
+
+@app.post("/guion/<nombre>/otro-gancho")
+def otro_gancho(nombre):
+    datos = leer(nombre)
+
+    def trabajo(t: Trabajo) -> bool:
+        nuevo = rehacer_con_otro_gancho(t, nombre)
+        if not nuevo:
+            return False
+        t.resultado = [nuevo]
+        if not producir(t, [nuevo]):
+            return False
+        t.escribir("Listo: revisa el gancho nuevo y prográmalo. El vídeo antiguo sigue en YouTube; si quieres, ocúltalo "
+                   "en YouTube Studio cuando salga el nuevo.")
+        return True
+
+    nuevo = cola.anadir(f"Otro gancho para «{datos.get('titulo', nombre)}»", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
 @app.post("/estadisticas/actualizar")
