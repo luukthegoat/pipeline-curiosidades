@@ -66,7 +66,7 @@
     if (!['en curso', 'en cola'].includes(t.estado) && t.resultado.length) {
       const enlaces = document.getElementById('enlaces');
       enlaces.innerHTML = '';
-      for (const g of t.resultado) enlaces.appendChild(enlace(g.titulo, '/guion/' + encodeURIComponent(g.nombre), false, g.idioma));
+      for (const g of t.resultado) enlaces.appendChild(enlace(g.titulo, g.url, false, g.etiqueta));
       document.getElementById('resultado').hidden = false;
     }
     if (activos) setTimeout(actualizar, 1500);

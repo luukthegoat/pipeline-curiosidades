@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import hashlib
+import re
 import threading
 import time
 import webbrowser
@@ -36,6 +37,7 @@ import actualidad  # noqa: E402  (noticias recientes para los vídeos de actuali
 import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
 import piloto_actualidad  # noqa: E402  (vídeo de la noticia del día, solo y con salvaguarda)
 import instagram  # noqa: E402  (publicar los vídeos como Reels)
+import video_largo  # noqa: E402  (vídeos largos explicados con dibujos)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -65,6 +67,8 @@ class Trabajo:
         self.estado = "en cola"  # en cola · en curso · terminada · con errores · cancelada
         self.lineas = []
         self.resultado = []  # guiones creados o tratados, para enlazarlos al terminar
+        self.enlaces = []  # otros enlaces para el final: [{"titulo", "url", "etiqueta"}] (p. ej., un vídeo largo)
+        self.largo = None  # el vídeo largo con el que trabaja (mientras tanto no se puede editar)
         self.proceso = None
         self.cerrojo = threading.Lock()
 
@@ -605,7 +609,8 @@ def api_tarea():
     resultado = [resumen(GUIONES / f"{n}.json") for n in trabajo.resultado if (GUIONES / f"{n}.json").exists()]
     return jsonify(
         trabajo={**trabajo.resumen(), "lineas": lineas,
-                 "resultado": [{"nombre": r["nombre"], "titulo": r["titulo"], "idioma": r["idioma"]} for r in resultado]},
+                 "resultado": [{"titulo": r["titulo"], "url": url_for("ver_guion", nombre=r["nombre"]),
+                                "etiqueta": r["idioma"]} for r in resultado] + trabajo.enlaces},
         trabajos=[t.resumen() for t in reversed(cola.trabajos)],
     )
 
@@ -1380,6 +1385,310 @@ def escuchar_muestra():
     if not MUESTRA.exists():
         abort(404)
     return send_file(MUESTRA, mimetype="audio/mpeg", max_age=0)
+
+
+# --- Vídeos largos: 10 minutos, horizontales, explicados con dibujos -----------------------------
+
+LARGOS = RAIZ / "salida" / "largos"
+# Ideas para empezar: historia de España, lo que mejor funciona en el canal.
+TEMAS_LARGOS = ["Segunda República española", "Franquismo", "Transición española", "Reyes Católicos",
+                "Imperio español", "Guerra de la Independencia española", "Reconquista", "Felipe II de España",
+                "Hernán Cortés", "Al-Ándalus"]
+
+
+def ruta_largo(nombre: str) -> Path:
+    carpeta = (LARGOS / nombre).resolve()
+    if carpeta.parent != LARGOS.resolve() or not (carpeta / "guion.json").exists():
+        abort(404)
+    return carpeta
+
+
+def leer_largo(nombre: str) -> dict:
+    return json.loads((ruta_largo(nombre) / "guion.json").read_text(encoding="utf-8"))
+
+
+def escribir_largo(nombre: str, guion: dict) -> None:
+    (ruta_largo(nombre) / "guion.json").write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def largo_ocupado(nombre: str) -> bool:
+    """¿Hay una tarea en marcha con este vídeo largo? (no se puede tocar su guion mientras tanto)"""
+    return any(t.largo == nombre for t in cola.activos())
+
+
+def duracion_largo(guion: dict) -> float:
+    """Segundos que dura (o durará) el vídeo: la voz de cada escena, sus pausas y las tarjetas de capítulo."""
+    total = 0.0
+    for parte in guion["partes"]:
+        if not parte.get("intro"):
+            total += video_largo.DURACION_CAPITULO
+        for escena in parte["escenas"]:
+            # Sin la voz grabada todavía, se calcula por palabras (unas 2,5 por segundo).
+            total += (escena.get("duracion") or len(escena["narracion"].split()) / 2.5) + video_largo.PAUSA_ESCENA
+    return total
+
+
+def resumen_largo(carpeta: Path) -> dict:
+    guion = json.loads((carpeta / "guion.json").read_text(encoding="utf-8"))
+    video = carpeta / "video.mp4"
+    segundos = duracion_largo(guion)
+    return {
+        "nombre": carpeta.name,
+        "titulo": guion.get("titulo") or guion.get("tema"),
+        "tema": guion.get("tema"),
+        "capitulos": sum(1 for p in guion["partes"] if not p.get("intro")),
+        "escenas": sum(len(p["escenas"]) for p in guion["partes"]),
+        "duracion": f"{int(segundos // 60)}:{int(segundos % 60):02d}",
+        "dudas": 0 if guion.get("editado_a_mano") else sum(len(p.get("dudas") or []) for p in guion["partes"]),
+        "revisado": bool(guion.get("revisado")),
+        "video": video.exists(),
+        "modificado": int(video.stat().st_mtime) if video.exists() else 0,
+        "miniatura": (carpeta / "miniatura.png").exists(),
+        "youtube": guion.get("youtube"),
+        "creado": (carpeta / "guion.json").stat().st_ctime,
+        "ocupado": largo_ocupado(carpeta.name),
+    }
+
+
+@app.route("/largos")
+def ver_largos():
+    carpetas = [c for c in LARGOS.iterdir() if (c / "guion.json").exists()] if LARGOS.exists() else []
+    largos = sorted((resumen_largo(c) for c in carpetas), key=lambda r: -r["creado"])
+    return render_template("largos.html", largos=largos, temas=TEMAS_LARGOS,
+                           mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""))
+
+
+@app.get("/api/wikipedia")
+def buscar_wikipedia():
+    """Artículos de Wikipedia que encajan con lo escrito (el tema de un vídeo largo es un artículo)."""
+    texto = request.args.get("q", "").strip()
+    if len(texto) < 3:
+        return jsonify([])
+    try:
+        datos = wikimedia.json_api(paso1_guiones.URL_WIKI_API, {"action": "opensearch", "search": texto, "limit": 8,
+                                                                "namespace": 0, "format": "json"})
+    except Exception:  # noqa: BLE001 — sin sugerencias si Wikipedia no contesta
+        return jsonify([])
+    return jsonify(datos[1] if isinstance(datos, list) and len(datos) > 1 else [])
+
+
+@app.post("/largos/crear")
+def crear_largo():
+    tema = " ".join(request.form.get("tema", "").split())
+    if not tema:
+        return redirect(url_for("ver_largos", error="Escribe el tema: el título de un artículo de Wikipedia."))
+    nombre = paso1_guiones.slug(tema)
+    if (LARGOS / nombre / "guion.json").exists():
+        return redirect(url_for("ver_largo", nombre=nombre, mensaje="Ya tenías un vídeo largo de ese tema."))
+    enlace = {"titulo": f"Revisa el guion de «{tema}»", "url": url_for("ver_largo", nombre=nombre),
+              "etiqueta": "vídeo largo"}
+
+    def trabajo(t: Trabajo) -> bool:
+        codigo = t.ejecutar("video_largo.py", tema, "--solo-guion")
+        if codigo == 0 and (LARGOS / nombre / "guion.json").exists():
+            t.enlaces = [enlace]
+            t.escribir("Guion listo. Revísalo (sobre todo fechas, cifras y nombres) antes de hacer el vídeo.")
+        return codigo == 0
+
+    nuevo = cola.anadir(f"Vídeo largo: guion de «{tema}»", trabajo)
+    nuevo.largo = nombre
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.route("/largo/<nombre>")
+def ver_largo(nombre):
+    carpeta = ruta_largo(nombre)
+    guion = leer_largo(nombre)
+    partes, numero = [], 0
+    for indice, parte in enumerate(guion["partes"]):
+        dudas = {}
+        if not guion.get("editado_a_mano"):  # las dudas son de la versión de la IA: si se editó, ya no cuadran
+            for duda in parte.get("dudas") or []:
+                dudas.setdefault(duda.get("escena"), []).append(duda)
+        escenas = []
+        for posicion, escena in enumerate(parte["escenas"], start=1):
+            numero += 1
+            imagen = Path(escena["imagenes"][-1]).name if escena.get("imagenes") else ""
+            escenas.append({
+                "numero": numero, "narracion": escena["narracion"], "tipo": escena["visual"].get("tipo", "narrador"),
+                "visual": json.dumps(escena["visual"], ensure_ascii=False, indent=1),
+                "dudas": dudas.get(posicion, []),
+                "imagen": imagen if imagen and (carpeta / "dibujos" / imagen).exists() else "",
+            })
+        partes.append({"indice": indice, "titulo": parte["titulo"], "numero": parte.get("numero"),
+                       "intro": parte.get("intro"), "escenas": escenas})
+    descripcion = carpeta / "descripcion.txt"
+    final = guion["partes"][-1]["escenas"][-1]["narracion"] if guion["partes"][-1]["escenas"] else ""
+    pregunta = next((f.strip() + "?" for f in final.split("?")[:-1] if f.strip()), "")
+    return render_template(
+        "largo.html", nombre=nombre, guion=guion, partes=partes, info=resumen_largo(carpeta),
+        descripcion=descripcion.read_text(encoding="utf-8") if descripcion.exists() else "",
+        pregunta=pregunta,
+        yt_conectado=subir_youtube.TOKEN.exists(), yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private",
+        tipos=dibujos_tipos(), mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
+    )
+
+
+def dibujos_tipos() -> dict:
+    return {"narrador": "Bonesy habla", "titulo": "Título", "fecha": "Fecha", "cifra": "Cifra", "mapa": "Mapa",
+            "personajes": "Personajes", "iconos": "Dibujos", "linea": "Línea de tiempo", "comparacion": "Comparación"}
+
+
+@app.post("/largo/<nombre>/guardar")
+def guardar_largo(nombre):
+    if largo_ocupado(nombre):
+        return redirect(url_for("ver_largo", nombre=nombre,
+                                error="Este vídeo tiene una tarea en marcha: espera a que termine para guardar cambios."))
+    guion = leer_largo(nombre)
+    cambios, errores = 0, []
+    for campo in ("titulo", "miniatura"):
+        valor = " ".join(request.form.get(campo, "").split())
+        if valor and valor != guion.get(campo):
+            guion[campo] = valor
+            cambios += 1
+    numero = 0
+    for indice, parte in enumerate(guion["partes"]):
+        if not parte.get("intro"):
+            titulo = " ".join(request.form.get(f"capitulo_{indice}", "").split())
+            if titulo and titulo != parte["titulo"]:
+                parte["titulo"] = titulo
+                cambios += 1
+        for escena in parte["escenas"]:
+            numero += 1
+            narracion = " ".join(request.form.get(f"narracion_{numero}", "").split())
+            if narracion and narracion != escena["narracion"]:
+                escena["narracion"] = narracion
+                cambios += 1
+            texto = request.form.get(f"visual_{numero}", "").strip()
+            if not texto:
+                continue
+            try:
+                visual = json.loads(texto)
+                if not isinstance(visual, dict) or not visual.get("tipo"):
+                    raise ValueError
+            except ValueError:
+                errores.append(numero)
+                continue
+            if visual != escena["visual"]:
+                escena["visual"] = visual
+                cambios += 1
+    error = (f"El dibujo de la escena {', '.join(map(str, errores))} no es válido (tiene que ser un JSON con «tipo»): "
+             "no se ha cambiado.") if errores else ""
+    if not cambios:
+        return redirect(url_for("ver_largo", nombre=nombre, mensaje="" if error else "No había cambios.",
+                                error=error))
+    guion["revisado"] = False
+    guion["editado_a_mano"] = True
+    escribir_largo(nombre, guion)
+    return redirect(url_for("ver_largo", nombre=nombre, error=error,
+                            mensaje=f"{cambios} cambio{'s' if cambios > 1 else ''} guardado{'s' if cambios > 1 else ''}. "
+                                    "Cuando acabes de revisar, márcalo como revisado y rehaz el vídeo: solo se rehacen "
+                                    "las escenas que has cambiado."))
+
+
+@app.post("/largo/<nombre>/revisado")
+def revisar_largo(nombre):
+    guion = leer_largo(nombre)
+    guion["revisado"] = request.form.get("valor") == "1"
+    escribir_largo(nombre, guion)
+    return redirect(url_for("ver_largo", nombre=nombre,
+                            mensaje="Guion marcado como revisado." if guion["revisado"] else "Marca de revisado quitada."))
+
+
+@app.post("/largo/<nombre>/producir")
+def producir_largo(nombre):
+    guion = leer_largo(nombre)
+    if largo_ocupado(nombre):
+        return redirect(url_for("ver_largo", nombre=nombre, error="Ya hay una tarea en marcha con este vídeo."))
+    enlace = {"titulo": f"Ver «{guion['titulo']}»", "url": url_for("ver_largo", nombre=nombre, _anchor="video"),
+              "etiqueta": "vídeo largo"}
+
+    def trabajo(t: Trabajo) -> bool:
+        codigo = t.ejecutar("video_largo.py", guion["tema"])
+        if codigo == 0:
+            t.enlaces = [enlace]
+        return codigo == 0
+
+    nuevo = cola.anadir(f"Vídeo largo: «{guion['titulo']}»", trabajo)
+    nuevo.largo = nombre
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.post("/largo/<nombre>/subir")
+def subir_largo(nombre):
+    guion = leer_largo(nombre)
+    if not guion.get("revisado"):
+        return redirect(url_for("ver_largo", nombre=nombre, error="Antes de subirlo, márcalo como revisado.",
+                                _anchor="publicar"))
+    if not (ruta_largo(nombre) / "video.mp4").exists():
+        return redirect(url_for("ver_largo", nombre=nombre, error="Antes de subirlo, haz el vídeo.", _anchor="publicar"))
+    privacidad = request.form.get("privacidad", "private")
+    argumentos = [guion["tema"], "--subir", "--privacidad",
+                  privacidad if privacidad in subir_youtube.PRIVACIDADES else "private"]
+    publicar_el = request.form.get("publicar_el", "")
+    if publicar_el:
+        try:
+            if datetime.fromisoformat(publicar_el) <= datetime.now():
+                raise ValueError
+        except ValueError:
+            return redirect(url_for("ver_largo", nombre=nombre, error="Elige una fecha de publicación futura.",
+                                    _anchor="publicar"))
+        argumentos += ["--publicar-el", publicar_el]
+    enlace = {"titulo": f"Ver «{guion['titulo']}»", "url": url_for("ver_largo", nombre=nombre, _anchor="publicar"),
+              "etiqueta": "vídeo largo"}
+
+    def trabajo(t: Trabajo) -> bool:
+        codigo = t.ejecutar("video_largo.py", *argumentos)
+        if codigo == 0:
+            t.enlaces = [enlace]
+        return codigo == 0
+
+    nuevo = cola.anadir(f"Subir a YouTube «{guion['titulo']}»", trabajo)
+    nuevo.largo = nombre
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.route("/largo/<nombre>/video.mp4")
+def archivo_video_largo(nombre):
+    ruta = ruta_largo(nombre) / "video.mp4"
+    if not ruta.exists():
+        abort(404)
+    return send_file(ruta, mimetype="video/mp4", conditional=True)
+
+
+@app.route("/largo/<nombre>/miniatura.png")
+def miniatura_largo(nombre):
+    ruta = ruta_largo(nombre) / "miniatura.png"
+    if not ruta.exists():
+        abort(404)
+    return send_file(ruta, mimetype="image/png", max_age=0)
+
+
+@app.route("/largo/<nombre>/dibujo/<archivo>")
+def dibujo_largo(nombre, archivo):
+    ruta = ruta_largo(nombre) / "dibujos" / archivo
+    if not re.fullmatch(r"[0-9a-f]{16}\.png", archivo) or not ruta.exists():
+        abort(404)
+    return send_file(ruta, mimetype="image/png", max_age=86400)  # el nombre cambia si cambia el dibujo
+
+
+@app.post("/largo/<nombre>/abrir-carpeta")
+def abrir_carpeta_largo(nombre):
+    os.startfile(ruta_largo(nombre))
+    return redirect(url_for("ver_largo", nombre=nombre))
+
+
+@app.post("/largo/<nombre>/borrar")
+def borrar_largo(nombre):
+    from send2trash import send2trash
+    carpeta = ruta_largo(nombre)
+    if largo_ocupado(nombre):
+        return redirect(url_for("ver_largo", nombre=nombre, error="Este vídeo tiene una tarea en marcha: espera a que termine."))
+    guion = leer_largo(nombre)
+    send2trash(str(carpeta))
+    aviso = " Sigue en YouTube: si quieres quitarlo de allí, bórralo en YouTube Studio." if guion.get("youtube") else ""
+    return redirect(url_for("ver_largos", mensaje=f"«{guion.get('titulo', nombre)}» se ha movido a la Papelera de "
+                                                  f"reciclaje.{aviso}"))
 
 
 @app.route("/ayuda")

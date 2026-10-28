@@ -3,6 +3,32 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.19.0] - 2026-10-28
+
+### Añadido
+- **Vídeos largos explicados con dibujos** (apartado «Vídeos largos» del menú): vídeos horizontales de unos 10 minutos,
+  por capítulos, al estilo «X en 10 minutos». A partir de un artículo de Wikipedia, el LLM escribe el índice y cada
+  capítulo (en orden cronológico estricto), y el verificador lo comprueba y hace reescribir las frases sin respaldo.
+- **Dibujos propios en vez de fotos** (`scripts/dibujos.py`): cada escena es un SVG con estilo de rotulador y trazo a
+  mano: el narrador Bonesy en varias posturas, personajes históricos sencillos con su nombre, mapas de España (con
+  Canarias en su recuadro) y del mundo con las zonas de colores, flechas y puntos, calendarios, cifras, líneas de
+  tiempo y comparaciones; los objetos son dibujos de Twemoji. Edge, mediante Playwright, convierte cada escena en
+  imagen (unos 50 s para todo un vídeo).
+- **Las cosas aparecen cuando la voz las nombra:** cada escena se dibuja por pasos y cada elemento entra, con un
+  fundido corto, en la palabra en que lo dice la voz.
+- **Revisar el guion en la app antes de dibujar:** cada escena con su texto, su dibujo y las dudas del verificador; se
+  puede corregir el texto, el título, los capítulos y la miniatura, y cambiar el dibujo. No deja subirlo a YouTube sin
+  marcarlo como revisado: en el primer vídeo la IA cometió una quincena de errores de fechas, cifras y orden.
+- **Solo se rehace lo que cambia:** voz, dibujos y clips se guardan por su contenido; corregir una frase rehace solo
+  esa escena (unos segundos en vez de minutos).
+- **Subida como vídeo normal** (no Short), ya o programada, con la miniatura dibujada, los capítulos en la descripción
+  y el comentario con la pregunta para fijar.
+- Volumen de los vídeos largos al nivel de YouTube (-14 LUFS).
+
+### Cambiado
+- El menú de arriba cabe en cualquier ancho de ventana: en las medianas se oculta el nombre junto al logo y en las
+  estrechas quedan solo los iconos (con su nombre al pasar el ratón).
+
 ## [1.18.0] - 2026-10-28
 
 ### Añadido

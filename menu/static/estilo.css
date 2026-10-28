@@ -122,7 +122,7 @@ code { font: 13px/1.4 "Cascadia Mono", Consolas, monospace; background: var(--su
   backdrop-filter: blur(12px);
 }
 .barra-dentro {
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 10px 24px;
   display: flex;
@@ -190,6 +190,16 @@ main {
 }
 main.ancho { max-width: 1168px; }
 
+/* Que el menú quepa siempre: primero se quita el nombre junto al logo y luego los textos (queda el de la sección
+   actual; el resto, al pasar el ratón). */
+@media (max-width: 1260px) {
+  .nombre-marca { display: none; }
+  .barra-dentro { gap: 14px; }
+}
+@media (max-width: 1080px) {
+  .navegacion a { padding: 0 11px; }
+  .navegacion a:not(.actual) > span:not(.contador) { display: none; }
+}
 @media (max-width: 860px) {
   .nombre-marca, .texto-tareas { display: none; }
   .barra-dentro { gap: 10px; padding: 8px 16px; }
@@ -201,8 +211,11 @@ main.ancho { max-width: 1168px; }
   main { padding: 28px 16px 72px; }
 }
 @media (max-width: 480px) {
-  .navegacion a.actual > span:not(.contador) { display: none; }  /* solo iconos: caben las cuatro secciones */
-  .barra-dentro { gap: 6px; }
+  .navegacion a.actual > span:not(.contador) { display: none; }  /* solo iconos: caben todas las secciones */
+  .navegacion { gap: 2px; }
+  .navegacion a, .tareas { padding: 0 8px; }
+  .tema { display: none; }  /* en el móvil manda el tema del sistema */
+  .barra-dentro { gap: 6px; padding: 8px 12px; }
 }
 
 /* ---------- Tipografía ---------- */
@@ -819,3 +832,42 @@ main > * { animation: aparecer .3s ease both; }
 .barrita b { position: relative; padding-left: 8px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .barrita.grande { max-width: 420px; }
 .fila-stats .tenue { color: var(--tenue); }
+
+/* ---------- Vídeos largos ---------- */
+
+.temas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tema-sugerido { height: 30px; padding: 0 12px; font-size: 13px; font-weight: 500; border-radius: 999px;
+  background: var(--superficie-2); color: var(--suave); border: 1px solid var(--borde); box-shadow: none; }
+.tema-sugerido:hover { color: var(--texto); border-color: var(--borde-fuerte); background: var(--superficie-2); }
+.mini-ancha { width: 128px; height: 72px; border-radius: 8px; object-fit: cover; flex: none; display: block; }
+.mini-ancha.vacia { background: var(--superficie-2); display: inline-block; }
+
+.dos-campos { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.capitulo-largo { margin: 26px 0 2px; padding-top: 18px; border-top: 2px solid var(--borde-fuerte); }
+.capitulo-largo h3 { margin: 0; }
+.titulo-capitulo { font-weight: 600; }
+.escena-larga { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; padding: 14px 0;
+  border-top: 1px solid var(--borde); }
+.capitulo-largo + .escena-larga { border-top: 0; }
+.escena-larga .dibujo img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--borde); display: block; }
+.escena-larga .hueco { aspect-ratio: 16 / 9; border-radius: 10px; border: 1px dashed var(--borde-fuerte); display: grid;
+  place-items: center; align-content: center; color: var(--tenue); font-size: 13px; text-align: center; padding: 8px; }
+.escena-larga label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.escena-larga .num { font-weight: 600; color: var(--suave); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.escena-larga.con-duda textarea[name^=narracion] { border-color: color-mix(in srgb, var(--aviso) 55%, transparent); }
+.dibujo-json { margin-top: 6px; }
+.dibujo-json summary { font-size: 13px; color: var(--suave); cursor: pointer; }
+.dibujo-json textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin-top: 6px; }
+.barra-guardar { position: sticky; bottom: 0; z-index: 2; margin-top: 0; padding: 12px 0;
+  background: var(--superficie); border-top: 1px solid var(--borde); }
+
+.vista-largo { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.vista-largo video { width: 560px; max-width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radio-sm); background: #000; }
+.vista-largo figure { margin: 0; width: 240px; max-width: 100%; }
+.vista-largo figcaption { margin-top: 6px; }
+.portada-ancha { width: 100%; border-radius: var(--radio-sm); display: block; border: 1px solid var(--borde); }
+@media (max-width: 720px) {
+  .escena-larga, .dos-campos { grid-template-columns: 1fr; }
+  .escena-larga .dibujo { max-width: 320px; }
+}

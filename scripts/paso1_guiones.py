@@ -344,6 +344,7 @@ MODELOS_RESERVA = [m.strip() for m in (os.getenv("MODELOS_RESERVA") or "openai/g
 MODELO_VERIFICADOR = os.getenv("MODELO_VERIFICADOR") or "openai/gpt-oss-20b"  # ahorra cupo del principal
 ARCHIVO_CUPO = Path("salida/_trabajo/groq_cupo.json")  # modelos sin cupo y hasta cuándo (lo lee el menú)
 ESPERA_CORTA = 60  # s; esperas más largas son el cupo diario: no se espera, se cambia de modelo
+MAX_TOKENS = 3000  # tope de la respuesta (los vídeos largos lo suben: sus capítulos son más largos)
 ultimo_modelo = ""  # el modelo que respondió la última llamada
 
 
@@ -402,7 +403,7 @@ def _llamar_modelo(api_key: str, modelo: str, sistema: str, usuario: str) -> str
         "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}],
         "response_format": {"type": "json_object"},
         "temperature": 0.7,
-        "max_tokens": 3000,
+        "max_tokens": MAX_TOKENS,
         "reasoning_effort": "low",  # gpt-oss razona antes de responder; "low" gasta menos tokens
     }
     if not modelo.startswith("openai/gpt-oss"):

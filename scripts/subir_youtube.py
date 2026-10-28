@@ -225,6 +225,34 @@ def _explicar(error: HttpError) -> str:
     return explicaciones.get(motivo, f"YouTube respondió {error.resp.status} ({motivo or 'sin detalle'}).")
 
 
+def _enviar(youtube, video: Path, cuerpo: dict) -> dict:
+    """Sube el archivo por partes (se reanuda si falla la red) y devuelve la respuesta de YouTube.
+
+    Si la conexión se corta justo al terminar, mira si el vídeo llegó a crearse antes de dar la subida por fallida.
+    """
+    print(f"  subiendo {video.name} ({video.stat().st_size // (1024 * 1024)} MB)…", flush=True)
+    peticion = youtube.videos().insert(
+        part="snippet,status", body=cuerpo,
+        media_body=MediaFileUpload(str(video), mimetype="video/mp4", chunksize=TROZO, resumable=True),
+    )
+    inicio = datetime.now(timezone.utc)
+    respuesta = None
+    try:
+        while respuesta is None:
+            progreso, respuesta = peticion.next_chunk()
+            if progreso:
+                print(f"  {progreso.progress():.0%}", flush=True)
+    except HttpError:
+        raise  # YouTube ha contestado que no: no hay vídeo
+    except Exception as error:  # conexión cortada o muda: ¿llegó a crearse?
+        encontrado = _buscar_recien_subido(cuerpo["snippet"]["title"], inicio)
+        if not encontrado:
+            raise
+        print(f"  la conexión se cortó al terminar ({error}), pero el vídeo sí llegó a YouTube", flush=True)
+        respuesta = {"id": encontrado, "status": {"privacyStatus": cuerpo["status"]["privacyStatus"]}}
+    return respuesta
+
+
 def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar: bool = False,
           borrador: bool = False) -> dict:
     """Sube el vídeo de un guion verificado y apunta en el guion el enlace. Devuelve {"id", "url", …}.
@@ -274,26 +302,7 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
     }
 
     youtube = _youtube_con_limite()
-    print(f"  subiendo {video.name} ({video.stat().st_size // (1024 * 1024)} MB)…", flush=True)
-    peticion = youtube.videos().insert(
-        part="snippet,status", body=cuerpo,
-        media_body=MediaFileUpload(str(video), mimetype="video/mp4", chunksize=TROZO, resumable=True),
-    )
-    inicio = datetime.now(timezone.utc)
-    respuesta = None
-    try:
-        while respuesta is None:
-            progreso, respuesta = peticion.next_chunk()
-            if progreso:
-                print(f"  {progreso.progress():.0%}", flush=True)
-    except HttpError:
-        raise  # YouTube ha contestado que no: no hay vídeo
-    except Exception as error:  # conexión cortada o muda: ¿llegó a crearse?
-        encontrado = _buscar_recien_subido(cuerpo["snippet"]["title"], inicio)
-        if not encontrado:
-            raise
-        print(f"  la conexión se cortó al terminar ({error}), pero el vídeo sí llegó a YouTube", flush=True)
-        respuesta = {"id": encontrado, "status": {"privacyStatus": estado["privacyStatus"]}}
+    respuesta = _enviar(youtube, video, cuerpo)
     id_video = respuesta["id"]
     privacidad_final = respuesta.get("status", {}).get("privacyStatus", estado["privacyStatus"])
     # Lo primero, apuntarlo: si algo falla a partir de aquí (miniatura, un mensaje…), el vídeo YA está en YouTube
@@ -323,6 +332,74 @@ def subir(guion: str, privacidad: str = "private", publicar_el: str = "", forzar
             # En los Shorts la portada se elige desde la app; la API solo deja si el canal está verificado.
             print("  aviso: YouTube no ha aceptado la miniatura (normal en Shorts o en canales sin verificar)")
 
+    return resultado
+
+
+ETIQUETAS_LARGOS = ["historia", "historia de España", "explicado", "documental", "en 10 minutos", "Mente Inquieta"]
+
+
+def subir_largo(carpeta, privacidad: str = "private", publicar_el: str = "") -> dict:
+    """Sube un vídeo largo (horizontal, no Short) con su miniatura y sus capítulos; apunta el enlace en su guion.
+
+    Solo si el guion está marcado como revisado: en los vídeos largos la IA se equivoca a menudo en fechas y cifras.
+    """
+    carpeta = Path(carpeta)
+    ruta = carpeta / "guion.json"
+    guion = json.loads(ruta.read_text(encoding="utf-8"))
+    if not guion.get("revisado"):
+        raise ValueError("el guion no está revisado: revísalo en la app y márcalo como revisado antes de subirlo")
+    if guion.get("youtube"):
+        print(f"  ya estaba subido: {guion['youtube']['url']}", flush=True)
+        return guion["youtube"]
+    video = carpeta / "video.mp4"
+    if not video.exists():
+        raise ValueError("todavía no tiene vídeo: hazlo primero")
+    descripcion = carpeta / "descripcion.txt"
+    estado = {
+        "privacyStatus": "private" if publicar_el else privacidad,
+        "selfDeclaredMadeForKids": False,
+        "containsSyntheticMedia": True,  # voz sintética: YouTube pide declararlo
+    }
+    if publicar_el:
+        estado["publishAt"] = _hora_utc(publicar_el)  # se hace público solo a esa hora
+    etiquetas = [e for e in dict.fromkeys([guion.get("tema", ""), *ETIQUETAS_LARGOS]) if e]
+    cuerpo = {
+        "snippet": {
+            "title": guion["titulo"][:100],
+            "description": descripcion.read_text(encoding="utf-8")[:4900] if descripcion.exists() else "",
+            "tags": etiquetas,
+            "categoryId": CATEGORIA_EDUCACION,
+            "defaultLanguage": "es",
+            "defaultAudioLanguage": "es",
+        },
+        "status": estado,
+    }
+    youtube = _youtube_con_limite()
+    respuesta = _enviar(youtube, video, cuerpo)
+    id_video = respuesta["id"]
+    privacidad_final = respuesta.get("status", {}).get("privacyStatus", estado["privacyStatus"])
+    resultado = {
+        "id": id_video,
+        "url": f"https://youtube.com/watch?v={id_video}",
+        "privacidad": privacidad_final,
+        "publicar_el": publicar_el or None,
+        "subido": datetime.now().isoformat(timespec="seconds"),
+    }
+    guion = json.loads(ruta.read_text(encoding="utf-8"))  # releer por si cambió mientras subía
+    guion["youtube"] = resultado
+    ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"  ✔ subido: {resultado['url']} ({privacidad_final})", flush=True)
+    if privacidad_final != estado["privacyStatus"]:
+        print("  aviso: YouTube lo ha dejado en privado porque tu proyecto de Google Cloud aún no está verificado. "
+              "Cámbialo a público en YouTube Studio.", flush=True)
+    miniatura = carpeta / "miniatura.png"
+    if miniatura.exists():
+        try:
+            youtube.thumbnails().set(videoId=id_video, media_body=MediaFileUpload(str(miniatura))).execute()
+            print("  miniatura puesta", flush=True)
+        except HttpError:
+            print("  aviso: YouTube no ha aceptado la miniatura. Para poner miniaturas propias hay que verificar el "
+                  "canal por teléfono (youtube.com/verify); después puedes subirla a mano en YouTube Studio.", flush=True)
     return resultado
 
 

@@ -27,6 +27,11 @@ a Instagram como Reel). Todo se maneja desde un menú que se abre como aplicaci�
 **vídeo con IA**: la app escribe los prompts de cada escena para una IA de vídeo (Veo, Sora, Runway, Kling) y monta los
 clips que generas con ella.
 
+**Vídeos largos:** de unos 10 minutos, horizontales y por capítulos, al estilo «X en 10 minutos». Las escenas no usan
+fotos: las dibuja la propia app en SVG con un estilo de rotulador (el narrador Bonesy, mapas de España y del mundo con
+las zonas de colores, calendarios, cifras, personajes y líneas de tiempo), y cada elemento aparece cuando la voz lo
+nombra. El guion se revisa escena a escena en el menú antes de dibujarlo, y solo se rehace lo que cambia.
+
 ## Decisiones técnicas
 
 Lo interesante del proyecto no es llamar a un LLM, sino todo lo que hace falta alrededor para que el resultado sea
@@ -83,6 +88,8 @@ flowchart LR
 | [`subir_youtube.py`](scripts/subir_youtube.py) | OAuth y subida a YouTube, programación, descripción del canal, vistas y retención (YouTube Analytics) |
 | [`instagram.py`](scripts/instagram.py) | Conexión con Instagram (Graph API) y publicación de cada vídeo como Reel |
 | [`video_ia.py`](scripts/video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
+| [`video_largo.py`](scripts/video_largo.py) | Vídeos largos: índice y capítulos con el LLM, voz, dibujos, montaje por escenas en caché, miniatura y capítulos de YouTube |
+| [`dibujos.py`](scripts/dibujos.py) | Escenas dibujadas en SVG (Bonesy, mapas, fechas, cifras, personajes…) y su captura con Edge (Playwright) |
 | [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias y, con clave, Tavily) y su texto, para los vídeos de actualidad |
 | [`radar.py`](scripts/radar.py) | Elige la noticia de la que más se habla hoy en España (tendencias de Google y Bing Noticias) |
 | [`piloto_actualidad.py`](scripts/piloto_actualidad.py) | Hace y publica solo el vídeo de la noticia del día, con salvaguarda |
@@ -97,7 +104,8 @@ flowchart LR
 
 Python · Groq (gpt-oss-120b / gpt-oss-20b / Qwen) · Wikipedia y Wikimedia API · The Met y Art Institute of Chicago
 APIs · edge-tts · ffmpeg (zoompan, subtítulos ASS, sidechain) · Pillow · Flask · pywebview (WebView2) · C# ·
-YouTube Data API v3 y YouTube Analytics API (OAuth 2.0) · Instagram Graph API · Tavily
+YouTube Data API v3 y YouTube Analytics API (OAuth 2.0) · Instagram Graph API · Tavily · Playwright (Edge) · SVG ·
+Natural Earth
 
 ## Instalación
 
@@ -143,8 +151,8 @@ de verdad.
 
 ## Novedades
 
-Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.16.0**, hace los vídeos de
-40-45 s con pregunta final y clips de vídeo primero, publica también en Instagram y enseña la retención de cada vídeo.
+Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md). La última, **1.19.0**, añade los vídeos largos
+de unos 10 minutos explicados con dibujos, con su apartado en el menú para revisarlos y subirlos.
 
 ## Licencia
 

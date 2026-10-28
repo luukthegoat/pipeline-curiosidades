@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titulo %}Vídeos largos · Mente Inquieta{% endblock %}
+{% block contenido %}
+<h1>Vídeos largos</h1>
+<p class="sub">Vídeos de unos 10 minutos, en horizontal, explicados con dibujos: un mapa cuando se habla de lugares, un
+  calendario con cada fecha, los personajes con su nombre… Dan mucho más tiempo de visionado que los Shorts, y eso es
+  lo que pide YouTube para monetizar.</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso error">{{ error }}</div>{% endif %}
+
+<section class="tarjeta">
+  <h2>Crear uno nuevo</h2>
+  <form method="post" action="{{ url_for('crear_largo') }}">
+    <label for="tema">Tema <span class="ayuda-campo">— el título de un artículo de Wikipedia (al escribir salen sugerencias)</span></label>
+    <input type="text" id="tema" name="tema" list="sugerencias" autocomplete="off" required
+           placeholder="Segunda República española">
+    <datalist id="sugerencias"></datalist>
+    <div class="temas">
+      {% for t in temas %}<button type="button" class="tema-sugerido" onclick="elegirTema(this)">{{ t }}</button>{% endfor %}
+    </div>
+    <div class="acciones">
+      <button type="submit">Escribir el guion</button>
+      <span class="ayuda-campo">Tarda unos 5 minutos. Después lo revisas y, cuando esté bien, haces el vídeo.</span>
+    </div>
+  </form>
+</section>
+
+<div class="aviso">En los vídeos largos la IA se equivoca bastante (en el primero hubo fechas, cifras y nombres mal):
+  <strong>revisa siempre el guion</strong>. La app no deja subirlo a YouTube hasta que lo marques como revisado.</div>
+
+<div class="cabecera-seccion"><h2>Tus vídeos largos</h2></div>
+{% if not largos %}
+  <div class="tarjeta vacio">Todavía no tienes ninguno.</div>
+{% else %}
+  <div class="lista">
+    {% for l in largos %}
+      <div class="fila-video">
+        <a class="portadilla" href="{{ url_for('ver_largo', nombre=l.nombre) }}" tabindex="-1" aria-hidden="true">
+          {% if l.miniatura %}<img class="mini-ancha" src="{{ url_for('miniatura_largo', nombre=l.nombre) }}?v={{ l.modificado }}" alt="" loading="lazy">
+          {% else %}<span class="mini-ancha vacia"></span>{% endif %}
+        </a>
+        <div class="cuerpo">
+          <a class="titulo" href="{{ url_for('ver_largo', nombre=l.nombre) }}">{{ l.titulo }}</a>
+          <div class="meta">
+            {% if l.ocupado %}<span class="etiqueta prog">en marcha</span>{% endif %}
+            <span class="etiqueta {{ 'ok' if l.revisado else 'mal' }}">{{ 'revisado' if l.revisado else 'sin revisar' }}</span>
+            {% if l.dudas and not l.revisado %}<span class="etiqueta mal">{{ l.dudas }} duda{{ 's' if l.dudas > 1 }}</span>{% endif %}
+            <span class="etiqueta {{ 'ok' if l.video }}">{{ 'vídeo hecho' if l.video else 'sin vídeo' }}</span>
+            {% if l.youtube %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+            <span>{{ l.capitulos }} capítulos · {{ l.escenas }} escenas · {{ l.duracion }}</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<script>
+  function elegirTema(boton) {
+    const campo = document.getElementById('tema');
+    campo.value = boton.textContent;
+    campo.focus();
+  }
+  // Sugerencias de Wikipedia mientras se escribe (el tema tiene que ser un artículo que exista).
+  let espera;
+  document.getElementById('tema').addEventListener('input', e => {
+    clearTimeout(espera);
+    const texto = e.target.value.trim();
+    if (texto.length < 3) return;
+    espera = setTimeout(async () => {
+      try {
+        const r = await fetch('{{ url_for("buscar_wikipedia") }}?q=' + encodeURIComponent(texto));
+        const lista = document.getElementById('sugerencias');
+        lista.innerHTML = '';
+        for (const titulo of await r.json()) {
+          const opcion = document.createElement('option');
+          opcion.value = titulo;
+          lista.appendChild(opcion);
+        }
+      } catch (err) {}
+    }, 350);
+  });
+</script>
+{% endblock %}

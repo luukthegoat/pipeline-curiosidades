@@ -42,6 +42,15 @@ QUÉ PUEDES HACER (barra de arriba)
        Ahí está también el comentario con la pregunta, para fijarlo.
     · Más opciones: texto para publicar (TikTok y YouTube), prompts y borrar.
 
+  Vídeos largos
+    Vídeos horizontales de unos 10 minutos por capítulos, explicados con dibujos
+    que hace la propia app (Bonesy, mapas, fechas, cifras, personajes…).
+    1. Escribe el tema (un artículo de Wikipedia) → «Escribir el guion» (~5 min).
+    2. Revisa el guion escena a escena: la IA se equivoca más en los vídeos
+       largos. Corrige y «Marcar como revisado».
+    3. «Hacer el vídeo» (~8-10 min la primera vez; luego solo lo que cambia).
+    4. «Subir a YouTube», ya o programado, con miniatura y capítulos.
+
   Programados
     La cola de publicaciones (Lista y Calendario): publicar ya, cambiar la hora,
     reintentar o quitar. «↻ Actualizar» lo comprueba todo con YouTube. Si

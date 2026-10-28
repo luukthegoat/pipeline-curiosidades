@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block titulo %}{{ guion.titulo }} · Mente Inquieta{% endblock %}
+{% block contenido %}
+{% set yt = guion.get('youtube') %}
+<a class="volver" href="{{ url_for('ver_largos') }}">← Vídeos largos</a>
+<h1>{{ guion.titulo }}</h1>
+<p class="sub">Vídeo largo · {{ info.capitulos }} capítulos · {{ info.escenas }} escenas · {{ info.duracion }}
+  · fuente: <a href="{{ guion.fuente }}" target="_blank" rel="noopener">Wikipedia ↗</a></p>
+
+<div class="estado-video">
+  <span class="etiqueta {{ 'ok' if info.revisado else 'mal' }}">{{ 'revisado' if info.revisado else 'sin revisar' }}</span>
+  <span class="etiqueta {{ 'ok' if info.video }}">{{ 'vídeo hecho' if info.video else 'sin vídeo' }}</span>
+  {% if yt %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+  {% if info.ocupado %}<span class="etiqueta prog">tarea en marcha</span>{% endif %}
+</div>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso error">{{ error }}</div>{% endif %}
+{% if info.ocupado %}
+  <div class="aviso">Hay una tarea en marcha con este vídeo (<a href="{{ url_for('ver_tarea') }}">ver</a>): espera a que
+    termine para cambiar el guion.</div>
+{% endif %}
+
+<div class="pasos-video">
+
+{# ================================================================ Revisar el guion #}
+<details class="tarjeta paso {{ 'hecho' if info.revisado }}" {% if not info.revisado %}open{% endif %} id="guion">
+  <summary>
+    <h2><span class="numero"></span>Revisa el guion
+      {% if info.revisado %}<span class="etiqueta ok">revisado</span>
+      {% elif info.dudas %}<span class="etiqueta mal">{{ info.dudas }} frase{{ 's' if info.dudas > 1 }} dudosa{{ 's' if info.dudas > 1 }}</span>{% endif %}</h2>
+  </summary>
+  <p class="ayuda-campo" style="margin-top: 0;">Lee cada escena y corrige lo que haga falta: <strong>fechas, cifras,
+    nombres y el orden</strong>, que es donde más se equivoca la IA. Las escenas con <span class="etiqueta mal">revisar</span>
+    tienen frases que el verificador no encontró en Wikipedia.
+    {% if guion.get('editado_a_mano') %}Como ya lo has editado, no se muestran las dudas de la versión de la IA.{% endif %}</p>
+
+  <form method="post" action="{{ url_for('guardar_largo', nombre=nombre) }}" onsubmit="return comprobarDibujos()">
+    <div class="dos-campos">
+      <div>
+        <label for="titulo">Título en YouTube</label>
+        <input type="text" id="titulo" name="titulo" maxlength="100" value="{{ guion.titulo }}">
+      </div>
+      <div>
+        <label for="miniatura">Texto de la miniatura <span class="ayuda-campo">— 2 a 4 palabras</span></label>
+        <input type="text" id="miniatura" name="miniatura" maxlength="40" value="{{ guion.miniatura }}">
+      </div>
+    </div>
+    {% for p in partes %}
+      <div class="capitulo-largo">
+        {% if p.intro %}
+          <h3>Introducción</h3>
+        {% else %}
+          <label for="capitulo_{{ p.indice }}">Capítulo {{ p.numero }}</label>
+          <input type="text" id="capitulo_{{ p.indice }}" name="capitulo_{{ p.indice }}" value="{{ p.titulo }}"
+                 class="titulo-capitulo">
+        {% endif %}
+      </div>
+      {% for e in p.escenas %}
+        <div class="escena-larga {{ 'con-duda' if e.dudas }}" id="e{{ e.numero }}">
+          <div class="dibujo">
+            {% if e.imagen %}
+              <img src="{{ url_for('dibujo_largo', nombre=nombre, archivo=e.imagen) }}" alt="Dibujo de la escena {{ e.numero }}" loading="lazy">
+            {% else %}
+              <span class="hueco">{{ tipos.get(e.tipo, e.tipo) }}<br><small>se dibuja al hacer el vídeo</small></span>
+            {% endif %}
+          </div>
+          <div>
+            <label for="n{{ e.numero }}"><span class="num">Escena {{ e.numero }}</span>
+              <span class="etiqueta">{{ tipos.get(e.tipo, e.tipo) }}</span>
+              {% if e.dudas %}<span class="etiqueta mal">revisar</span>{% endif %}</label>
+            {% for d in e.dudas %}<div class="duda"><q>{{ d.frase }}</q><br><small>{{ d.motivo }}</small></div>{% endfor %}
+            <textarea id="n{{ e.numero }}" name="narracion_{{ e.numero }}" rows="3">{{ e.narracion }}</textarea>
+            <details class="dibujo-json">
+              <summary>Cambiar el dibujo (avanzado)</summary>
+              <textarea name="visual_{{ e.numero }}" rows="8" spellcheck="false" data-escena="{{ e.numero }}">{{ e.visual }}</textarea>
+            </details>
+          </div>
+        </div>
+      {% endfor %}
+    {% endfor %}
+    <div class="acciones barra-guardar">
+      <button class="secundario" type="submit" {{ 'disabled' if info.ocupado }}>Guardar cambios</button>
+      <span class="ayuda-campo">Al rehacer el vídeo solo se rehacen las escenas que cambies.</span>
+    </div>
+  </form>
+
+  <div class="cierre-paso">
+    {% if info.revisado %}
+      <form method="post" action="{{ url_for('revisar_largo', nombre=nombre) }}">
+        <input type="hidden" name="valor" value="0">
+        <button class="secundario" type="submit">Quitar «revisado»</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('revisar_largo', nombre=nombre) }}"
+            onsubmit="return confirm('¿Has comprobado las fechas, cifras y nombres de todas las escenas?')">
+        <input type="hidden" name="valor" value="1">
+        <button type="submit">Marcar como revisado</button>
+      </form>
+      <span class="ayuda-campo">Solo cuando hayas comprobado los datos. Sin esto no se puede subir.</span>
+    {% endif %}
+  </div>
+</details>
+
+{# ================================================================ El vídeo #}
+<section class="tarjeta paso {{ 'hecho' if info.video }}" id="video">
+  <h2><span class="numero"></span>{{ 'El vídeo' if info.video else 'Haz el vídeo' }}</h2>
+  {% if info.video %}
+    <div class="vista-largo">
+      <video src="{{ url_for('archivo_video_largo', nombre=nombre) }}?v={{ info.modificado }}" controls preload="metadata"></video>
+      {% if info.miniatura %}
+        <figure>
+          <img class="portada-ancha" src="{{ url_for('miniatura_largo', nombre=nombre) }}?v={{ info.modificado }}" alt="Miniatura">
+          <figcaption class="ayuda-campo">Miniatura</figcaption>
+        </figure>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="ayuda-campo" style="margin-top: 0;">Graba la voz, dibuja las escenas, lo monta con música y hace la
+      miniatura. La primera vez tarda unos 8-10 minutos; después, al corregir algo, solo se rehace lo que cambia.</p>
+  {% endif %}
+  <div class="acciones">
+    <form method="post" action="{{ url_for('producir_largo', nombre=nombre) }}">
+      <button class="{{ 'secundario' if info.video }}" type="submit" {{ 'disabled' if info.ocupado }}>
+        {{ 'Rehacer el vídeo' if info.video else 'Hacer el vídeo' }}</button>
+    </form>
+    <form method="post" action="{{ url_for('abrir_carpeta_largo', nombre=nombre) }}">
+      <button class="secundario" type="submit">Abrir su carpeta</button>
+    </form>
+  </div>
+  {% if descripcion %}
+    <details class="plegable">
+      <summary>Descripción para YouTube (con los capítulos)</summary>
+      <div class="copiable"><textarea readonly rows="12">{{ descripcion }}</textarea>
+        <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+    </details>
+  {% endif %}
+</section>
+
+{# ================================================================ Publicar #}
+<section class="tarjeta paso {{ 'hecho' if yt }}" id="publicar">
+  <h2><span class="numero"></span>Publica en YouTube</h2>
+  {% if yt %}
+    <p><span class="etiqueta ok">subido</span> {{ yt.privacidad }}{% if yt.publicar_el %} · se publica el
+      {{ yt.publicar_el.replace('T', ' a las ') }}{% endif %} · <a href="{{ yt.url }}" target="_blank" rel="noopener">verlo en YouTube ↗</a></p>
+    {% if pregunta %}
+      <label>Comentario para fijar</label>
+      <div class="copiable"><textarea readonly rows="2">{{ pregunta }} 👇</textarea>
+        <button class="secundario" type="button" onclick="copiar(this)">Copiar</button></div>
+      <p class="ayuda-campo">Cuando ya sea público, pégalo como comentario y fíjalo (⋮ → Fijar).</p>
+    {% endif %}
+  {% elif not yt_conectado %}
+    <p class="ayuda-campo">Primero conecta tu canal en <a href="{{ url_for('ajustes') }}#youtube">Ajustes → YouTube</a>.</p>
+  {% elif not info.video %}
+    <p class="ayuda-campo">Cuando el vídeo esté hecho, podrás subirlo aquí.</p>
+  {% elif not info.revisado %}
+    <p class="ayuda-campo">Para subirlo, márcalo antes como revisado (paso 1).</p>
+  {% else %}
+    <form method="post" action="{{ url_for('subir_largo', nombre=nombre) }}">
+      <div class="opciones">
+        <label><input type="radio" name="cuando" value="ahora" checked onchange="cuandoLargo()"> Subir ahora</label>
+        <label><input type="radio" name="cuando" value="programar" onchange="cuandoLargo()"> Programar</label>
+      </div>
+      <div id="largo-ahora">
+        <label for="privacidad">Visibilidad</label>
+        <select id="privacidad" name="privacidad" class="medio">
+          <option value="private" {{ 'selected' if yt_privacidad == 'private' }}>Privado (lo ves en YouTube Studio y lo publicas tú)</option>
+          <option value="unlisted" {{ 'selected' if yt_privacidad == 'unlisted' }}>Oculto (solo con el enlace)</option>
+          <option value="public" {{ 'selected' if yt_privacidad == 'public' }}>Público</option>
+        </select>
+      </div>
+      <div id="largo-programar" hidden>
+        <label for="publicar_el">Se publica el</label>
+        <input type="datetime-local" id="publicar_el" name="publicar_el" class="medio" disabled>
+        <p class="ayuda-campo">Se sube ya, en privado, y YouTube lo publica solo a esa hora aunque el ordenador esté apagado.</p>
+      </div>
+      <div class="acciones">
+        <button type="submit" id="boton-largo" {{ 'disabled' if info.ocupado }}>Subir a YouTube</button>
+        <span class="ayuda-campo">Como vídeo normal (no Short), con la miniatura y los capítulos.</span>
+      </div>
+    </form>
+    <script>
+      function cuandoLargo() {
+        const programar = document.querySelector('input[name=cuando]:checked').value === 'programar';
+        document.getElementById('largo-ahora').hidden = programar;
+        document.getElementById('largo-programar').hidden = !programar;
+        const campo = document.getElementById('publicar_el');
+        campo.disabled = !programar;  // desactivado no se envía: así «Subir ahora» sube al momento
+        campo.required = programar;
+        if (programar && !campo.value) {
+          const d = new Date(Date.now() + 24 * 3600 * 1000);
+          d.setHours(18, 0, 0, 0);
+          campo.value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        }
+        document.getElementById('boton-largo').textContent = programar ? 'Subir y programar' : 'Subir a YouTube';
+      }
+    </script>
+  {% endif %}
+</section>
+
+</div>
+
+<details class="mas-opciones">
+  <summary>Más opciones</summary>
+  <div class="bloque">
+    <h3>Borrar este vídeo largo</h3>
+    <p class="ayuda-campo">Mueve su carpeta (guion, voz, dibujos y vídeo) a la Papelera de reciclaje de Windows, desde
+      donde se puede recuperar.{% if yt %} No lo quita de YouTube.{% endif %}</p>
+    <form method="post" action="{{ url_for('borrar_largo', nombre=nombre) }}"
+          onsubmit='return confirm({{ ("¿Mover «" ~ guion.titulo ~ "» a la Papelera de reciclaje?") | tojson }})'>
+      <button class="secundario peligro" type="submit" {{ 'disabled' if info.ocupado }}>Borrar…</button>
+    </form>
+  </div>
+</details>
+
+<script>
+  // Antes de guardar, comprueba que los dibujos cambiados a mano siguen siendo válidos.
+  function comprobarDibujos() {
+    for (const campo of document.querySelectorAll('textarea[data-escena]')) {
+      try {
+        const visual = JSON.parse(campo.value);
+        if (!visual || typeof visual !== 'object' || !visual.tipo) throw new Error();
+      } catch (e) {
+        campo.closest('details').open = true;
+        campo.focus();
+        alert('El dibujo de la escena ' + campo.dataset.escena + ' no es válido: revisa las comas, comillas y llaves.');
+        return false;
+      }
+    }
+    return true;
+  }
+  // Al saltar a una escena (#e12), que el paso del guion esté abierto.
+  if (location.hash.startsWith('#e')) document.getElementById('guion').open = true;
+</script>
+{% endblock %}
