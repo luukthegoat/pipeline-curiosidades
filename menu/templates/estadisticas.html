@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block titulo %}Estadísticas · Mente Inquieta{% endblock %}
+{% block contenido %}
+<div class="cabecera-pagina">
+  <h1>Estadísticas</h1>
+  <form method="post" action="{{ url_for('refrescar_estadisticas') }}" class="en-linea">
+    <input type="hidden" name="orden" value="{{ orden }}">
+    <button type="submit" {% if not yt_conectado %}disabled title="Conecta tu canal en Ajustes → YouTube"{% endif %}
+            onclick="this.textContent = 'Actualizando…'; this.style.pointerEvents = 'none'; this.form.submit();">↻ Actualizar</button>
+  </form>
+</div>
+<p class="sub">Cómo van tus vídeos en YouTube.
+  {% if actualizado %}Datos del {{ actualizado }}; se actualizan solos cada 15 minutos con el menú abierto.
+  {% else %}Aún no se han traído los datos: pulsa «Actualizar».{% endif %}</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso">{{ error }}</div>{% endif %}
+
+{% if not videos %}
+  <div class="tarjeta"><p>Todavía no hay vídeos publicados con datos de YouTube.</p></div>
+{% else %}
+
+{# ---------------------------------------------------------------- Totales #}
+<div class="cifras">
+  <div class="cifra"><span class="valor">{{ totales.vistas | miles }}</span><span class="nombre">vistas</span>
+    <span class="detalle">{{ totales.media | miles }} de media · {{ totales.videos }} vídeos</span></div>
+  <div class="cifra"><span class="valor">{{ totales.me_gusta | miles }}</span><span class="nombre">me gusta</span>
+    <span class="detalle">{{ '%.1f' % (100 * totales.me_gusta / totales.vistas) if totales.vistas else 0 }} % de las vistas</span></div>
+  <div class="cifra"><span class="valor">{{ totales.comentarios | miles }}</span><span class="nombre">comentarios</span>
+    <span class="detalle">fija la pregunta del final</span></div>
+  <div class="cifra {{ 'bien' if totales.se_quedan and totales.se_quedan >= 70 else 'flojo' if totales.se_quedan and totales.se_quedan < 50 }}">
+    <span class="valor">{{ totales.se_quedan if totales.se_quedan is not none else '—' }}{% if totales.se_quedan is not none %} %{% endif %}</span>
+    <span class="nombre">se queda a verlo</span><span class="detalle">la meta: más de 70 %</span></div>
+  <div class="cifra"><span class="valor">{{ totales.visto_pct if totales.visto_pct is not none else '—' }}{% if totales.visto_pct is not none %} %{% endif %}</span>
+    <span class="nombre">del vídeo se ve</span><span class="detalle">más de 100 % = lo repiten</span></div>
+</div>
+
+{% if error_retencion == 'sin_permiso' %}
+  <div class="aviso">Para ver cuánta gente se queda y cuánto ve, <a href="{{ url_for('ajustes') }}#youtube">vuelve a conectar
+    YouTube</a> (pedirá un permiso nuevo, solo de lectura) y pulsa «Actualizar».</div>
+{% elif error_retencion == 'api_apagada' %}
+  <div class="aviso">Para ver la retención, activa la <strong>YouTube Analytics API</strong> en
+    <a href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com" target="_blank" rel="noopener">Google Cloud</a>
+    y pulsa «Actualizar».</div>
+{% endif %}
+
+{# ---------------------------------------------------------------- Conclusiones #}
+{% if conclusiones %}
+<div class="tarjeta">
+  <h2>Qué dicen los datos</h2>
+  <ul class="conclusiones">
+    {% for c in conclusiones %}<li>{{ c }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ---------------------------------------------------------------- Por tipo #}
+<div class="tarjeta">
+  <h2>Por tipo de vídeo</h2>
+  <div class="tabla-envoltura">
+    <table class="tabla-stats">
+      <thead><tr><th>Tipo</th><th class="num">Vídeos</th><th>Vistas de media</th><th class="num">Se queda</th><th class="num">Se ve</th></tr></thead>
+      <tbody>
+      {% for t in por_tipo %}
+        <tr>
+          <td>{{ t.tipo }}</td>
+          <td class="num">{{ t.videos }}</td>
+          <td><div class="barrita"><span style="width: {{ (100 * t.media / maximo_tipo) | round(1) }}%"></span><b>{{ t.media | miles }}</b></div></td>
+          <td class="num">{{ t.se_quedan ~ ' %' if t.se_quedan is not none else '—' }}</td>
+          <td class="num">{{ t.visto_pct ~ ' %' if t.visto_pct is not none else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if por_duracion %}
+    <h3 style="margin-top: 18px;">Por duración</h3>
+    <div class="tabla-envoltura">
+      <table class="tabla-stats">
+        <thead><tr><th>Duración</th><th class="num">Vídeos</th><th class="num">Vistas de media</th><th class="num">Se queda</th><th class="num">Se ve</th></tr></thead>
+        <tbody>
+        {% for d in por_duracion %}
+          <tr><td>{{ d.nombre }}</td><td class="num">{{ d.videos }}</td><td class="num">{{ d.media | miles }}</td>
+            <td class="num">{{ d.se_quedan ~ ' %' if d.se_quedan is not none else '—' }}</td>
+            <td class="num">{{ d.visto_pct ~ ' %' if d.visto_pct is not none else '—' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  <p class="ayuda-campo" style="margin-top: 12px;">La retención llega de YouTube con uno o dos días de retraso: solo se muestra cuando ya
+    tiene datos de {{ min_vistas }} vistas o más (con menos es puro azar).</p>
+</div>
+
+{# ---------------------------------------------------------------- Vídeo a vídeo #}
+<div class="cabecera-seccion">
+  <h2>Vídeo a vídeo</h2>
+  <div class="filtros">
+    {% for clave, texto in [('vistas', 'Más vistos'), ('retencion', 'Más retienen'), ('visto', 'Más se ven'), ('reciente', 'Recientes')] %}
+      <a href="{{ url_for('ver_estadisticas', orden=clave) }}" class="{{ 'actual' if orden == clave }}">{{ texto }}</a>
+    {% endfor %}
+  </div>
+</div>
+<div class="lista">
+  {% for v in videos %}
+    {% set s = v.stats %}
+    <div class="fila-video fila-stats">
+      <a class="portadilla" href="{{ url_for('ver_guion', nombre=v.nombre) }}" tabindex="-1" aria-hidden="true">
+        {% if v.miniatura %}<img class="mini" src="{{ url_for('miniatura', nombre=v.nombre) }}?v={{ v.modificado }}" alt="" loading="lazy">
+        {% else %}<span class="mini vacia"></span>{% endif %}
+      </a>
+      <div class="cuerpo">
+        <a class="titulo" href="{{ url_for('ver_guion', nombre=v.nombre) }}">{{ v.titulo }}</a>
+        <div class="barrita grande"><span style="width: {{ (100 * s.vistas / maximo_vistas) | round(1) }}%"></span>
+          <b>{{ s.vistas | miles }} vista{{ 's' if s.vistas != 1 }}</b></div>
+        <div class="meta">
+          <span class="etiqueta">{{ v.tipo_bonito }}{% if v.serie %} · {{ v.serie.parte }}/{{ v.serie.total }}{% endif %}</span>
+          {% if v.fiable and s.se_quedan is not none and s.se_quedan is defined %}
+            <span class="etiqueta {{ 'ok' if s.se_quedan >= 70 else 'mal' if s.se_quedan < 50 else '' }}"
+                  title="De cada 100 personas a las que les salió, {{ s.se_quedan }} se quedaron a verlo">{{ s.se_quedan }} % se queda</span>
+          {% endif %}
+          {% if v.fiable and s.visto_pct %}
+            <span title="De media se ve {{ s.segundos }} s">se ve el {{ s.visto_pct }} % ({{ s.segundos }} s{% if v.duracion %} de {{ '%.0f' % v.duracion }}{% endif %})</span>
+          {% elif v.duracion %}<span>{{ '%.0f' % v.duracion }} s</span>{% endif %}
+          <span>{{ s.me_gusta | miles }} me gusta · {{ s.comentarios | miles }} coment.</span>
+          {% if v.publicado %}<span class="tenue">{{ v.publicado }}</span>{% endif %}
+          <a href="{{ v.youtube.url }}" target="_blank" rel="noopener">YouTube ↗</a>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

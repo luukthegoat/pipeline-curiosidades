@@ -401,17 +401,14 @@ def mis_videos():
     if ver == "publicados" and request.args.get("orden") == "vistas":
         lista.sort(key=lambda g: -(g["estadisticas"] or {}).get("vistas", 0))
     if ver == "publicados" and request.args.get("orden") == "retencion":
-        lista.sort(key=lambda g: -((g["estadisticas"] or {}).get("se_quedan") or -1))
+        lista.sort(key=lambda g: -((g["estadisticas"] or {}).get("se_quedan") or -1)
+                   if _retencion_fiable(g["estadisticas"] or {}) else 1)
     stats = estadisticas_youtube()
     vistas = {"total": sum(v["vistas"] for v in stats["videos"].values()),
               "actualizado": stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else ""}
     # Retención media del canal (ponderada por vistas) y si falta permiso o la API para traerla.
-    con_ret = [v for v in stats["videos"].values() if v.get("se_quedan") is not None and v["vistas"]]
-    total_ret = sum(v["vistas"] for v in con_ret)
-    vistas["se_quedan"] = round(sum(v["se_quedan"] * v["vistas"] for v in con_ret) / total_ret) if total_ret else None
-    con_pct = [v for v in stats["videos"].values() if v.get("visto_pct") and v["vistas"]]
-    total_pct = sum(v["vistas"] for v in con_pct)
-    vistas["visto_pct"] = round(sum(v["visto_pct"] * v["vistas"] for v in con_pct) / total_pct) if total_pct else None
+    fiables = [{"stats": v} for v in stats["videos"].values() if _retencion_fiable(v)]
+    vistas["se_quedan"], vistas["visto_pct"] = _media(fiables, "se_quedan"), _media(fiables, "visto_pct")
     vistas["error_retencion"] = subir_youtube.retencion().get("error", "")
     sin_youtube = [g["nombre"] for g in lista if g["apartado"] in ("revisar", "listos") and g["video"]]
     return render_template(
@@ -1096,6 +1093,128 @@ def revisar_programados():
     mensaje = ("Actualizado con YouTube: " + "; ".join(cambios) + "." if cambios
                else "Actualizado: todo coincide con YouTube.")
     return redirect(url_for(destino, mensaje=mensaje, **extra))
+
+
+TIPOS_VIDEO = {"efemeride": "Efeméride", "serie": "Serie", "humor": "Humor", "serio": "Serio / misterio",
+               "general": "Divulgación", "ingles": "En inglés", "actualidad": "Actualidad"}
+MIN_VISTAS_RETENCION = 50  # con menos vistas, la retención de un vídeo es puro azar
+
+
+def _media(videos: list, clave: str):
+    """Media de `clave` ponderada por las vistas con retención (None si ningún vídeo la tiene)."""
+    con = [v for v in videos if v["stats"].get(clave) is not None and v["stats"].get("vistas_analitica")]
+    total = sum(v["stats"]["vistas_analitica"] for v in con)
+    return round(sum(v["stats"][clave] * v["stats"]["vistas_analitica"] for v in con) / total) if total else None
+
+
+def _retencion_fiable(stats: dict) -> bool:
+    """¿Hay retención de suficientes vistas? (YouTube la da con días de retraso: un vídeo puede tener 500 vistas
+    y retención de solo 1, que sale «100 %».)"""
+    return (stats.get("vistas_analitica") or 0) >= MIN_VISTAS_RETENCION
+
+
+@app.route("/estadisticas")
+def ver_estadisticas():
+    """Cómo van los vídeos publicados: totales, retención, por tipo, por duración y vídeo a vídeo."""
+    stats = estadisticas_youtube()
+    videos = []
+    for g in todos():
+        if not (g["youtube"] or {}).get("id") or not g["estadisticas"]:
+            continue
+        publicado = (g["youtube"].get("publicar_el") or g["youtube"].get("subido") or g["fecha"] or "")[:10]
+        videos.append({**g, "stats": g["estadisticas"], "publicado": publicado,
+                       "tipo_bonito": TIPOS_VIDEO.get(g["tipo"], g["tipo"])})
+    orden = request.args.get("orden", "vistas")
+    claves = {"vistas": lambda v: -v["stats"]["vistas"],
+              "retencion": lambda v: -(v["stats"].get("se_quedan") or -1) if _retencion_fiable(v["stats"]) else 1,
+              "visto": lambda v: -(v["stats"].get("visto_pct") or -1) if _retencion_fiable(v["stats"]) else 1,
+              "reciente": lambda v: v["publicado"]}
+    videos.sort(key=claves.get(orden, claves["vistas"]))
+    if orden == "reciente":
+        videos.reverse()
+
+    fiables = [v for v in videos if _retencion_fiable(v["stats"])]
+    for v in videos:
+        v["fiable"] = _retencion_fiable(v["stats"])
+    totales = {
+        "videos": len(videos),
+        "vistas": sum(v["stats"]["vistas"] for v in videos),
+        "me_gusta": sum(v["stats"].get("me_gusta", 0) for v in videos),
+        "comentarios": sum(v["stats"].get("comentarios", 0) for v in videos),
+        "se_quedan": _media(fiables, "se_quedan"),
+        "visto_pct": _media(fiables, "visto_pct"),
+    }
+    totales["media"] = round(totales["vistas"] / totales["videos"]) if totales["videos"] else 0
+
+    # Por tipo de vídeo
+    por_tipo = []
+    for tipo in {v["tipo"] for v in videos}:
+        grupo = [v for v in videos if v["tipo"] == tipo]
+        vistas = sum(v["stats"]["vistas"] for v in grupo)
+        por_tipo.append({"tipo": TIPOS_VIDEO.get(tipo, tipo), "videos": len(grupo), "vistas": vistas,
+                         "media": round(vistas / len(grupo)),
+                         "se_quedan": _media([v for v in grupo if v in fiables], "se_quedan"),
+                         "visto_pct": _media([v for v in grupo if v in fiables], "visto_pct")})
+    por_tipo.sort(key=lambda t: -t["media"])
+    maximo_tipo = max((t["media"] for t in por_tipo), default=0) or 1
+
+    # Por duración: cortos (hasta 47 s) frente a largos
+    por_duracion = []
+    for nombre, filtro in (("Hasta 47 s", lambda d: d <= 47), ("Más de 47 s", lambda d: d > 47)):
+        grupo = [v for v in fiables if v["duracion"] and filtro(v["duracion"])]
+        if grupo:
+            por_duracion.append({"nombre": nombre, "videos": len(grupo), "se_quedan": _media(grupo, "se_quedan"),
+                                 "visto_pct": _media(grupo, "visto_pct"),
+                                 "media": round(sum(v["stats"]["vistas"] for v in grupo) / len(grupo))})
+
+    # Conclusiones automáticas (solo con datos suficientes)
+    conclusiones = []
+    if len(por_tipo) > 1:
+        mejor, peor = por_tipo[0], por_tipo[-1]
+        conclusiones.append(f"Lo que más vistas da: {mejor['tipo'].lower()} ({mejor['media']:,} de media por vídeo); "
+                            f"lo que menos: {peor['tipo'].lower()} ({peor['media']:,}).".replace(",", "."))
+    if fiables:
+        mejor_ret = max(fiables, key=lambda v: v["stats"].get("se_quedan") or 0)
+        if mejor_ret["stats"].get("se_quedan"):
+            conclusiones.append(f"El que más gente retiene: «{mejor_ret['titulo']}» ({mejor_ret['stats']['se_quedan']} % "
+                                "se queda). Fíjate en cómo empieza.")
+        se_van = [v for v in fiables if (v["stats"].get("visto_pct") or 100) < 45]
+        if se_van:
+            conclusiones.append(f"En {len(se_van)} vídeo{'s' if len(se_van) > 1 else ''} la gente ve menos de la mitad: "
+                                "o el gancho promete algo que tarda en llegar, o el vídeo es largo para lo que cuenta.")
+    if totales["vistas"] and totales["comentarios"] / totales["vistas"] < 0.002:
+        conclusiones.append(f"Casi no hay comentarios ({totales['comentarios']} en {totales['vistas']:,} vistas): fija "
+                            "siempre el comentario con la pregunta del final.".replace(",", "."))
+    if len(por_duracion) == 2 and por_duracion[0]["visto_pct"] and por_duracion[1]["visto_pct"]:
+        corto, largo = por_duracion
+        conclusiones.append(f"Los vídeos cortos se ven en un {corto['visto_pct']} % de media; los largos, en un "
+                            f"{largo['visto_pct']} %.")
+
+    ret = subir_youtube.retencion()
+    return render_template(
+        "estadisticas.html", videos=videos, totales=totales, por_tipo=por_tipo, maximo_tipo=maximo_tipo,
+        por_duracion=por_duracion, conclusiones=conclusiones, orden=orden,
+        maximo_vistas=max((v["stats"]["vistas"] for v in videos), default=0) or 1,
+        min_vistas=MIN_VISTAS_RETENCION,
+        actualizado=stats["actualizado"][:16].replace("T", " a las ") if stats["actualizado"] else "",
+        error_retencion=ret.get("error", ""), yt_conectado=subir_youtube.TOKEN.exists(),
+        mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
+    )
+
+
+@app.post("/estadisticas/actualizar")
+def refrescar_estadisticas():
+    """«↻ Actualizar» en Estadísticas: trae ya de YouTube las vistas y la retención de cada vídeo."""
+    orden = {"orden": request.form["orden"]} if request.form.get("orden") else {}
+    try:
+        cuantos = len(subir_youtube.actualizar_estadisticas())
+    except Exception as error:  # noqa: BLE001 — sin conexión o sin YouTube conectado
+        return redirect(url_for("ver_estadisticas", error=f"No se han podido traer las vistas de YouTube: {error}", **orden))
+    try:
+        subir_youtube.actualizar_retencion(forzar=True)
+    except Exception as error:  # noqa: BLE001 — las vistas sí se han traído
+        return redirect(url_for("ver_estadisticas", error=f"Vistas actualizadas, pero no la retención: {error}", **orden))
+    return redirect(url_for("ver_estadisticas", mensaje=f"Actualizado con YouTube ({cuantos} vídeos).", **orden))
 
 
 @app.post("/videos/vistas")

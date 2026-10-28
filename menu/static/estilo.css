@@ -788,3 +788,34 @@ main > * { animation: aparecer .3s ease both; }
 }
 
 [hidden] { display: none !important; }
+
+/* ---------- Estadísticas ---------- */
+
+.cifras { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+.cifra { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 14px 16px;
+  box-shadow: var(--sombra); display: grid; gap: 2px; min-width: 0; }
+.cifra .valor { font-size: 24px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.cifra .nombre { font-size: 13.5px; font-weight: 550; }
+.cifra .detalle { font-size: 12px; color: var(--tenue); }
+.cifra.bien .valor { color: var(--ok); }
+.cifra.flojo .valor { color: var(--aviso); }
+@media (max-width: 760px) { .cifras { grid-template-columns: repeat(2, 1fr); } }
+
+.conclusiones { margin: 0; }
+.conclusiones li { margin-bottom: 8px; }
+
+.tabla-envoltura { overflow-x: auto; }
+.tabla-stats { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabla-stats th { text-align: left; font-size: 12.5px; font-weight: 600; color: var(--suave); padding: 0 10px 8px 0;
+  border-bottom: 1px solid var(--borde); white-space: nowrap; }
+.tabla-stats td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+.tabla-stats tr:last-child td { border-bottom: 0; }
+.tabla-stats .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla-stats td:nth-child(3) { width: 45%; min-width: 140px; }
+
+.barrita { position: relative; height: 22px; border-radius: 6px; background: var(--superficie-2); overflow: hidden;
+  display: flex; align-items: center; }
+.barrita span { position: absolute; inset: 0 auto 0 0; background: var(--acento-suave); border-right: 2px solid var(--acento); }
+.barrita b { position: relative; padding-left: 8px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.barrita.grande { max-width: 420px; }
+.fila-stats .tenue { color: var(--tenue); }

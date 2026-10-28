@@ -3,6 +3,19 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.18.0] - 2026-10-28
+
+### Añadido
+- **Apartado «Estadísticas»** en el menú: vistas, «me gusta» y comentarios totales; cuánta gente se queda y cuánto ve
+  (media del canal); comparación por tipo de vídeo y por duración; conclusiones automáticas («lo que más vistas da»,
+  «el que más retiene», «en N vídeos se ve menos de la mitad»…), y la lista de vídeos con barras, ordenable. Con su
+  botón «↻ Actualizar», que trae de YouTube las vistas y la retención al momento.
+
+### Arreglado
+- **Retención engañosa en vídeos recientes:** YouTube la da con días de retraso, y un vídeo con 500 vistas podía salir
+  con «100 % se queda» por tener datos de una sola. Ahora solo se muestra (y cuenta en las medias) cuando YouTube ya
+  tiene datos de 50 vistas o más.
+
 ## [1.17.0] - 2026-10-28
 
 Mejoras a partir de las estadísticas de la primera semana: lo que mejor funciona es la actualidad y la historia de

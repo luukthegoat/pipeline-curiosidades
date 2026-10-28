@@ -448,7 +448,9 @@ def estadisticas() -> dict:
         return {"actualizado": "", "videos": {}}
     for id_video, ret in retencion().get("videos", {}).items():
         if id_video in datos["videos"]:
-            datos["videos"][id_video].update({k: v for k, v in ret.items() if k != "vistas"})
+            # «vistas_analitica»: las vistas de las que YouTube ya tiene retención (van con días de retraso)
+            datos["videos"][id_video].update({k: v for k, v in ret.items() if k != "vistas"},
+                                             vistas_analitica=ret.get("vistas", 0))
     return datos
 
 

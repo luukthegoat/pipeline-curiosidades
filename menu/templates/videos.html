@@ -122,11 +122,11 @@
               <b>{{ g.estadisticas.vistas | miles }}</b> vista{{ 's' if g.estadisticas.vistas != 1 }}
               · {{ g.estadisticas.me_gusta | miles }} me gusta</span>
             {% set ret = g.estadisticas %}
-            {% if ret.se_quedan is not none and ret.se_quedan is defined %}
+            {% if ret.se_quedan is not none and ret.se_quedan is defined and (ret.vistas_analitica or 0) >= 50 %}
               <span class="etiqueta {{ 'ok' if ret.se_quedan >= 70 else 'mal' if ret.se_quedan < 50 else '' }}"
                     title="De cada 100 personas a las que les salió, {{ ret.se_quedan }} se quedaron a verlo; el resto deslizó">{{ ret.se_quedan }} % se queda</span>
             {% endif %}
-            {% if ret.visto_pct %}
+            {% if ret.visto_pct and (ret.vistas_analitica or 0) >= 50 %}
               <span title="De media se ve {{ ret.segundos }} s, el {{ ret.visto_pct }} % del vídeo (más de 100 % = lo repiten)">ve el {{ ret.visto_pct }} % ({{ ret.segundos }} s)</span>
             {% endif %}
           {% endif %}
