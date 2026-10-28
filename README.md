@@ -34,6 +34,10 @@ las zonas de colores, calendarios, cifras, personajes y líneas de tiempo), y ca
 nombra. El guion se revisa escena a escena en el menú antes de dibujarlo, y solo se rehace lo que cambia. Cada vídeo
 largo sale con tres miniaturas para probar, una pantalla final y tres Shorts verticales que llevan a él.
 
+**Asistente:** un chat dentro del menú al que le pides lo que quieras con tus palabras; entiende qué vídeo es
+(Short, serie, efemérides, diario, vídeo largo o actualidad), lo propone y lo lanza con un clic. Usa una IA local con
+Ollama si está instalada y, si no, Groq.
+
 **Para crecer:** el menú enseña el **camino a monetizar** (suscriptores, horas de vídeos largos y vistas de Shorts
 frente a lo que pide YouTube, al ritmo actual) y mete cada vídeo en su lista de reproducción.
 
@@ -94,6 +98,7 @@ flowchart LR
 | [`instagram.py`](scripts/instagram.py) | Conexión con Instagram (Graph API) y publicación de cada vídeo como Reel |
 | [`video_ia.py`](scripts/video_ia.py) | Formato «Vídeo con IA»: IAs de vídeo, prompts por escena y clips subidos |
 | [`video_largo.py`](scripts/video_largo.py) | Vídeos largos: índice y capítulos con el LLM, voz, dibujos, montaje por escenas en caché, miniatura y capítulos de YouTube |
+| [`asistente.py`](scripts/asistente.py) | Asistente del menú: entiende lo que se le pide (Ollama en local o Groq) y lo convierte en una acción |
 | [`shorts_largo.py`](scripts/shorts_largo.py) | Shorts verticales sacados de un vídeo largo (fragmentos elegidos por el LLM, subtítulos ASS) |
 | [`dibujos.py`](scripts/dibujos.py) | Escenas dibujadas en SVG (Bonesy, mapas, fechas, cifras, personajes…) y su captura con Edge (Playwright) |
 | [`actualidad.py`](scripts/actualidad.py) | Noticias recientes (Bing Noticias y, con clave, Tavily) y su texto, para los vídeos de actualidad |
@@ -111,7 +116,7 @@ flowchart LR
 Python · Groq (gpt-oss-120b / gpt-oss-20b / Qwen) · Wikipedia y Wikimedia API · The Met y Art Institute of Chicago
 APIs · edge-tts · ffmpeg (zoompan, subtítulos ASS, sidechain) · Pillow · Flask · pywebview (WebView2) · C# ·
 YouTube Data API v3 y YouTube Analytics API (OAuth 2.0) · Instagram Graph API · Tavily · Playwright (Edge) · SVG ·
-Natural Earth
+Natural Earth · Ollama
 
 ## Instalación
 

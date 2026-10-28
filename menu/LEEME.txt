@@ -16,6 +16,11 @@ CÓMO ABRIRLO
   ciérralo y vuelve a abrirlo para cargar la versión nueva.
 
 QUÉ PUEDES HACER (barra de arriba)
+  Asistente
+    Escribe lo que quieras («hazme un vídeo largo sobre los Reyes Católicos»,
+    «¿cuál es mi vídeo más visto?») y te propone el vídeo; pulsa «Crear» para
+    hacerlo. Usa una IA local (Ollama) si está abierta; si no, Groq.
+
   Crear
     · Elegir el tipo: tema libre (en una o varias partes), efemérides, actualidad,
       vídeo con IA o «Diario de…». Todos salen de 40-45 s, con gancho en la

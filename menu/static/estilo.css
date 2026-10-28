@@ -122,7 +122,7 @@ code { font: 13px/1.4 "Cascadia Mono", Consolas, monospace; background: var(--su
   backdrop-filter: blur(12px);
 }
 .barra-dentro {
-  max-width: 1200px;
+  max-width: 1340px;
   margin: 0 auto;
   padding: 10px 24px;
   display: flex;
@@ -192,11 +192,11 @@ main.ancho { max-width: 1168px; }
 
 /* Que el menú quepa siempre: primero se quita el nombre junto al logo y luego los textos (queda el de la sección
    actual; el resto, al pasar el ratón). */
-@media (max-width: 1260px) {
+@media (max-width: 1440px) {
   .nombre-marca { display: none; }
   .barra-dentro { gap: 14px; }
 }
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .navegacion a { padding: 0 11px; }
   .navegacion a:not(.actual) > span:not(.contador) { display: none; }
 }
@@ -216,6 +216,9 @@ main.ancho { max-width: 1168px; }
   .navegacion a, .tareas { padding: 0 8px; }
   .tema { display: none; }  /* en el móvil manda el tema del sistema */
   .barra-dentro { gap: 6px; padding: 8px 12px; }
+}
+@media (max-width: 400px) {
+  .navegacion a, .tareas { padding: 0 5px; }
 }
 
 /* ---------- Tipografía ---------- */
@@ -899,3 +902,21 @@ main > * { animation: aparecer .3s ease both; }
   .escena-larga, .dos-campos, .tres-campos { grid-template-columns: 1fr; }
   .escena-larga .dibujo { max-width: 320px; }
 }
+
+/* ---------- Asistente ---------- */
+
+.chat { display: grid; gap: 10px; margin-bottom: 16px; }
+.burbuja { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.5; white-space: pre-wrap;
+  border: 1px solid var(--borde); background: var(--superficie); box-shadow: var(--sombra); }
+.burbuja.tu { justify-self: end; background: var(--acento-suave); color: var(--acento-tinta); border-color: transparent;
+  border-bottom-right-radius: 4px; }
+.burbuja.asistente { justify-self: start; border-bottom-left-radius: 4px; }
+.burbuja .temas { white-space: normal; }
+.accion-chat { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radio-sm); background: var(--superficie-2);
+  white-space: normal; }
+.accion-chat form { margin: 0; }
+.caja-chat { display: flex; gap: 10px; align-items: flex-end; position: sticky; bottom: 0; padding: 12px 0;
+  background: var(--fondo, var(--superficie)); }
+.caja-chat textarea { flex: 1; min-height: 52px; }
+@media (max-width: 600px) { .burbuja { max-width: 100%; } }

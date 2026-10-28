@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block titulo %}Asistente · MenteInquieta67{% endblock %}
+{% block contenido %}
+<div class="cabecera-pagina">
+  <h1>Asistente</h1>
+  {% if mensajes %}
+    <form method="post" action="{{ url_for('borrar_asistente') }}" onsubmit="return confirm('¿Borrar la conversación?')">
+      <button class="secundario" type="submit">Empezar de cero</button>
+    </form>
+  {% endif %}
+</div>
+<p class="sub">Dime qué vídeo quieres, con tus palabras, y lo preparo. También puedes preguntarme por el canal o
+  pedirme ideas. <span class="etiqueta {{ 'ok' if motor.local }}">{{ 'IA local' if motor.local else 'Groq' }}</span></p>
+{% if error %}<div class="aviso error">{{ error }}</div>{% endif %}
+
+<div class="chat" id="chat">
+  {% if not mensajes %}
+    <div class="burbuja asistente">¡Hola! Pídeme, por ejemplo:
+      <div class="temas">
+        {% for idea in ['Hazme un vídeo largo sobre los Reyes Católicos', 'Una serie de 3 sobre Napoleón',
+                        'Las efemérides de mañana', '¿Cómo van mis vídeos?', 'Dame 5 ideas de historia de España'] %}
+          <button type="button" class="tema-sugerido" onclick="usar(this)">{{ idea }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  {% for m in mensajes %}
+    <div class="burbuja {{ m.rol }}">
+      {{ m.texto }}
+      {% if m.accion %}
+        <div class="accion-chat">
+          <strong>{{ describir(m.accion) }}</strong>
+          {% if m.creado %}
+            <a class="boton secundario" href="{{ m.creado }}">Ver ✓</a>
+          {% else %}
+            <form method="post" action="{{ url_for('crear_desde_asistente', indice=loop.index0) }}">
+              <button type="submit">Crear</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+  <div id="final"></div>
+</div>
+
+<form method="post" action="{{ url_for('hablar_asistente') }}" class="caja-chat" id="caja"
+      onsubmit="const b = this.querySelector('button'); b.disabled = true; b.textContent = {{ ('Pensando… (unos 30 s)' if motor.local else 'Pensando…') | tojson | forceescape }};">
+  <textarea name="mensaje" id="mensaje" rows="2" required placeholder="Escribe lo que quieras… (Intro para enviar)"
+            onkeydown="if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); this.form.requestSubmit(); }"></textarea>
+  <button type="submit">Enviar</button>
+</form>
+<p class="ayuda-campo">No crea nada sin que pulses «Crear». Los vídeos se hacen como siempre (guion, voz y vídeo) y quedan
+  en Mis vídeos o en Vídeos largos para revisarlos antes de publicarlos.</p>
+
+<script>
+  function usar(boton) {
+    const caja = document.getElementById('mensaje');
+    caja.value = boton.textContent;
+    caja.focus();
+  }
+  document.getElementById('final').scrollIntoView({block: 'end'});
+  document.getElementById('mensaje').focus();
+</script>
+{% endblock %}

@@ -68,6 +68,26 @@
   </form>
 </div>
 
+<div class="tarjeta" id="asistente">
+  <h2>Asistente</h2>
+  <p>Ahora contesta: <strong>{{ motor_asistente.nombre }}</strong>.</p>
+  {% if not motor_asistente.local %}
+    <p class="ayuda-campo">Para que funcione con una IA <strong>en tu ordenador</strong> (gratis, sin internet y sin
+      cupos): instala <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>, ábrelo y, en una
+      terminal, escribe <code>ollama pull {{ modelo_ollama }}</code> (unos 5 GB). El asistente lo usará solo en cuanto esté
+      abierto. Los guiones de los vídeos siguen haciéndose con Groq.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('guardar_asistente') }}">
+    <div class="opciones"><label><input type="checkbox" name="local" value="1" {{ 'checked' if asistente_local }}>
+      Usar la IA local (Ollama) si está abierta</label></div>
+    <p class="ayuda-campo">En local es gratis y no gasta cupo, pero en este ordenador tarda unos 20-45 s por respuesta;
+      con Groq, unos 5 s.</p>
+    <label for="modelo">Modelo de Ollama <span class="ayuda-campo">— el recomendado es qwen2.5:7b; con poca memoria, qwen2.5:3b</span></label>
+    <input type="text" id="modelo" name="modelo" class="medio" value="{{ modelo_ollama }}">
+    <div class="acciones"><button class="secundario" type="submit">Guardar</button></div>
+  </form>
+</div>
+
 <div class="tarjeta" id="autoprogramar">
   <h2>Programar solos los vídeos sin avisos</h2>
   {% if autoprogramar %}

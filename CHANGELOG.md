@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [2.1.0] - 2026-10-28
+
+### Añadido
+- **Asistente** (nueva sección del menú): un chat al que le pides lo que quieras con tus palabras. Entiende qué vídeo
+  es (Short, serie, efemérides, «Diario de…», vídeo largo o actualidad), rellena sus datos (fechas como «mañana», el
+  título exacto de Wikipedia para los vídeos largos…) y lo lanza al pulsar «Crear». También contesta preguntas sobre el
+  canal con sus estadísticas y propone ideas. Nunca crea nada sin confirmación.
+- **IA local con Ollama**: si está instalado y abierto, el asistente la usa (gratis, sin internet y sin cupos); si no,
+  Groq. En Ajustes → Asistente se elige si usarla y el modelo (por defecto qwen2.5:7b). En un ordenador sin tarjeta
+  gráfica tarda unos 20-45 s por respuesta; con Groq, unos 5 s.
+
+### Cambiado
+- El menú de arriba sigue cabiendo con la sección nueva en cualquier ancho de ventana.
+
 ## [2.0.0] - 2026-10-28
 
 La aplicación pasa a llamarse **MenteInquieta67**, como el canal. Mejoras a partir de lo que recomiendan creadores de

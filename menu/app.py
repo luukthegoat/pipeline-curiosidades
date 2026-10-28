@@ -38,6 +38,7 @@ import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
 import piloto_actualidad  # noqa: E402  (vídeo de la noticia del día, solo y con salvaguarda)
 import instagram  # noqa: E402  (publicar los vídeos como Reels)
 import video_largo  # noqa: E402  (vídeos largos explicados con dibujos)
+import asistente  # noqa: E402  (el chat que entiende lo que quieres y lanza el vídeo)
 import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
 
 GUIONES = RAIZ / "salida" / "guiones"
@@ -48,7 +49,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -1499,6 +1500,8 @@ def ajustes():
         yt_token=subir_youtube.TOKEN.exists(),
         yt_privacidad=env.get("YT_PRIVACIDAD") or "private",
         listas_auto=subir_youtube.listas_activadas(),
+        motor_asistente=asistente.motor(), modelo_ollama=env.get("OLLAMA_MODELO") or asistente.MODELO_OLLAMA,
+        asistente_local=os.getenv("ASISTENTE_LOCAL", "1") == "1",
         tavily=bool(os.getenv("TAVILY_API_KEY")),
         pexels=bool(os.getenv("PEXELS_API_KEY")),
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
@@ -1985,6 +1988,119 @@ def borrar_largo(nombre):
     aviso = " Sigue en YouTube: si quieres quitarlo de allí, bórralo en YouTube Studio." if guion.get("youtube") else ""
     return redirect(url_for("ver_largos", mensaje=f"«{guion.get('titulo', nombre)}» se ha movido a la Papelera de "
                                                   f"reciclaje.{aviso}"))
+
+
+# --- Asistente: le escribes lo que quieras y propone (y lanza) el vídeo ----------------------------
+
+def contexto_asistente() -> str:
+    """Lo que el asistente sabe del canal para contestar preguntas (sin inventar cifras)."""
+    lineas = []
+    videos = [g for g in todos() if g["estadisticas"]]
+    if videos:
+        mejores = sorted(videos, key=lambda g: -g["estadisticas"]["vistas"])[:5]
+        lineas.append(f"Vídeos publicados con datos: {len(videos)}; vistas en total: "
+                      f"{sum(g['estadisticas']['vistas'] for g in videos)}. Los más vistos:")
+        lineas += [f"- «{g['titulo']}» ({TIPOS_VIDEO.get(g['tipo'], g['tipo'])}): {g['estadisticas']['vistas']} vistas"
+                   for g in mejores]
+    m = subir_youtube.monetizacion()
+    if m.get("suscriptores") is not None:
+        lineas.append(f"Suscriptores: {m['suscriptores']} (+{m.get('suscriptores_28', 0)} en 28 días). Horas de vídeos "
+                      f"largos en 12 meses: {m.get('horas_largos')}. Vistas de Shorts en 90 días: {m.get('vistas_shorts_90')}. "
+                      "Para monetizar: 1.000 suscriptores y 4.000 horas de vídeos largos o 10 millones de vistas de "
+                      "Shorts (desde el 1 de febrero de 2027, el doble).")
+    lineas.append(f"Guiones por revisar: {contar_pendientes()}. Vídeos programados: {len(programados.por_guion())}.")
+    largos = []
+    for carpeta in sorted(LARGOS.iterdir()) if LARGOS.exists() else []:
+        if (carpeta / "guion.json").exists():
+            r = resumen_largo(carpeta)
+            estado = ("publicado en YouTube" if r["youtube"] else "vídeo hecho, sin subir" if r["video"]
+                      else "guion sin vídeo")
+            largos.append(f"- «{r['titulo']}» (tema «{r['tema']}»): {estado}"
+                          + (f", {r['stats']['vistas']} vistas" if r.get("stats") else ""))
+    lineas += ["Vídeos largos:", *largos] if largos else ["Vídeos largos: ninguno."]
+    return "\n".join(lineas)
+
+
+@app.route("/asistente")
+def ver_asistente():
+    return render_template("asistente.html", mensajes=asistente.historial(), motor=asistente.motor(),
+                           describir=asistente.describir, error=request.args.get("error", ""))
+
+
+@app.post("/asistente")
+def hablar_asistente():
+    mensaje = request.form.get("mensaje", "").strip()
+    if mensaje:
+        asistente.responder(mensaje, contexto_asistente())
+    return redirect(url_for("ver_asistente", _anchor="final"))
+
+
+@app.post("/asistente/borrar")
+def borrar_asistente():
+    asistente.borrar()
+    return redirect(url_for("ver_asistente"))
+
+
+@app.post("/asistente/crear/<int:indice>")
+def crear_desde_asistente(indice):
+    """Lanza la acción que propuso el asistente en ese mensaje (una sola vez)."""
+    mensajes = asistente.historial()
+    if not 0 <= indice < len(mensajes) or not mensajes[indice].get("accion"):
+        abort(404)
+    mensaje = mensajes[indice]
+    if mensaje.get("creado"):
+        return redirect(mensaje["creado"])
+    accion = mensaje["accion"]
+    tipo = accion["tipo"]
+    if tipo == "actualidad":  # aquí hay que elegir los artículos: se va a esa página con la búsqueda hecha
+        destino = url_for("ver_actualidad", tema=accion["noticia"], dias="3")
+        mensaje["creado"] = destino
+        asistente.guardar(mensajes)
+        return redirect(destino)
+    if tipo == "largo":
+        nombre = paso1_guiones.slug(accion["tema"])
+        if (LARGOS / nombre / "guion.json").exists():
+            destino = url_for("ver_largo", nombre=nombre)
+        else:
+            enlace = {"titulo": f"Revisa «{accion['tema']}»", "url": url_for("ver_largo", nombre=nombre),
+                      "etiqueta": "vídeo largo"}
+
+            def trabajo(t: Trabajo) -> bool:  # guion, voz, dibujos y vídeo: luego se revisa antes de subirlo
+                codigo = t.ejecutar("video_largo.py", accion["tema"])
+                if (LARGOS / nombre / "guion.json").exists():
+                    t.enlaces = [enlace]
+                    t.escribir("Vídeo largo hecho. Revisa el guion (fechas, cifras y nombres) antes de subirlo.")
+                return codigo == 0
+
+            nuevo = cola.anadir(f"Vídeo largo: «{accion['tema']}» (desde el asistente)", trabajo)
+            nuevo.largo = nombre
+            destino = url_for("ver_tarea", id=nuevo.id)
+        mensaje["creado"] = destino
+        asistente.guardar(mensajes)
+        return redirect(destino)
+    if tipo == "short":
+        argumentos, titulo = ["--tema", accion["tema"], "--partes", "1"], f"Vídeo sobre «{accion['tema']}»"
+    elif tipo == "serie":
+        argumentos = ["--tema", accion["tema"], "--partes", str(accion["partes"])]
+        titulo = f"Serie de {accion['partes']} vídeos sobre «{accion['tema']}»"
+    elif tipo == "efemerides":
+        argumentos, titulo = ["--fecha", accion["fecha"], "--cantidad", str(accion["cantidad"])], f"Efemérides del {accion['fecha']}"
+    else:  # diario
+        argumentos = ["--diario", accion["personaje"], "--problema", accion.get("problema", "")]
+        titulo = f"Diario de «{accion['personaje']}»"
+    respuesta = lanzar_guiones(titulo + " (desde el asistente)", argumentos + ["--idiomas", "es"], True)
+    mensaje["creado"] = respuesta.location
+    asistente.guardar(mensajes)
+    return respuesta
+
+
+@app.post("/ajustes/asistente")
+def guardar_asistente():
+    modelo = request.form.get("modelo", "").strip()
+    local = "1" if request.form.get("local") == "1" else "0"
+    guardar_env({"OLLAMA_MODELO": modelo, "ASISTENTE_LOCAL": local})
+    os.environ.update(OLLAMA_MODELO=modelo, ASISTENTE_LOCAL=local)
+    return redirect(url_for("ajustes", mensaje="Asistente guardado.") + "#asistente")
 
 
 @app.route("/ayuda")
