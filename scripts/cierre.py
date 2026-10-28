@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 import paso2_audio
 
 ANCHO, ALTO, FPS = 1080, 1920, 30
-VERSION = "1"  # súbela si cambias el diseño: se rehacen los cierres en caché
+VERSION = "3"  # súbela si cambias el diseño: se rehacen los cierres en caché
 DORADO = (255, 196, 0)
 ROJO = (204, 0, 0)
 GRIS = (60, 60, 64)
@@ -41,22 +41,18 @@ def textos(datos: dict) -> dict:
     sobrio = datos.get("musica") == "triste"
     if sobrio:
         pregunta = "MORE HISTORY?" if ingles else "¿MÁS HISTORIA?"
-        voz = ("If you found this interesting, like and subscribe for more stories." if ingles else
-               "Si te ha parecido interesante, dale a like y suscríbete para más historias.")
+        voz = "Subscribe for more history." if ingles else "Suscríbete para más historia."
     elif serie.get("total", 1) > 1 and serie["parte"] < serie["total"]:
         siguiente = serie["parte"] + 1
         pregunta = f"PART {siguiente}?" if ingles else f"¿PARTE {siguiente}?"
-        voz = (f"Want part {siguiente}? Like and subscribe so you don't miss it." if ingles else
-               f"¿Quieres la parte {siguiente}? Dale a like y suscríbete para no perdértela.")
+        voz = f"Part {siguiente}? Subscribe." if ingles else f"¿Parte {siguiente}? Suscríbete."
     elif diario:
         siguiente = diario["dia"] + 1
         pregunta = f"DAY {siguiente}?" if ingles else f"¿DÍA {siguiente}?"
-        voz = (f"Want day {siguiente}? Like and subscribe so you don't miss it." if ingles else
-               f"¿Quieres el día {siguiente}? Dale a like y suscríbete para no perdértelo.")
+        voz = f"Day {siguiente}? Subscribe." if ingles else f"¿Día {siguiente}? Suscríbete."
     else:
         pregunta = "WANT MORE?" if ingles else "¿QUIERES MÁS?"
-        voz = ("Want more stories like this? Like and subscribe." if ingles else
-               "¿Quieres más historias como esta? Dale a like y suscríbete.")
+        voz = "Want more? Subscribe." if ingles else "¿Quieres más? Suscríbete."
     return {
         "pregunta": pregunta, "voz": voz, "sobrio": sobrio,
         "boton": "SUBSCRIBE" if ingles else "SUSCRIBIRSE",
@@ -119,7 +115,7 @@ class Dibujante:
         self.pulgar = _emoji("👍", 260)
         self.campana = _emoji("🔔", 110)
         self.mano = _emoji("👆", 170)
-        self.clic = 1.7  # segundo en que la mano pulsa el botón
+        self.clic = 1.1  # segundo en que la mano pulsa el botón (el cierre es corto: la gente desliza al final)
 
     def fotograma(self, t: float) -> Image.Image:
         info, sobrio = self.info, self.info["sobrio"]
@@ -203,10 +199,14 @@ def crear(datos: dict, trabajo: Path, huella) -> tuple:
     if salida.exists() and clave.exists() and clave.read_text().startswith(firma):
         return salida, float(clave.read_text().split("|")[1])
 
-    audio = trabajo / "cierre.mp3"
-    asyncio.run(paso2_audio.sintetizar(info["voz"], voz, audio))
-    duracion = MP3(audio).info.length + 0.6
-    duracion = max(duracion, 3.6)
+    bruto, audio = trabajo / "cierre_voz.mp3", trabajo / "cierre.mp3"
+    asyncio.run(paso2_audio.sintetizar(info["voz"], voz, bruto))
+    # La voz sintética trae silencio al principio y al final: fuera, para que el cierre dure lo justo.
+    recorte = "silenceremove=start_periods=1:start_threshold=-45dB"
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(bruto),
+                    "-af", f"{recorte},areverse,{recorte},areverse", str(audio)], check=True)
+    duracion = MP3(audio).info.length + 0.3
+    duracion = max(duracion, 2.3)
 
     dibujante = Dibujante(info, duracion)
     comando = [

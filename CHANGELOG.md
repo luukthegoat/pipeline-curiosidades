@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.17.0] - 2026-10-28
+
+Mejoras a partir de las estadísticas de la primera semana: lo que mejor funciona es la actualidad y la historia de
+España; las series largas y el final de los vídeos pierden público.
+
+### Cambiado
+- **Series de 3 partes como mucho** (antes hasta 10): en las de 4-5 partes cada una tenía menos vistas que la anterior.
+- **Cierre más corto:** la toma final dura unos 2,5 s (antes unos 4,5 s), con una frase breve («¿Parte 2? Suscríbete.»)
+  y sin el silencio que añadía la voz sintética.
+- **Más actualidad española:** el radar de noticias elige la noticia de España antes que una internacional, salvo que
+  la internacional sea lo más comentado aquí.
+- **Sin rótulos sobre las imágenes:** las noticias ya no llevan «IMÁGENES DE ARCHIVO» encima; la descripción y el texto
+  de TikTok e Instagram avisan de que son imágenes de archivo que no muestran los hechos.
+
 ## [1.16.1] - 2026-10-27
 
 ### Arreglado

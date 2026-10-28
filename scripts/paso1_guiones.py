@@ -722,6 +722,7 @@ SECCIONES_FINALES = re.compile(
 )
 MAX_CARACTERES_PARTE = 6000   # material por parte de una serie
 MIN_CARACTERES_PARTE = 1500   # por debajo no hay material para un vídeo
+MAX_PARTES = 3                # en las series largas cada parte pierde público: 3 como mucho
 
 
 def dividir_en_partes(texto: str, partes: int) -> list:
@@ -1058,7 +1059,7 @@ def main(argv=None) -> int:
     elif args.tema:
         print(f"Buscando «{args.tema}» en Wikipedia…")
         try:
-            trabajos = preparar_tema(args.tema, max(1, min(args.partes, 10)), api_key, modelo)
+            trabajos = preparar_tema(args.tema, max(1, min(args.partes, MAX_PARTES)), api_key, modelo)
         except (ValueError, requests.RequestException) as error:
             print(f"[error] {error}", file=sys.stderr)
             return 1

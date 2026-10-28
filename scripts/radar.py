@@ -46,7 +46,8 @@ Buenas candidatas (de más a menos):
 - Polémicas políticas del día: lo que ha dicho o hecho un cargo público o un partido y está levantando reacciones.
 - Sucesos y conflictos con mucha repercusión (disturbios, saqueos, protestas, apagones, huelgas).
 - Debates de sociedad con dos posturas claras (vivienda, okupas, inmigración, impuestos, educación…).
-- Internacional solo si en España se está hablando mucho de ello.
+- Internacional SOLO si afecta directamente a España o es lo más comentado del día aquí. Ante la duda, elige
+  siempre la noticia española: es la que mejor funciona en el canal.
 
 DESCARTA siempre:
 - Deportes, famosos, prensa rosa, televisión, realities, influencers, series, loterías y el tiempo (salvo catástrofe).

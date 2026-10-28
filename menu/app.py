@@ -439,7 +439,8 @@ def crear():
     fecha = request.form.get("fecha") or date.today().isoformat()
     cantidad = request.form.get("cantidad", "1")
     partes = request.form.get("partes", "1")
-    partes = partes if partes.isdigit() and 1 <= int(partes) <= 10 else "1"
+    # Como mucho 3 partes: en las series largas cada parte pierde público (las de 5 casi no tuvieron vistas).
+    partes = str(min(int(partes), paso1_guiones.MAX_PARTES)) if partes.isdigit() and int(partes) >= 1 else "1"
     idiomas = ",".join(request.form.getlist("idiomas")) or "es"
     completo = request.form.get("completo") == "on"
     personaje = request.form.get("personaje", "").strip()

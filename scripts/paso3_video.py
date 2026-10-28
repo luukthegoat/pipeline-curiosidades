@@ -1294,19 +1294,9 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         subtitulos = texto_ass(relativas, total, gancho if indice == 0 else "",
                                datos.get("titulo", "") if indice == 0 else "", datos.get("palabras_clave", []))
         eleccion = elegidas[escena["numero"]]
+        # Sin rótulos sobre las imágenes (antes, en las noticias: «IMÁGENES DE ARCHIVO»): que son de archivo lo dice
+        # la descripción.
         etiqueta = ""
-        if datos.get("actualidad") and eleccion["ruta"] and not (eleccion["imagen"] or {}).get("ruta"):
-            # Foto de este año (puede ser del propio suceso, con licencia libre): se dice de dónde es.
-            # Si es anterior, se avisa de que es de archivo y no muestra los hechos.
-            ingles = datos.get("idioma") == "en"
-            es_video = (eleccion["imagen"] or {}).get("video")
-            if (eleccion["imagen"] or {}).get("anio") == datetime.now().year:
-                etiqueta = ("VIDEO" if es_video else "PHOTO" if ingles else "FOTO") + ": WIKIMEDIA COMMONS"
-                etiqueta = etiqueta.replace("VIDEO", "VÍDEO") if es_video and not ingles else etiqueta
-            elif es_video:
-                etiqueta = "ARCHIVE FOOTAGE" if ingles else "IMÁGENES DE ARCHIVO"
-            else:
-                etiqueta = "ARCHIVE IMAGE" if ingles else "IMAGEN DE ARCHIVO"
         imagen = eleccion["imagen"]
         hacer = segmento_video if (imagen or {}).get("video") and eleccion["ruta"] else segmento_escena
         trabajos.append((hacer, trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
@@ -1515,8 +1505,8 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
         fecha_datos = datos["actualidad"].get("fecha_datos", "")
         tiktok.append(f"{'Sources' if ingles else 'Fuentes'}: {medios}"
                       + (f" ({'as of' if ingles else 'datos a'} {fecha_datos})" if fecha_datos else ""))
-        tiktok.append("Images from Wikimedia Commons; those marked as archive do not show the events." if ingles
-                      else "Imágenes de Wikimedia Commons; las marcadas como de archivo no muestran los hechos.")
+        tiktok.append("Archive images from Wikimedia Commons: they do not show the events." if ingles
+                      else "Imágenes de archivo de Wikimedia Commons: no muestran los hechos.")
     elif datos.get("video_ia"):
         tiktok.append(_linea_video_ia(datos))
     else:
@@ -1579,10 +1569,10 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
         lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos["fuentes"]]]
     if datos.get("actualidad"):
         fecha_datos = datos["actualidad"].get("fecha_datos", "")
-        lineas += ["", (f"Information as of {fecha_datos}: the situation may change. Images from Wikimedia Commons; "
-                        "those marked as archive do not show the events." if ingles else
-                        f"Información a {fecha_datos}: la situación puede cambiar. Imágenes de Wikimedia Commons; las "
-                        "marcadas como de archivo no muestran los hechos.")]
+        lineas += ["", (f"Information as of {fecha_datos}: the situation may change. Archive images from Wikimedia "
+                        "Commons: they do not show the events." if ingles else
+                        f"Información a {fecha_datos}: la situación puede cambiar. Imágenes de archivo de Wikimedia "
+                        "Commons: no muestran los hechos.")]
     if creditos:
         lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos]]
     lineas.append("")
