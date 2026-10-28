@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [1.21.0] - 2026-10-28
+
+### Añadido
+- **Bonesy se viste según la época** en los vídeos largos: toga y casco romano, armadura, armadura y morrión de
+  conquistador, corona y capa real (si el tema es un rey o una reina), tricornio, chistera, traje y sombrero… La IA da
+  el año del tema y la ropa sale de una tabla (eligiendo prendas se equivocaba: corona para Hernán Cortés). En el siglo
+  XX va siempre de civil, para no ponerse de un bando. Se cambia en la página del guion (ropa, color y sombrero).
+- Ropas y sombreros nuevos también para los personajes históricos: toga, armadura, capa real, tricornio, morrión y
+  casco romano.
+
+### Arreglado
+- Cambiar solo el título, la miniatura o la ropa de Bonesy ya no esconde las dudas del verificador ni quita el
+  «revisado»: eso solo pasa al cambiar el texto o los dibujos.
+
 ## [1.20.0] - 2026-10-28
 
 Mejoras de los Shorts a partir de los consejos de creadores de YouTube (lo primero es que no deslicen; después, que

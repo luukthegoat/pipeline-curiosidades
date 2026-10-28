@@ -46,6 +46,19 @@
         <input type="text" id="miniatura" name="miniatura" maxlength="40" value="{{ guion.miniatura }}">
       </div>
     </div>
+    <label>Ropa de Bonesy <span class="ayuda-campo">— acorde con la época; sale así en todo el vídeo</span></label>
+    <div class="tres-campos">
+      <select name="bonesy_ropa" aria-label="Ropa">
+        {% for clave, nombre in ropas.items() %}<option value="{{ clave }}" {{ 'selected' if bonesy.ropa == clave }}>{{ nombre }}</option>{% endfor %}
+      </select>
+      <select name="bonesy_color" aria-label="Color de la ropa">
+        <option value="">Color de siempre</option>
+        {% for c in colores %}<option value="{{ c }}" {{ 'selected' if bonesy.color_ropa == c }}>{{ c | capitalize }}</option>{% endfor %}
+      </select>
+      <select name="bonesy_sombrero" aria-label="Sombrero">
+        {% for clave, nombre in sombreros.items() %}<option value="{{ clave }}" {{ 'selected' if bonesy.sombrero == clave }}>{{ nombre }}</option>{% endfor %}
+      </select>
+    </div>
     {% for p in partes %}
       <div class="capitulo-largo">
         {% if p.intro %}

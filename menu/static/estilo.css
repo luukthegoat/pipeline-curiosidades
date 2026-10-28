@@ -843,6 +843,7 @@ main > * { animation: aparecer .3s ease both; }
 .mini-ancha.vacia { background: var(--superficie-2); display: inline-block; }
 
 .dos-campos { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.tres-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .capitulo-largo { margin: 26px 0 2px; padding-top: 18px; border-top: 2px solid var(--borde-fuerte); }
 .capitulo-largo h3 { margin: 0; }
 .titulo-capitulo { font-weight: 600; }
@@ -868,6 +869,6 @@ main > * { animation: aparecer .3s ease both; }
 .vista-largo figcaption { margin-top: 6px; }
 .portada-ancha { width: 100%; border-radius: var(--radio-sm); display: block; border: 1px solid var(--borde); }
 @media (max-width: 720px) {
-  .escena-larga, .dos-campos { grid-template-columns: 1fr; }
+  .escena-larga, .dos-campos, .tres-campos { grid-template-columns: 1fr; }
   .escena-larga .dibujo { max-width: 320px; }
 }

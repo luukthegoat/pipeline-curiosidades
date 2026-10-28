@@ -61,14 +61,16 @@ Devuelve SOLO un JSON:
  "tono": "uno de: epico, misterio, triste, neutro",
  "gancho": "la pregunta o el dato sorprendente con el que arranca el vídeo (1 frase)",
  "capitulos": [{"titulo": "título corto del capítulo (2-5 palabras)", "secciones": [números de las SECCIONES que usa],
-                "idea": "qué cuenta este capítulo, en 1-2 frases", "icono": "1 emoji para su tarjeta"}]}
+                "idea": "qué cuenta este capítulo, en 1-2 frases", "icono": "1 emoji para su tarjeta"}],
+ "anio": el año central del tema, en número (p. ej. 1521; antes de Cristo, en negativo)}
 
 Reglas:
 - Entre 5 y 6 capítulos en ESTRICTO orden cronológico (nunca vuelvas atrás en el tiempo) que cuenten la historia
   completa: contexto, causas, lo que pasó y cómo terminó / qué consecuencias tuvo.
 - Cada capítulo usa 1-4 secciones del índice: las que contienen SUS hechos (si habla de una batalla, la sección de esa
   batalla). El guionista solo podrá usar lo que haya en ellas.
-- Rigor y neutralidad: los temas políticos se cuentan con hechos, sin tomar partido."""
+- Rigor y neutralidad: los temas políticos se cuentan con hechos, sin tomar partido.
+- "anio" sirve para vestir al narrador como uno más de aquella época."""
 
 PROMPT_CAPITULO = """Eres guionista de un canal de divulgación de historia en español, al estilo «X explicado en 10 minutos».
 El vídeo se titula «{titulo}». Los capítulos son: {indice}.
@@ -120,6 +122,33 @@ def _ffmpeg(argumentos: list) -> None:
                                 *map(str, argumentos)], capture_output=True, text=True)
     if resultado.returncode:
         raise RuntimeError(f"ffmpeg: {resultado.stderr[-800:]}")
+
+
+# Ropa de Bonesy según el año del tema (la IA da bien el año; eligiendo prendas o épocas se equivocaba).
+# (hasta el año, ropa). En el siglo XX va siempre de civil: en una guerra civil, nada que lo ponga de un lado.
+VESTUARIOS = [
+    (475, {"ropa": "toga", "sombrero": "casco_romano"}),
+    (1491, {"ropa": "armadura"}),
+    (1699, {"ropa": "armadura", "sombrero": "morrion"}),
+    (1799, {"ropa": "traje", "color_ropa": "azul", "sombrero": "tricornio"}),
+    (1899, {"ropa": "traje", "color_ropa": "negro", "sombrero": "chistera"}),
+    (1945, {"ropa": "traje", "color_ropa": "marron", "sombrero": "sombrero"}),
+    (1979, {"ropa": "traje", "color_ropa": "gris"}),
+]
+REALEZA = re.compile(r"\b(?i:reyes|rey|reina|reinas|dinast[ií]a)\b|\b[A-ZÁÉÍÓÚ][a-záéíóúñ]+ [IVX]+\b")
+
+
+def vestuario(anio, tema: str) -> dict:
+    """La ropa de Bonesy: la de la época del tema, o de rey si el tema es un rey o una reina («Felipe II», «Reyes
+    Católicos»)."""
+    try:
+        anio = int(str(anio).strip())
+    except (TypeError, ValueError):
+        anio = 9999
+    ropa = next((r for hasta, r in VESTUARIOS if anio <= hasta), {"ropa": "sudadera"})
+    if REALEZA.search(tema or ""):
+        ropa = {"ropa": "capa_real", "sombrero": "corona"}
+    return {"ropa": ropa["ropa"], "color_ropa": ropa.get("color_ropa", ""), "sombrero": ropa.get("sombrero", "")}
 
 
 def _secciones(articulo: str) -> list:
@@ -218,6 +247,7 @@ def hacer_guion(tema: str, carpeta: Path) -> dict:
         for d in dudas:
             print(f"      ¿{d['frase']}? → {d['motivo']}", flush=True)
     guion = {"tema": tema, **{k: plan.get(k) for k in ("titulo", "miniatura", "iconos_miniatura", "tono", "gancho")},
+             "bonesy": vestuario(plan.get("anio"), tema),
              "fuente": f"https://es.wikipedia.org/wiki/{tema.replace(' ', '_')}", "revisado": False,
              "partes": partes}
     (carpeta / "guion.json").write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -323,7 +353,7 @@ def hacer_dibujos(guion: dict, carpeta: Path) -> None:
     for item in _escenas(guion):
         parte = item["parte"]
         etiqueta = "" if parte.get("intro") else f"{parte['numero']} · {parte['titulo']}"
-        pasos, claves = dibujos.escena(item["visual"], etiqueta)
+        pasos, claves = dibujos.escena(item["visual"], etiqueta, guion.get("bonesy"))
         semilla = int(_huella(item["visual"], etiqueta)[:6], 16) % 50 + 1  # el temblor del trazo a mano
         rutas = []
         for capas in pasos:
@@ -344,7 +374,7 @@ def hacer_dibujos(guion: dict, carpeta: Path) -> None:
         (e["visual"] for p in guion["partes"] for e in p["escenas"]
          if e["visual"].get("tipo") == "mapa" and e["visual"].get("resaltar")), None)
     html = dibujos.documento(dibujos.miniatura(guion.get("miniatura") or guion["titulo"], guion.get("iconos_miniatura"),
-                                               mapa_miniatura), ancho=1280, alto=720)
+                                               mapa_miniatura, guion.get("bonesy")), ancho=1280, alto=720)
     miniatura = carpeta / "miniatura.png"
     if guion.get("miniatura_hecha") != _huella(html) or not miniatura.exists():
         trabajos["miniatura"] = (html, miniatura, 1280, 720)

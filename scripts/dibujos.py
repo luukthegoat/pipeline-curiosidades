@@ -39,6 +39,17 @@ COLORES = {
     "rosa": "#e98aa5", "celeste": "#7cc3e8", "caqui": "#8f8a4e", "dorado": "#d9a520", "granate": "#8e2b2b",
 }
 PIEL = "#f2c9a0"
+METAL = "#b8bcc2"
+LINO = "#f3efe6"
+# Lo que puede llevar Bonesy (y los personajes): el vídeo largo elige según su época; se cambia en la app.
+ROPAS = {"sudadera": "Sudadera roja (la de siempre)", "traje": "Traje", "uniforme": "Uniforme", "obrero": "Ropa de obrero",
+         "toga": "Toga", "armadura": "Armadura", "capa_real": "Capa real", "sotana": "Hábito o sotana",
+         "vestido": "Vestido"}
+SOMBREROS = {"": "Nada", "corona": "Corona", "gorra_militar": "Gorra militar", "casco": "Casco de soldado",
+             "boina": "Boina", "chistera": "Chistera", "sombrero": "Sombrero", "tricornio": "Tricornio",
+             "morrion": "Morrión de conquistador", "casco_romano": "Casco romano", "mitra": "Mitra"}
+COLOR_ROPA = {"sudadera": "rojo", "traje": "gris", "uniforme": "caqui", "obrero": "gris", "toga": "rojo",
+              "armadura": "rojo", "capa_real": "morado", "sotana": "negro", "vestido": "rojo"}
 
 
 def color(nombre: str, defecto: str = "rojo") -> str:
@@ -235,11 +246,34 @@ def _cuerpo(ropa_color, tipo="sudadera") -> str:
     elif tipo == "vestido":
         partes = [f'<path d="M-46,-292 Q0,-304 46,-292 Q60,-230 92,-70 Q0,-50 -92,-70 Q-60,-230 -46,-292 Z" '
                   f'fill="{ropa_color}" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>']
+    elif tipo == "toga":  # túnica de lino con la banda del color de la ropa
+        partes = [f'<path d="M-50,-292 Q0,-306 50,-292 Q66,-250 64,-150 Q0,-136 -64,-150 Q-66,-250 -50,-292 Z" '
+                  f'fill="{LINO}" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>',
+                  f'<path d="M-46,-296 L58,-152" stroke="{TINTA}" stroke-width="26" stroke-linecap="round"/>',
+                  f'<path d="M-46,-296 L58,-152" stroke="{ropa_color}" stroke-width="18" stroke-linecap="round"/>']
+    elif tipo == "armadura":  # coraza de metal con la sobreveste del color de la ropa
+        partes = [f'<path d="M-50,-292 Q0,-306 50,-292 Q66,-250 64,-150 Q0,-136 -64,-150 Q-66,-250 -50,-292 Z" '
+                  f'fill="{METAL}" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>',
+                  f'<rect x="-22" y="-292" width="44" height="142" fill="{ropa_color}" stroke="{TINTA}" stroke-width="4"/>']
+        partes += [f'<path d="M-62,{y} Q0,{y + 10} 62,{y}" fill="none" stroke="{TINTA}" stroke-width="3" opacity=".6"/>'
+                   for y in (-248, -212, -176)]
+        partes += [f'<circle cx="{lado * 52}" cy="-282" r="24" fill="{METAL}" stroke="{TINTA}" stroke-width="5"/>'
+                   for lado in (-1, 1)]
+    elif tipo == "capa_real":  # túnica con cuello de armiño (la capa va detrás, en _capa)
+        partes += [f'<path d="M-52,-296 Q0,-266 52,-296 L50,-276 Q0,-246 -50,-276 Z" fill="white" stroke="{TINTA}" '
+                   f'stroke-width="4"/>']
+        partes += [f'<circle cx="{x}" cy="{-280 + abs(x) // 4}" r="3" fill="{TINTA}"/>' for x in (-36, -18, 0, 18, 36)]
     elif tipo == "sotana":
         partes = [f'<path d="M-50,-292 Q0,-306 50,-292 Q70,-200 72,-30 Q0,-20 -72,-30 Q-70,-200 -50,-292 Z" '
                   f'fill="{COLORES["negro"]}" stroke="{TINTA}" stroke-width="6"/>',
                   f'<rect x="-12" y="-300" width="24" height="12" fill="white" stroke="{TINTA}" stroke-width="3"/>']
     return "".join(partes)
+
+
+def _capa(color_capa) -> str:
+    """Capa real por detrás de la figura (se dibuja antes que las piernas)."""
+    return (f'<path d="M-50,-290 Q-110,-150 -96,-30 Q0,-14 96,-30 Q110,-150 50,-290 Z" fill="{color_capa}" '
+            f'stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>')
 
 
 def _cabeza_calavera(pose) -> str:
@@ -288,6 +322,24 @@ def _sombrero(tipo, color_s) -> str:
         c = color_s or COLORES["marron"]
         return (f'<ellipse cx="0" cy="-408" rx="74" ry="14" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
                 f'<path d="M-38,-410 Q-36,-456 0,-458 Q36,-456 38,-410 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>')
+    if tipo == "tricornio":
+        c = color_s or COLORES["negro"]
+        return (f'<path d="M-72,-404 Q0,-378 72,-404 L42,-446 Q0,-430 -42,-446 Z" fill="{c}" stroke="{TINTA}" '
+                f'stroke-width="5" stroke-linejoin="round"/>'
+                f'<path d="M-62,-404 Q0,-384 62,-404" fill="none" stroke="{COLORES["dorado"]}" stroke-width="5"/>')
+    if tipo == "morrion":  # el casco de los conquistadores: cresta y ala en punta
+        c = color_s or METAL
+        return (f'<path d="M-40,-406 Q-38,-452 0,-458 Q38,-452 40,-406 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<path d="M-26,-446 Q0,-500 26,-446 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<path d="M-78,-392 Q-40,-414 0,-410 Q40,-414 78,-392 Q40,-402 0,-400 Q-40,-402 -78,-392 Z" '
+                f'fill="{c}" stroke="{TINTA}" stroke-width="5" stroke-linejoin="round"/>')
+    if tipo == "casco_romano":
+        c = color_s or METAL
+        return (f'<path d="M-50,-398 Q-48,-458 0,-462 Q48,-458 50,-398 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<path d="M-46,-456 Q0,-512 46,-456 Q0,-474 -46,-456 Z" fill="{COLORES["rojo"]}" stroke="{TINTA}" '
+                f'stroke-width="4"/>'
+                + "".join(f'<rect x="{-58 if lado < 0 else 44}" y="-402" width="14" height="42" rx="5" fill="{c}" '
+                          f'stroke="{TINTA}" stroke-width="4"/>' for lado in (-1, 1)))
     if tipo == "mitra":
         return (f'<path d="M-36,-406 Q-34,-460 0,-480 Q34,-460 36,-406 Z" fill="white" stroke="{TINTA}" stroke-width="5"/>'
                 f'<line x1="0" y1="-478" x2="0" y2="-406" stroke="{COLORES["dorado"]}" stroke-width="8"/>')
@@ -334,34 +386,54 @@ def _cabeza_persona(aspecto: dict, pose) -> str:
     return "".join(partes)
 
 
-def figura(x, y, alto, pose="neutro", aspecto=None, mirar="derecha") -> str:
-    """Bonesy (sin `aspecto`) o un personaje sencillo, con los pies en (x, y) y `alto` píxeles de alto."""
+def _vestir(ropa: str, color_ropa: str):
+    """(ropa válida, color del cuerpo, color de las mangas)."""
+    ropa = ropa if ropa in ROPAS else "traje"
+    cuerpo = color(color_ropa or COLOR_ROPA[ropa], "gris")
+    manga = {"sotana": COLORES["negro"], "toga": LINO, "armadura": METAL}.get(ropa, cuerpo)
+    return ropa, cuerpo, manga
+
+
+def figura(x, y, alto, pose="neutro", aspecto=None, mirar="derecha", traje=None) -> str:
+    """Bonesy (sin `aspecto`) o un personaje sencillo, con los pies en (x, y) y `alto` píxeles de alto.
+
+    `traje` viste a Bonesy según el vídeo: {"ropa", "color_ropa", "sombrero", "color_sombrero"} (sin él, la sudadera).
+    """
     escala = alto / 470
     pose = ALIAS_POSES.get(normalizar(pose or ""), normalizar(pose or ""))
     pose = pose if pose in POSES else "neutro"
     (codo_i, muneca_i), (codo_d, muneca_d) = POSES[pose]
-    if aspecto is None:  # Bonesy: calavera, sudadera roja, piernas de hueso, reloj verde
-        manga = cuerpo_color = COLORES["rojo"]
+    detras = ""
+    if aspecto is None:  # Bonesy: calavera, piernas de hueso y reloj verde, con la ropa del vídeo
+        traje = traje or {}
+        ropa, cuerpo_color, manga = _vestir(normalizar(traje.get("ropa") or "sudadera"), traje.get("color_ropa"))
         mano = HUESO
-        piernas = _piernas(HUESO, hueso=True)
-        cuerpo = _cuerpo(cuerpo_color, "sudadera")
-        cabeza = _cabeza_calavera(pose)
+        piernas = _zapatos() if ropa in ("vestido", "sotana") else _piernas(HUESO, hueso=True)
+        cuerpo = _cuerpo(cuerpo_color, ropa)
+        sombrero = _sombrero(normalizar(traje.get("sombrero") or ""),
+                             color(traje["color_sombrero"]) if traje.get("color_sombrero") else None)
+        # La calavera es más alta que una cabeza: el sombrero, un poco más arriba
+        cabeza = _cabeza_calavera(pose) + (f'<g transform="translate(0,-5)">{sombrero}</g>' if sombrero else "")
         sensor = True
+        if ropa == "capa_real":
+            detras = _capa(COLORES["granate"])
     else:
-        ropa = normalizar(aspecto.get("ropa") or "traje")
-        cuerpo_color = color(aspecto.get("color_ropa") or ("caqui" if ropa == "uniforme" else "gris"), "gris")
-        manga = COLORES["negro"] if ropa == "sotana" else cuerpo_color
+        ropa, cuerpo_color, manga = _vestir(normalizar(aspecto.get("ropa") or "traje"), aspecto.get("color_ropa"))
+        if ropa == "sudadera":
+            ropa = "traje"  # la sudadera es solo de Bonesy
         mano = aspecto.get("piel") or PIEL
         piernas = (_zapatos() if ropa in ("vestido", "sotana") else
                    _piernas(COLORES["azul"] if ropa == "obrero" else COLORES["negro"]))
-        cuerpo = _cuerpo(cuerpo_color, ropa if ropa in ("traje", "uniforme", "obrero", "vestido", "sotana") else "traje")
+        cuerpo = _cuerpo(cuerpo_color, ropa)
+        if ropa == "capa_real":
+            detras = _capa(COLORES["granate"])
         cabeza = _cabeza_persona(aspecto, pose)
         sensor = False
     brazo_i = _brazo(HOMBROS[0], codo_i, muneca_i, manga, mano, sensor)
     brazo_d = _brazo(HOMBROS[1], codo_d, muneca_d, manga, mano)
     volteo = -1 if mirar == "izquierda" else 1
     return (f'<g transform="translate({x:.0f},{y:.0f}) scale({escala * volteo:.3f},{escala:.3f})" filter="url(#mano)">'
-            f'{piernas}{brazo_i if pose != "brazos" else ""}{cuerpo}{cabeza}{brazo_d}'
+            f'{detras}{piernas}{brazo_i if pose != "brazos" else ""}{cuerpo}{cabeza}{brazo_d}'
             f'{brazo_i if pose == "brazos" else ""}</g>')
 
 
@@ -639,8 +711,8 @@ def mapa(visual: dict, caja) -> tuple:
 ZONA_CONTENIDO = (520, 1880)  # x de la parte derecha (a la izquierda está Bonesy)
 
 
-def _narrador(pose="explica", alto=520, x=250, y=1040, mirar="derecha"):
-    return figura(x, y, alto, pose, None, mirar)
+def _narrador(pose="explica", alto=520, x=250, y=1040, mirar="derecha", traje=None):
+    return figura(x, y, alto, pose, None, mirar, traje)
 
 
 def _calendario(cx, cy, dia, mes, anio) -> str:
@@ -674,9 +746,12 @@ def _partes_fecha(fecha: str):
     return (dia.group(1) if dia and mes else ""), mes, (anio.group(1) if anio else fecha)
 
 
-def escena(visual: dict, capitulo: str = "") -> list:
+def escena(visual: dict, capitulo: str = "", bonesy=None) -> list:
     """Lista de pasos; cada paso es la lista de capas SVG que se ven. También [(clave, paso)] para sincronizar."""
     tipo = normalizar(visual.get("tipo") or "narrador")
+
+    def narrador(pose, alto=520, x=250, y=1040):
+        return _narrador(pose, alto, x, y, traje=bonesy)
     pose = visual.get("pose") or None
     base, pasos, claves = [], [], []
     x0, x1 = ZONA_CONTENIDO
@@ -685,7 +760,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
         base.append(etiqueta(60 + len(capitulo) * 9.6 + 25, 62, capitulo, 34, fondo="#fff3c4"))
 
     if tipo == "titulo":
-        base.append(_narrador(pose or "saluda", 600, 300))
+        base.append(narrador(pose or "saluda", 600, 300))
         numero = visual.get("numero") or ""
         if numero:
             base.append(texto(centro + 60, 330, f"CAPÍTULO {numero}", 56, fuente="titulo", relleno=COLORES["rojo"]))
@@ -696,14 +771,14 @@ def escena(visual: dict, capitulo: str = "") -> list:
         if iconos:
             pasos.append([icono(iconos[0], centro + 60, 870, 190)])
     elif tipo == "fecha":
-        base.append(_narrador(pose or "senala"))
+        base.append(narrador(pose or "senala"))
         dia, mes, anio = _partes_fecha(visual.get("fecha"))
         base.append(_calendario(830, 540, dia, mes, anio))
         if visual.get("texto"):
             pasos.append([texto(1460, 540, visual["texto"], 64, 680, centrar_vertical=True, max_lineas=5)])
             claves.append(visual["texto"])
     elif tipo == "cifra":
-        base.append(_narrador(pose or "sorpresa"))
+        base.append(narrador(pose or "sorpresa"))
         numero = str(visual.get("numero") or "")
         tam = 230 if len(numero) <= 7 else 170
         base.append(texto(centro, 330, numero, tam, fuente="titulo", relleno=COLORES["rojo"]))
@@ -717,7 +792,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
                            for i in range(cuantos))
             pasos.append([capa])
     elif tipo == "mapa":
-        base.append(_narrador(pose or "senala", 480, 230))
+        base.append(narrador(pose or "senala", 480, 230))
         caja = (500, 110, 1380, 900)
         fondo, capas, leyenda = mapa(visual, caja)
         base.append(fondo)
@@ -739,7 +814,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
         personas = (visual.get("personas") or [])[:3]
         hay_narrador = len(personas) < 3
         if hay_narrador:
-            base.append(_narrador(pose or "explica", 460, 220))
+            base.append(narrador(pose or "explica", 460, 220))
         inicio = x0 + 40 if hay_narrador else 260
         hueco = (x1 - inicio) / max(len(personas), 1)
         alto = 560
@@ -762,7 +837,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
             pasos.append([bocadillo(bx, by, ancho, visual["bocadillo"], (px, cabeza - 15), 42)])
             claves.append("")
     elif tipo == "iconos":
-        base.append(_narrador(pose or "explica"))
+        base.append(narrador(pose or "explica"))
         elementos = [e for e in (visual.get("elementos") or []) if svg_emoji(e.get("icono", ""))][:3]
         if visual.get("texto"):
             base.append(texto(centro, 170, visual["texto"], 70, 1250, "titulo", max_lineas=2))
@@ -775,7 +850,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
             pasos.append(capa)
             claves.append(e.get("texto") or "")
     elif tipo == "linea":
-        base.append(_narrador(pose or "senala", 460, 220))
+        base.append(narrador(pose or "senala", 460, 220))
         hitos = (visual.get("hitos") or [])[:5]
         y = 560
         base.append(f'<g filter="url(#mano)"><line x1="{x0 - 20}" y1="{y}" x2="{x1 - 10}" y2="{y}" stroke="{TINTA}" '
@@ -802,7 +877,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
             pasos.append(capa)
             claves.append(str(h.get("fecha") or ""))
     elif tipo == "comparacion":
-        base.append(_narrador(pose or "piensa", 440, 210))
+        base.append(narrador(pose or "piensa", 440, 210))
         lados = [visual.get("izquierda") or {}, visual.get("derecha") or {}]
         anchos = ((480, 1140), (1220, 1880))
         for (ax, bx), lado in zip(anchos, lados):
@@ -825,7 +900,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
         pasos[-1].append(f'<g filter="url(#mano)"><circle cx="1180" cy="560" r="62" fill="{COLORES["amarillo"]}" '
                          f'stroke="{TINTA}" stroke-width="6"/></g>' + texto(1180, 566, "VS", 64, fuente="titulo"))
     else:  # narrador
-        base.append(_narrador(pose or "explica", 720, 420))
+        base.append(narrador(pose or "explica", 720, 420))
         frase = visual.get("bocadillo") or visual.get("texto") or ""
         if frase:
             base.append(bocadillo(760, 120, 1060, frase, (560, 380), 58))
@@ -841,7 +916,7 @@ def escena(visual: dict, capitulo: str = "") -> list:
     return resultado, claves
 
 
-def miniatura(frase: str, iconos=None, mapa_visual=None) -> list:
+def miniatura(frase: str, iconos=None, mapa_visual=None, bonesy=None) -> list:
     """Capas de la miniatura (se dibuja en 1920×1080 y se captura a 1280×720): frase enorme, Bonesy y un dibujo."""
     capas = []
     if mapa_visual:
@@ -851,7 +926,7 @@ def miniatura(frase: str, iconos=None, mapa_visual=None) -> list:
         lista = iconos_validos(iconos)[:2]
         for j, e in enumerate(lista):
             capas.append(icono(e, 1450 + (j - (len(lista) - 1) / 2) * 330, 560, 380))
-    capas.append(figura(1680 if mapa_visual else 1700, 1060, 640, "sorpresa", None, "izquierda"))
+    capas.append(figura(1680 if mapa_visual else 1700, 1060, 640, "sorpresa", None, "izquierda", bonesy))
     lineas = partir(frase.upper(), 11, 3)
     tam = 190 if len(lineas) <= 2 else 160
     y = 540 - (len(lineas) - 1) * tam * 0.55

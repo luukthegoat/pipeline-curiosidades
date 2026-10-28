@@ -28,7 +28,7 @@ a Instagram como Reel). Todo se maneja desde un menú que se abre como aplicaci�
 clips que generas con ella.
 
 **Vídeos largos:** de unos 10 minutos, horizontales y por capítulos, al estilo «X en 10 minutos». Las escenas no usan
-fotos: las dibuja la propia app en SVG con un estilo de rotulador (el narrador Bonesy, mapas de España y del mundo con
+fotos: las dibuja la propia app en SVG con un estilo de rotulador (el narrador Bonesy, vestido según la época del tema, mapas de España y del mundo con
 las zonas de colores, calendarios, cifras, personajes y líneas de tiempo), y cada elemento aparece cuando la voz lo
 nombra. El guion se revisa escena a escena en el menú antes de dibujarlo, y solo se rehace lo que cambia.
 

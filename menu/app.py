@@ -38,6 +38,7 @@ import video_ia  # noqa: E402  (vídeos hechos con clips de una IA de vídeo)
 import piloto_actualidad  # noqa: E402  (vídeo de la noticia del día, solo y con salvaguarda)
 import instagram  # noqa: E402  (publicar los vídeos como Reels)
 import video_largo  # noqa: E402  (vídeos largos explicados con dibujos)
+import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -1646,7 +1647,10 @@ def ver_largo(nombre):
         descripcion=descripcion.read_text(encoding="utf-8") if descripcion.exists() else "",
         pregunta=pregunta,
         yt_conectado=subir_youtube.TOKEN.exists(), yt_privacidad=leer_env().get("YT_PRIVACIDAD") or "private",
-        tipos=dibujos_tipos(), mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
+        tipos=dibujos_tipos(), ropas=dibujos.ROPAS, sombreros=dibujos.SOMBREROS,
+        colores=[c for c in dibujos.COLORES if c not in ("blanco", "celeste", "dorado")],
+        bonesy={"ropa": "sudadera", "color_ropa": "", "sombrero": "", **(guion.get("bonesy") or {})},
+        mensaje=request.args.get("mensaje", ""), error=request.args.get("error", ""),
     )
 
 
@@ -1662,10 +1666,20 @@ def guardar_largo(nombre):
                                 error="Este vídeo tiene una tarea en marcha: espera a que termine para guardar cambios."))
     guion = leer_largo(nombre)
     cambios, errores = 0, []
+    texto_cambiado = False  # texto o dibujos: lo que hay que volver a revisar (la ropa o el título, no)
     for campo in ("titulo", "miniatura"):
         valor = " ".join(request.form.get(campo, "").split())
         if valor and valor != guion.get(campo):
             guion[campo] = valor
+            cambios += 1
+    if "bonesy_ropa" in request.form:  # el vestuario de Bonesy (todo el vídeo)
+        bonesy = {"ropa": request.form["bonesy_ropa"] if request.form["bonesy_ropa"] in dibujos.ROPAS else "sudadera",
+                  "color_ropa": request.form.get("bonesy_color", "") if request.form.get("bonesy_color") in dibujos.COLORES
+                  else "",
+                  "sombrero": request.form.get("bonesy_sombrero", "") if request.form.get("bonesy_sombrero") in
+                  dibujos.SOMBREROS else ""}
+        if bonesy != {"ropa": "sudadera", "color_ropa": "", "sombrero": "", **(guion.get("bonesy") or {})}:
+            guion["bonesy"] = bonesy
             cambios += 1
     numero = 0
     for indice, parte in enumerate(guion["partes"]):
@@ -1677,9 +1691,10 @@ def guardar_largo(nombre):
         for escena in parte["escenas"]:
             numero += 1
             narracion = " ".join(request.form.get(f"narracion_{numero}", "").split())
-            if narracion and narracion != escena["narracion"]:
+            if narracion and narracion != " ".join(escena["narracion"].split()):  # espacios aparte
                 escena["narracion"] = narracion
                 cambios += 1
+                texto_cambiado = True
             texto = request.form.get(f"visual_{numero}", "").strip()
             if not texto:
                 continue
@@ -1693,13 +1708,15 @@ def guardar_largo(nombre):
             if visual != escena["visual"]:
                 escena["visual"] = visual
                 cambios += 1
+                texto_cambiado = True
     error = (f"El dibujo de la escena {', '.join(map(str, errores))} no es válido (tiene que ser un JSON con «tipo»): "
              "no se ha cambiado.") if errores else ""
     if not cambios:
         return redirect(url_for("ver_largo", nombre=nombre, mensaje="" if error else "No había cambios.",
                                 error=error))
-    guion["revisado"] = False
-    guion["editado_a_mano"] = True
+    if texto_cambiado:
+        guion["revisado"] = False
+        guion["editado_a_mano"] = True
     escribir_largo(nombre, guion)
     return redirect(url_for("ver_largo", nombre=nombre, error=error,
                             mensaje=f"{cambios} cambio{'s' if cambios > 1 else ''} guardado{'s' if cambios > 1 else ''}. "
