@@ -19,6 +19,7 @@ MODELO_OLLAMA = "qwen2.5:7b"   # el recomendado: entiende bien el español y res
 HISTORIAL = Path("salida/asistente.json")
 MAX_MENSAJES = 60      # los que se guardan
 MENSAJES_CONTEXTO = 10  # los que se le pasan a la IA para que siga la conversación
+MINIMO_INDICACIONES = 150  # un mensaje así de largo trae lo que quieres contar: va tal cual a la serie
 
 TIPOS = {
     "short": "Short sobre un tema",
@@ -49,6 +50,8 @@ Reglas:
   «Crear» para empezar (no digas que ya lo has hecho).
 - Si falta algo imprescindible o no está claro qué vídeo quiere (p. ej. «hazme algo»), usa "ninguna" y pregunta, o
   propón 2-3 ideas concretas para que elija. Nunca te inventes un vídeo que no ha pedido.
+- Si pega lo que quiere contar (un guion, ganchos, «Parte 1: … Parte 2: …»), elige "short" o "serie" (con tantas
+  partes como haya) y un "tema" corto: la app usará su texto tal cual. Dile que lo seguirá.
 - Si pregunta por el canal o sus vídeos, contesta con los DATOS DEL CANAL; nunca inventes cifras.
 - Si pide ideas, propón temas concretos: lo que mejor funciona en el canal es la historia de España y la actualidad
   española.
@@ -170,10 +173,11 @@ def validar(accion) -> dict:
 def describir(accion: dict) -> str:
     """«Vídeo largo con dibujos: «Reyes Católicos»» para enseñarlo en el chat."""
     tipo = accion.get("tipo")
+    extra = " · con tus indicaciones" if accion.get("indicaciones") else ""
     if tipo in ("short", "largo"):
-        return f"{TIPOS[tipo]}: «{accion['tema']}»"
+        return f"{TIPOS[tipo]}: «{accion['tema']}»{extra}"
     if tipo == "serie":
-        return f"{TIPOS[tipo]}: «{accion['tema']}» en {accion['partes']} partes"
+        return f"{TIPOS[tipo]}: «{accion['tema']}» en {accion['partes']} partes{extra}"
     if tipo == "efemerides":
         return f"{TIPOS[tipo]}: {accion['fecha']} ({accion['cantidad']} vídeo{'s' if accion['cantidad'] > 1 else ''})"
     if tipo == "diario":
@@ -193,6 +197,12 @@ def responder(mensaje: str, contexto: str) -> dict:
         datos = json.loads(re.sub(r"^```(?:json)?|```$", "", bruto.strip()))
         texto = str(datos.get("respuesta") or "").strip() or "Hecho."
         accion = validar(datos.get("accion"))
+        if accion["tipo"] in ("short", "serie") and len(mensaje.strip()) >= MINIMO_INDICACIONES:
+            # Tu texto, sin pasar por la IA (que lo resumiría): el guion lo seguirá parte por parte.
+            accion["indicaciones"] = mensaje.strip()[:paso1_guiones.MAX_INDICACIONES]
+            numeros = {int(n) for n in re.findall(r"(?im)^[\s#*>-]*parte\s+(\d+)\b", mensaje)}
+            if 2 <= len(numeros) <= paso1_guiones.MAX_PARTES:  # tantas partes como has escrito
+                accion.update(tipo="serie", partes=len(numeros))
     except Exception as error:  # noqa: BLE001 — que el fallo se vea en el chat y no rompa la página
         texto, accion = f"No he podido contestar ({type(error).__name__}: {str(error)[:160]}). Prueba otra vez.", {"tipo": "ninguna"}
     if accion.pop("aviso", ""):

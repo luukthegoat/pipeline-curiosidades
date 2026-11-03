@@ -40,6 +40,7 @@ import instagram  # noqa: E402  (publicar los vídeos como Reels)
 import video_largo  # noqa: E402  (vídeos largos explicados con dibujos)
 import asistente  # noqa: E402  (el chat que entiende lo que quieres y lanza el vídeo)
 import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
+import dibujos_short  # noqa: E402  (dibujos animados dentro de los Shorts)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -49,7 +50,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -492,6 +493,9 @@ def crear():
 
     if modo == "tema":
         argumentos = ["--tema", tema, "--partes", partes]
+        indicaciones = request.form.get("indicaciones", "").strip()[:paso1_guiones.MAX_INDICACIONES]
+        if indicaciones:
+            argumentos += ["--indicaciones", indicaciones]
         titulo = f"Serie de {partes} vídeos sobre «{tema}»" if partes != "1" else f"Vídeo sobre «{tema}»"
     elif modo == "diario":
         argumentos = ["--diario", personaje, "--problema", problema]
@@ -572,6 +576,16 @@ def guardar_autoprogramar():
         if hechos:
             mensaje += f" Programados ahora: {len(hechos)}."
     return redirect(url_for("ajustes", mensaje=mensaje, _anchor="autoprogramar"))
+
+
+@app.post("/ajustes/dibujos-shorts")
+def guardar_dibujos_shorts():
+    activo = "1" if request.form.get("activo") == "1" else "0"
+    guardar_env({"DIBUJOS_SHORTS": activo})
+    os.environ["DIBUJOS_SHORTS"] = activo
+    mensaje = ("Activado: los Shorts llevarán imágenes y dibujos." if activo == "1"
+               else "Desactivado: los Shorts irán solo con imágenes.")
+    return redirect(url_for("ajustes", mensaje=mensaje, _anchor="dibujos-shorts"))
 
 
 @app.post("/ajustes/piloto")
@@ -815,10 +829,44 @@ def imagenes_guion(nombre):
         opciones = [candidatas[i] for i in ranking[:12]]
         # Los vídeos son pocos: se ofrecen siempre (aunque no estén entre los 12 mejores) para elegirlos a mano.
         opciones += [candidatas[i] for i in ranking[12:] if candidatas[i].get("video")][:6]
-        escenas.append({"escena": escena, "actual": actual, "a_mano": bool(escena.get("imagen")), "opciones": opciones})
+        dibujo = (elegidas.get(str(escena["numero"])) or {}).get("dibujo")
+        escenas.append({"escena": escena, "actual": actual, "a_mano": bool(escena.get("imagen")), "opciones": opciones,
+                        "dibujo": dibujo, "clip_dibujo": dibujo and ruta_dibujo(nombre, escena["numero"]).exists()})
     return render_template("imagenes.html", nombre=nombre, datos=datos, escenas=escenas,
+                           dibujos_activos=dibujos_short.activado(),
                            miniatura=paso3_video.miniatura_url, total=len(candidatas),
                            mensaje=request.args.get("mensaje", ""))
+
+
+def ruta_dibujo(nombre: str, numero: int) -> Path:
+    return paso3_video.CARPETA_TRABAJO / nombre / f"dibujo_{numero:02d}.mp4"
+
+
+@app.route("/guion/<nombre>/dibujo/<int:numero>.mp4")
+def ver_dibujo(nombre, numero):
+    ruta = ruta_dibujo(nombre, numero).resolve()
+    if not ruta.exists() or (RAIZ / "salida").resolve() not in ruta.parents:
+        abort(404)
+    return send_file(ruta, max_age=0)
+
+
+@app.post("/guion/<nombre>/dibujo")
+def cambiar_dibujo(nombre):
+    """Quita (o vuelve a poner) el dibujo de una escena: se nota al rehacer el vídeo."""
+    datos = leer(nombre)
+    numero = request.form.get("escena", type=int)
+    escena = next((e for e in datos.get("escenas", []) if e["numero"] == numero), None)
+    if not escena:
+        abort(400)
+    if request.form.get("accion") == "quitar":
+        escena["sin_dibujo"] = True
+        mensaje = f"Escena {numero}: sin dibujo, solo la imagen."
+    else:
+        escena.pop("sin_dibujo", None)
+        mensaje = f"Escena {numero}: lleva otra vez su dibujo."
+    escribir(nombre, datos)
+    return redirect(url_for("imagenes_guion", nombre=nombre, mensaje=mensaje + " Rehaz el vídeo para verlo.")
+                    + f"#escena-{numero}")
 
 
 @app.post("/guion/<nombre>/imagen")
@@ -1505,6 +1553,7 @@ def ajustes():
         tavily=bool(os.getenv("TAVILY_API_KEY")),
         pexels=bool(os.getenv("PEXELS_API_KEY")),
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
+        dibujos_shorts=dibujos_short.activado(),
         piloto=piloto_actualidad.configuracion(),
         piloto_tarea=piloto_actualidad.estado_tarea(),
         piloto_contados=list(reversed(piloto_actualidad.contados(2))),
@@ -2088,6 +2137,8 @@ def crear_desde_asistente(indice):
     else:  # diario
         argumentos = ["--diario", accion["personaje"], "--problema", accion.get("problema", "")]
         titulo = f"Diario de «{accion['personaje']}»"
+    if accion.get("indicaciones"):  # lo que quieres contar, tal cual lo escribiste en el chat (Short o serie)
+        argumentos += ["--indicaciones", accion["indicaciones"]]
     respuesta = lanzar_guiones(titulo + " (desde el asistente)", argumentos + ["--idiomas", "es"], True)
     mensaje["creado"] = respuesta.location
     asistente.guardar(mensajes)

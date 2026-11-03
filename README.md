@@ -129,8 +129,11 @@ pip install -r requirements.txt
 copy .env.example .env      # y pon tu clave gratuita de Groq (console.groq.com/keys)
 ```
 
-Abre el menú como aplicación de escritorio, en su propia ventana: `pythonw menu\aplicacion.py`, o crea el
-lanzador `MenteInquieta67.exe` con `lanzador\crear_exe.bat`. También funciona en el navegador con
+Abre el menú como aplicación de escritorio, en su propia ventana: `pythonw menu\aplicacion.py`, o crea los accesos
+directos «MenteInquieta67» (carpeta del proyecto, escritorio y menú Inicio) con `lanzador\crear_accesos.bat`. Con el
+«Control inteligente de aplicaciones» de Windows activado, el lanzador `MenteInquieta67.exe`
+(`lanzador\crear_exe.bat`) queda bloqueado por no llevar firma digital; los accesos directos no, porque abren el
+Python firmado del entorno. También funciona en el navegador con
 `menu\Abrir menu.bat`. Después, sigue la ayuda integrada.
 Para subir a YouTube hace falta crear unas credenciales OAuth en Google Cloud: la guía está en
 [`menu/LEEME.txt`](menu/LEEME.txt) y en el propio menú (Ajustes → YouTube).

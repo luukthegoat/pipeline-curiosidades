@@ -593,6 +593,14 @@ Señala SOLO las afirmaciones que un espectador creería como hechos históricos
 cargos, lugares, fechas) y que el MATERIAL no respalda."""
 
 
+def _dicho_por_el_autor(frase: str, autor: str) -> bool:
+    """¿La frase repite lo que escribió el autor? (casi todas sus palabras con contenido están en sus indicaciones)."""
+    def palabras(texto):
+        return {p for p in re.findall(r"\w+", slug(texto, 10_000).replace("-", " ")) if len(p) >= 4 or p.isdigit()}
+    propias = palabras(frase)
+    return bool(propias) and len(propias & palabras(autor)) / len(propias) >= 0.7
+
+
 def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, humor: bool = False,
                     noticia: bool = False) -> list:
     """Segunda pasada: lista las frases del guion que el material no respalda.
@@ -603,16 +611,20 @@ def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, hum
     hoy = date.today()
     aviso_noticia = AVISO_ACTUALIDAD.format(hoy=hoy.isoformat(), hoy_corto=f"{hoy.day} de {MESES_ES[hoy.month - 1]}")
     sistema = PROMPT_VERIFICADOR + (AVISO_HUMOR if humor else "") + (aviso_noticia if noticia else "")
+    if "INDICACIONES DEL AUTOR" in material:  # lo que aporta el autor del canal es responsabilidad suya
+        sistema += ("\nLas INDICACIONES DEL AUTOR DEL CANAL (al final del MATERIAL) también son material: no marques "
+                    "las frases que digan lo mismo que ellas, aunque no estén en el artículo.")
     respuesta = llamar_groq(api_key, MODELO_VERIFICADOR, sistema, f"MATERIAL:\n{material}\n\nGUION:\n{numeradas}")
     try:
         datos = json.loads(respuesta)
     except ValueError:
         return [{"escena": None, "frase": "", "motivo": "el verificador no devolvió JSON válido: revisa todo a mano"}]
     dudas = datos.get("sin_respaldo", []) if isinstance(datos, dict) else []
+    autor = material.split("INDICACIONES DEL AUTOR", 1)[1] if "INDICACIONES DEL AUTOR" in material else ""
     return [
         {"escena": d.get("escena"), "frase": str(d.get("frase", "")), "motivo": str(d.get("motivo", ""))}
         for d in dudas
-        if isinstance(d, dict)
+        if isinstance(d, dict) and not (autor and _dicho_por_el_autor(str(d.get("frase", "")), autor))
     ]
 
 
@@ -775,15 +787,19 @@ def secciones_articulo(texto: str) -> list:
     return [(titulo, cuerpo) for titulo, cuerpo in secciones if len(cuerpo) > 80]
 
 
-def indice_serie(api_key: str, modelo: str, tema: str, secciones: list, partes: int):
+def indice_serie(api_key: str, modelo: str, tema: str, secciones: list, partes: int, indicaciones: str = ""):
     """Pide a la IA el reparto de secciones por parte. Devuelve (lista de partes, desenlace) o None."""
     lista = "\n".join(
         f"{i}. {titulo} ({len(cuerpo)} caracteres): {cuerpo[:150].replace(chr(10), ' ')}…"
         for i, (titulo, cuerpo) in enumerate(secciones, start=1)
     )
     sistema = PROMPT_INDICE.format(partes=partes, tema=tema, minimo=MIN_CARACTERES_PARTE)
+    pedido = f"SECCIONES:\n{lista}"
+    if indicaciones:  # el autor ya sabe qué quiere en cada parte: el reparto y los enfoques lo siguen
+        pedido += (f"\n\nINDICACIONES DEL AUTOR (síguelas: qué cuenta cada parte; elige para cada una las secciones "
+                   f"que tengan esos hechos):\n{indicaciones}")
     try:
-        datos = json.loads(llamar_groq(api_key, modelo, sistema, f"SECCIONES:\n{lista}"))
+        datos = json.loads(llamar_groq(api_key, modelo, sistema, pedido))
         plan = datos["partes"]
         if not isinstance(plan, list) or len(plan) != partes:
             return None
@@ -803,13 +819,41 @@ def material_de_secciones(secciones: list, numeros: list) -> str:
     return "\n\n".join(f"== {secciones[n - 1][0]} ==\n{secciones[n - 1][1][:cupo]}" for n in numeros)
 
 
-def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = MODELO_POR_DEFECTO) -> list:
+MAX_INDICACIONES = 3000  # caracteres de las indicaciones del autor
+
+
+def indicaciones_por_parte(indicaciones: str, partes: int) -> list:
+    """Las indicaciones de cada parte si vienen separadas («Parte 1: …», «## Parte 2 …»); si no, todas en cada una."""
+    cabeceras = list(re.finditer(r"(?im)^[\s#*>-]*parte\s+(\d+)\b", indicaciones))
+    por_parte = {}
+    for i, cabecera in enumerate(cabeceras):
+        fin = cabeceras[i + 1].start() if i + 1 < len(cabeceras) else len(indicaciones)
+        numero = int(cabecera.group(1))
+        if 1 <= numero <= partes:  # con su título («Parte 2: «Almansa…»»), que va en la misma línea
+            por_parte[numero] = indicaciones[cabecera.end():fin].strip(" \n:—-*")
+    if len(por_parte) < 2:
+        return [indicaciones] * partes
+    comun = indicaciones[:cabeceras[0].start()].strip()  # lo que va antes de «Parte 1» vale para todas
+    return ["\n".join(t for t in (comun, por_parte.get(n, "")) if t) for n in range(1, partes + 1)]
+
+
+def bloque_indicaciones(texto: str) -> str:
+    if not texto:
+        return ""
+    return ("\n\n--- INDICACIONES DEL AUTOR DEL CANAL (lo que quiere contar en este vídeo: síguelo, con sus ganchos; "
+            f"sus datos cuentan como material, pero no añadas nada que no esté aquí o en el artículo):\n{texto}")
+
+
+def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = MODELO_POR_DEFECTO,
+                  indicaciones: str = "") -> list:
     """Material para un tema libre: el artículo de Wikipedia que mejor encaja.
 
     Con varias partes, la IA hace primero un índice de la serie (qué secciones cuenta cada
     parte); si falla, el artículo se reparte en orden en tramos iguales.
+    `indicaciones`: lo que el autor quiere contar (en cada parte, si las separa con «Parte 1:», «Parte 2:»…).
     Devuelve una lista de (evento, material, fuentes), una por vídeo.
     """
+    indicaciones = indicaciones.strip()[:MAX_INDICACIONES]
     titulo = buscar_articulo(tema)
     texto = texto_articulo(titulo) if titulo else ""
     if not texto:
@@ -818,18 +862,23 @@ def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = M
     fuentes = [{"titulo": titulo, "url": url}]
     if partes <= 1:
         material = f"TEMA: {tema}\n\n--- ARTÍCULO: {titulo}\n{texto[:MAX_CARACTERES_PRINCIPAL]}"
-        return [({"year": None, "text": tema}, material, fuentes)]
+        return [({"year": None, "text": tema, "indicaciones": indicaciones}, material + bloque_indicaciones(indicaciones),
+                 fuentes)]
 
     posibles = max(1, len(SECCIONES_FINALES.split(texto)[0]) // MIN_CARACTERES_PARTE)
     if partes > posibles:
         print(f"Aviso: el artículo solo da para unas {posibles} partes; hago {posibles}.")
         partes = posibles
         if partes == 1:
-            return preparar_tema(tema, 1)
+            return preparar_tema(tema, 1, api_key, modelo, indicaciones)
     contexto = texto[:600]
+    de_cada_parte = indicaciones_por_parte(indicaciones, partes) if indicaciones else [""] * partes
+    if indicaciones:
+        print("Con tus indicaciones" + (" (una por parte)" if de_cada_parte[0] != indicaciones else ""))
 
     secciones = secciones_articulo(texto)
-    indice = indice_serie(api_key, modelo, tema, secciones, partes) if api_key and len(secciones) >= partes else None
+    indice = (indice_serie(api_key, modelo, tema, secciones, partes, indicaciones)
+              if api_key and len(secciones) >= partes else None)
     if indice:
         plan, desenlace = indice
         print("Índice de la serie:")
@@ -847,9 +896,11 @@ def preparar_tema(tema: str, partes: int = 1, api_key: str = "", modelo: str = M
         if numero > 1:
             material += f"CONTEXTO (solo para situarte; no lo vuelvas a contar):\n{contexto}\n\n"
         material += f"--- ARTÍCULO: {titulo} (tramo {numero} de {partes})\n{tramo}"
+        material += bloque_indicaciones(de_cada_parte[numero - 1])
         evento = {
             "year": None, "text": tema, "parte": numero, "total": partes,
             "enfoque": enfoques[numero - 1], "desenlace": desenlace, "enfoques": enfoques,
+            "indicaciones": de_cada_parte[numero - 1],
         }
         trabajos.append((evento, material, fuentes))
     return trabajos
@@ -963,7 +1014,9 @@ def indicaciones_serie(evento: dict, titulos_previos: list) -> str:
         return ""
     lineas = [
         f"SERIE: este guion es la PARTE {parte} DE {total} de una serie de vídeos sobre «{evento['text']}».",
-        "Cuenta SOLO los hechos del tramo del artículo que viene en el MATERIAL; las otras partes cubren el resto.",
+        "Cuenta SOLO los hechos del tramo del artículo que viene en el MATERIAL; las otras partes cubren el resto."
+        + (" El autor ha dejado INDICACIONES de lo que quiere en esta parte (al final del MATERIAL): mandan sobre el "
+           "enfoque; usa su gancho y sus datos." if evento.get("indicaciones") else ""),
         f"El \"nombre_corto\" resume en 2 a 4 palabras el tema de toda la serie, no solo esta parte "
         f"(tema: «{evento['text']}»; si es largo, NO lo copies: resúmelo, p. ej. «Guerra civil»).",
     ]
@@ -995,6 +1048,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Genera guiones a partir de Wikipedia (efemérides o un tema libre)")
     parser.add_argument("--tema", help='tema libre, p. ej. "La caída de Constantinopla" (en vez de efemérides)')
     parser.add_argument("--partes", type=int, default=1, help="con --tema: dividirlo en varios vídeos de 40-45 s")
+    parser.add_argument("--indicaciones", default="",
+                        help="con --tema: lo que quieres contar (por partes: «Parte 1: …», «Parte 2: …»)")
     parser.add_argument("--diario", metavar="PERSONAJE",
                         help='formato «Día X como…» de humor histórico, p. ej. "soldado romano en Vindolanda"')
     parser.add_argument("--dia", type=int, default=0, help="con --diario: número de día (por defecto, el siguiente)")
@@ -1069,7 +1124,8 @@ def main(argv=None) -> int:
     elif args.tema:
         print(f"Buscando «{args.tema}» en Wikipedia…")
         try:
-            trabajos = preparar_tema(args.tema, max(1, min(args.partes, MAX_PARTES)), api_key, modelo)
+            trabajos = preparar_tema(args.tema, max(1, min(args.partes, MAX_PARTES)), api_key, modelo,
+                                     args.indicaciones)
         except (ValueError, requests.RequestException) as error:
             print(f"[error] {error}", file=sys.stderr)
             return 1

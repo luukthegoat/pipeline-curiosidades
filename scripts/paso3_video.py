@@ -45,6 +45,7 @@ from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 import cierre
+import dibujos_short  # en 2-3 escenas, la foto pasa a un dibujo animado (mapa, cifra, fecha…) a mitad de la frase
 import musica
 import pexels  # planos de ambiente (mar, humo, mapas…) para las escenas sin vídeo de archivo
 import wikimedia  # acceso a Wikimedia con caché y ritmo controlado (evita que te pongan en espera)
@@ -1226,7 +1227,9 @@ def leer_datos(carpeta_audio: Path) -> dict:
         return datos
     guion = json.loads(ruta.read_text(encoding="utf-8"))
     elegidas = {e.get("numero"): e.get("imagen") for e in guion.get("escenas", []) if e.get("imagen")}
-    escenas = [{**e, "imagen": elegidas.get(e["numero"])} for e in datos["escenas"]]
+    sin_dibujo = {e.get("numero") for e in guion.get("escenas", []) if e.get("sin_dibujo")}  # quitado en el menú
+    escenas = [{**e, "imagen": elegidas.get(e["numero"]), "sin_dibujo": e["numero"] in sin_dibujo}
+               for e in datos["escenas"]]
     return {**datos, **{k: v for k, v in guion.items() if k != "escenas"}, "escenas": escenas}
 
 
@@ -1283,6 +1286,7 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
 
     # 2. Un segmento por escena (en paralelo y con caché), con la línea de tiempo ya recortada
     gancho = str(datos.get("gancho") or "").strip()
+    plan_dibujos = dibujos_short.planificar(datos, trabajo, huella)
     trabajos, cursor = [], 0.0
     for indice, escena in enumerate(datos["escenas"]):
         tiempos = escena.get("palabras_tiempos", [])
@@ -1297,14 +1301,27 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         # Sin rótulos sobre las imágenes (antes, en las noticias: «IMÁGENES DE ARCHIVO»): que son de archivo lo dice
         # la descripción.
         etiqueta = ""
-        imagen = eleccion["imagen"]
-        hacer = segmento_video if (imagen or {}).get("video") and eleccion["ruta"] else segmento_escena
-        trabajos.append((hacer, trabajo, escena["numero"], eleccion["ruta"], carpeta_audio / escena["audio"],
-                         util, total, subtitulos, etiqueta))
+        imagen, ruta = eleccion["imagen"], eleccion["ruta"]
+        es_clip = bool((imagen or {}).get("video") and ruta)
+        hacer = segmento_video if es_clip else segmento_escena
         marca = (" (generada con IA)" if (imagen or {}).get("ia") else " (elegida a mano)") if eleccion["a_mano"] else ""
-        marca += " [vídeo]" if hacer is segmento_video else ""
+        marca += " [vídeo]" if es_clip else ""
+        # Los clips de vídeo se quedan como están, y las escenas a las que les quitaste el dibujo, con su foto.
+        plan = None if es_clip or escena.get("sin_dibujo") else plan_dibujos.get(escena["numero"])
+        momento = plan and dibujos_short.tiempos(plan, relativas, total, indice == 0, DURACION_GANCHO if gancho else 0)
+        if momento:
+            try:
+                ruta = dibujos_short.clip(trabajo, escena["numero"], ruta, plan, momento, total, huella, info_archivo)
+                hacer = segmento_video
+                eleccion["dibujo"] = plan["visual"]
+                marca += f" + dibujo ({plan['visual']['tipo']}, desde el s {momento[0]:.1f})"
+            except Exception as error:  # noqa: BLE001 — sin el dibujo la escena sale igual, con su foto
+                print(f"    no se pudo hacer el dibujo de la escena {escena['numero']} ({type(error).__name__}: {error})")
+        trabajos.append((hacer, trabajo, escena["numero"], ruta, carpeta_audio / escena["audio"],
+                         util, total, subtitulos, etiqueta))
         print(f"  escena {escena['numero']}: {total:.2f} s · {imagen['archivo'][:55] if imagen else 'sin imagen'}{marca}")
         cursor += total
+    elegidas_path(nombre).write_text(json.dumps(elegidas, ensure_ascii=False, indent=2), encoding="utf-8")  # con dibujos
 
     inicio = time.time()
     with ThreadPoolExecutor(max_workers=HILOS) as hilos:
@@ -1435,6 +1452,8 @@ SEPARADOR = "=" * 60
 def _linea_credito(c, ingles: bool) -> str:
     if isinstance(c, str):  # crédito copiado de una descripción antigua
         return f"- {c}"
+    if c.get("creditos"):  # montaje propio de una escena (fotos de archivo + dibujos): el crédito de cada foto
+        return "\n".join(_linea_credito(foto, ingles) for foto in c["creditos"])
     if c.get("ia"):
         return f"- {c['archivo']} — {'AI-generated image (Pollinations)' if ingles else 'imagen generada con IA (Pollinations)'}"
     if c.get("ruta"):

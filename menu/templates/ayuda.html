@@ -48,7 +48,10 @@
     <li><strong>Vídeo.</strong> Primero busca <strong>clips de vídeo de archivo</strong> con licencia libre (los de los
       artículos de Wikipedia y de Wikimedia Commons; en las noticias, del suceso o de sus lugares). Una IA revisa cuáles encajan de verdad con cada escena y con la época, y pone 1-2 por vídeo
       (al menos uno si alguno encaja). Las demás escenas llevan imágenes reales de Wikipedia, Wikimedia Commons y dos
-      museos con obras de dominio público (The Met y el Art Institute of Chicago), con un zoom lento. Encima van la voz,
+      museos con obras de dominio público (The Met y el Art Institute of Chicago), con un zoom lento. En 2-3 escenas,
+      a mitad de la frase, la imagen pasa a un <strong>dibujo animado</strong> (un mapa con el lugar, una cifra enorme,
+      una fecha, causas y consecuencias, antes y después…) que se completa al ritmo de la voz; lo decide una IA solo con
+      lo que dice el texto, se puede quitar escena a escena en «Elegir imágenes» y desactivar en Ajustes. Encima van la voz,
       subtítulos que resaltan la palabra que suena, el gancho en grande al empezar y música que baja sola cuando se
       habla. Crea también la miniatura y la descripción con fuentes y créditos. En «Elegir imágenes» los clips salen
       marcados con ▶ para ponerlos a mano donde quieras.</li>
@@ -90,7 +93,9 @@
 <div class="tarjeta">
   <h2>Flujo recomendado</h2>
   <ol class="pasos">
-    <li>En <a href="{{ url_for('inicio') }}">Crear</a>, elige el tipo, escribe el tema y deja «Solo el guion». Si el tema da para más, elige varias partes.</li>
+    <li>En <a href="{{ url_for('inicio') }}">Crear</a>, elige el tipo, escribe el tema y deja «Solo el guion». Si el tema da para más, elige varias partes.
+      En «Qué quieres contar» puedes dejar ganchos y datos que no pueden faltar; en una serie, sepáralos con
+      «Parte 1:», «Parte 2:»… y cada vídeo seguirá lo suyo (también funciona pegando ese texto en el Asistente).</li>
     <li>En <a href="{{ url_for('mis_videos') }}">Mis vídeos → Por revisar</a>, abre el vídeo. Su página va por pasos: revisa el texto (con las frases dudosas y las fuentes), genera el vídeo y publícalo.</li>
     <li>Si algo no te gusta, cámbialo y pulsa «Rehacer»: solo se rehacen las escenas cambiadas. El gancho, la música y las imágenes están en «Gancho, música e imágenes», dentro del paso del vídeo.</li>
     <li>Publica con un clic: «Revisado → programar» lo da por bueno y lo programa a su hora recomendada. Si tienes

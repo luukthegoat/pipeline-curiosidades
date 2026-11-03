@@ -34,6 +34,26 @@
         <span class="ayuda-campo">se elegirá automáticamente al hacer el vídeo</span>
       {% endif %}
     </p>
+    {% if dibujos_activos and not (item.actual and item.actual.video) %}
+      <div class="dibujo-escena">
+        {% if e.sin_dibujo %}
+          <p><span class="etiqueta">sin dibujo</span> Esta escena va solo con su imagen.</p>
+          <form method="post" action="{{ url_for('cambiar_dibujo', nombre=nombre) }}">
+            <input type="hidden" name="escena" value="{{ e.numero }}"><input type="hidden" name="accion" value="poner">
+            <button class="secundario" type="submit">Volver a poner dibujo</button>
+          </form>
+        {% elif item.dibujo %}
+          <p><span class="etiqueta ok">✏️ + dibujo: {{ item.dibujo.tipo }}</span> A mitad de la frase, la imagen pasa a este dibujo.</p>
+          {% if item.clip_dibujo %}
+            <video src="{{ url_for('ver_dibujo', nombre=nombre, numero=e.numero) }}" controls muted playsinline preload="metadata"></video>
+          {% endif %}
+          <form method="post" action="{{ url_for('cambiar_dibujo', nombre=nombre) }}">
+            <input type="hidden" name="escena" value="{{ e.numero }}"><input type="hidden" name="accion" value="quitar">
+            <button class="secundario" type="submit">Quitar el dibujo</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
 
     <div class="rejilla">
       {% for o in item.opciones %}
@@ -64,7 +84,9 @@
           <button class="secundario" type="submit">Volver a automática</button>
         </form>
       {% endif %}
-      {% if item.actual and item.actual.ruta %}
+      {% if item.actual and item.actual.ruta and item.actual.video %}
+        <video class="propia" src="{{ url_for('imagen_propia', nombre=nombre, numero=e.numero) }}" controls muted loop playsinline></video>
+      {% elif item.actual and item.actual.ruta %}
         <img class="propia" src="{{ url_for('imagen_propia', nombre=nombre, numero=e.numero) }}" alt="Tu imagen">
       {% endif %}
     </div>

@@ -3,6 +3,30 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [2.2.0] - 2026-10-29
+
+### Añadido
+- **Imágenes y dibujos en los Shorts**: en 2-3 escenas de cada vídeo, a mitad de la frase, la imagen pasa a un dibujo
+  animado hecho por la app con el estilo de los vídeos largos: un mapa con el lugar marcado, una cifra enorme, un
+  calendario, causas y consecuencias con iconos, una comparación antes/después o una línea de tiempo. Cada elemento
+  aparece con un pequeño salto cuando la voz lo nombra. Una IA (Groq) elige las escenas y qué dibujar, solo con lo que
+  dice el texto (si se nombran lugares, siempre hay un mapa). La respuesta se guarda y los clips van en caché: al
+  rehacer el vídeo no se vuelve a preguntar ni a dibujar lo que no ha cambiado.
+- En **Elegir imágenes** cada escena enseña su dibujo y tiene un botón para quitarlo (o volver a ponerlo).
+- **Ajustes → Dibujos en los Shorts** para activarlos o desactivarlos (activados por defecto).
+- Una escena puede llevar como imagen un clip de vídeo propio con varias fotos: la descripción da el crédito de cada
+  foto, y la página de imágenes lo muestra con un reproductor.
+- **Qué quieres contar** en los vídeos sobre un tema y en las series: un campo nuevo en Crear (y en el Asistente,
+  pegando el texto en el chat) para dar ganchos, datos y momentos que no pueden faltar. Si se separa con «Parte 1:»,
+  «Parte 2:»…, cada parte recibe solo lo suyo, y el índice de la serie reparte el artículo según eso. Tus datos cuentan
+  como material para el verificador: deja de marcar las frases que solo repiten lo que escribiste, pero sigue marcando
+  las que lo cambian.
+- El Asistente pasa tu texto tal cual (sin resumirlo) cuando pides un Short o una serie con detalles, y hace tantas
+  partes como hayas escrito.
+- **Accesos directos «MenteInquieta67»** (carpeta del proyecto, escritorio y menú Inicio), creados con
+  `lanzador\crear_accesos.bat`. Windows bloqueaba `MenteInquieta67.exe` con el «Control inteligente de aplicaciones»
+  activado, por no llevar firma digital; los accesos abren directamente el Python firmado del entorno y no se bloquean.
+
 ## [2.1.0] - 2026-10-28
 
 ### Añadido

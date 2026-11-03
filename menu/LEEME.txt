@@ -2,11 +2,15 @@ MENÚ · MENTE INQUIETA
 =====================
 
 CÓMO ABRIRLO
-  Como aplicación: doble clic en «MenteInquieta67.exe» (carpeta principal) o en
-  su acceso directo del escritorio. El menú se abre en su propia ventana, sin
+  Como aplicación: doble clic en el acceso directo «MenteInquieta67» (carpeta
+  principal, escritorio o menú Inicio). El menú se abre en su propia ventana, sin
   navegador ni consola; al cerrar la ventana se apaga (si hay tareas en marcha,
-  pregunta antes). El .exe se crea con lanzador\crear_exe.bat. Si algo falla,
-  los mensajes quedan en salida\_trabajo\menu.log.
+  pregunta antes). Los accesos se crean con lanzador\crear_accesos.bat. Si algo
+  falla, los mensajes quedan en salida\_trabajo\menu.log.
+
+  «MenteInquieta67.exe» (se crea con lanzador\crear_exe.bat) hace lo mismo, pero
+  si Windows tiene activado el «Control inteligente de aplicaciones» lo bloquea
+  por no llevar firma digital. Los accesos directos no tienen ese problema.
 
   En el navegador: doble clic en «Abrir menu.bat» (en esta carpeta). Se abre
   una ventana negra (el servidor) y el menú aparece en http://127.0.0.1:8765.

@@ -88,6 +88,22 @@
   </form>
 </div>
 
+<div class="tarjeta" id="dibujos-shorts">
+  <h2>Dibujos en los Shorts</h2>
+  {% if dibujos_shorts %}
+    <p><span class="etiqueta ok">activado</span> En 2 o 3 escenas de cada Short, a mitad de la frase, la imagen pasa a un
+      dibujo animado (un mapa con el lugar, una cifra enorme, una fecha, causas y consecuencias…). Los decide la IA solo
+      con lo que dice el texto. En la página de imágenes de cada vídeo ves cada dibujo y puedes quitarlo.</p>
+  {% else %}
+    <p><span class="etiqueta">desactivado</span> Los Shorts van solo con imágenes y vídeos de archivo.</p>
+  {% endif %}
+  <p class="ayuda-campo">Se nota en los vídeos que se hagan (o rehagan) a partir de ahora. Los vídeos largos siempre van con dibujos.</p>
+  <form method="post" action="{{ url_for('guardar_dibujos_shorts') }}">
+    <input type="hidden" name="activo" value="{{ '0' if dibujos_shorts else '1' }}">
+    <button class="{{ 'secundario' if dibujos_shorts else '' }}" type="submit">{{ 'Desactivar' if dibujos_shorts else 'Activar' }}</button>
+  </form>
+</div>
+
 <div class="tarjeta" id="autoprogramar">
   <h2>Programar solos los vídeos sin avisos</h2>
   {% if autoprogramar %}
