@@ -166,7 +166,9 @@ def buscar_articulos(candidata: dict, config: dict):
     return busqueda, reconocidos[:5]
 
 
-def crear_video(config: dict, forzar: bool = False) -> bool:
+def crear_video(config: dict, forzar: bool = False, publicar_con=None) -> bool:
+    """`publicar_con(nombre, ruta, guion)`: quién publica el vídeo (el piloto automático lo pone a su mejor hora);
+    por defecto, al momento."""
     hoy = date.today().isoformat()
     de_hoy = [c for c in contados(0) if c["fecha"] == hoy]
     if len(de_hoy) >= config["max_dia"] and not forzar:
@@ -213,7 +215,7 @@ def crear_video(config: dict, forzar: bool = False) -> bool:
         return False
 
     guion = json.loads(ruta.read_text(encoding="utf-8"))
-    publicado = publicar(nombre, ruta, guion)
+    publicado = (publicar_con or publicar)(nombre, ruta, guion)
     apuntar_contado(elegida, nombre, publicado)
     return True
 

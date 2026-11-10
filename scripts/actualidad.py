@@ -48,6 +48,9 @@ MEDIOS = {
     "reuters.com": "Reuters", "apnews.com": "AP", "bbc.com": "BBC", "bbc.co.uk": "BBC", "theguardian.com": "The Guardian",
     "nytimes.com": "The New York Times", "washingtonpost.com": "The Washington Post", "dw.com": "DW",
     "euronews.com": "Euronews", "cnn.com": "CNN", "politico.eu": "Politico Europe", "aljazeera.com": "Al Jazeera",
+    # Deportes (para los vídeos de fútbol del piloto automático)
+    "marca.com": "Marca", "as.com": "AS", "mundodeportivo.com": "Mundo Deportivo", "sport.es": "Sport",
+    "relevo.com": "Relevo", "uefa.com": "UEFA", "rfef.es": "RFEF", "laliga.com": "LaLiga",
 }
 
 

@@ -322,10 +322,23 @@ def _titulo(pagina: dict) -> str:
 
 
 def ordenar_paginas(evento: dict) -> list:
-    """Pone primero los artículos cuyo título aparece en el texto del evento (el protagonista)."""
+    """Pone primero el artículo que confirma la fecha (el del hecho en sí, no el del país) y después los artículos
+    cuyo título aparece en el texto del evento (el protagonista)."""
     texto = evento.get("text", "").lower()
     paginas = evento.get("pages", [])
-    return sorted(paginas, key=lambda p: _titulo(p).lower() not in texto)
+    return sorted(paginas, key=lambda p: (_titulo(p) != evento.get("confirma"), _titulo(p).lower() not in texto))
+
+
+def confirma_fecha(evento: dict, fecha: date) -> str:
+    """Título del artículo que dice que aquello pasó ese día («10 de noviembre de 1898»), o «».
+
+    La lista de efemérides de Wikipedia tiene errores de fecha (y un vídeo de «tal día como hoy» con el día mal es
+    justo lo que no puede pasar): solo vale el evento si alguno de sus artículos trae el día, el mes y el año."""
+    patron = re.compile(rf"\b{fecha.day}(?:\.?º)?\s+de\s+{MESES_ES[fecha.month - 1]}\s+del?\s+{evento['year']}\b", re.I)
+    for pagina in evento.get("pages", [])[:MAX_PAGINAS_POR_EVENTO + 3]:
+        if patron.search(texto_articulo(pagina.get("title", _titulo(pagina))) or ""):
+            return _titulo(pagina)
+    return ""
 
 
 def preparar_material(evento: dict) -> tuple:
@@ -626,6 +639,65 @@ def verificar_guion(api_key: str, modelo: str, material: str, escenas: list, hum
         for d in dudas
         if isinstance(d, dict) and not (autor and _dicho_por_el_autor(str(d.get("frase", "")), autor))
     ]
+
+
+PROMPT_CORREGIR = """Eres el corrector de un canal de vídeos cortos. Un verificador ha marcado frases del guion que el
+MATERIAL (las fuentes) no respalda. Reescribe SOLO las escenas marcadas para que digan únicamente lo que respalda el
+MATERIAL: quita el adorno inventado o cámbialo por un dato que sí esté en el MATERIAL. Mantén el tono, el idioma
+({idioma}), más o menos el mismo número de palabras y que la frase enlace con la escena anterior y la siguiente. Si la
+última escena acaba con una pregunta al espectador, consérvala. No toques las escenas no marcadas.
+Responde SOLO con JSON: {{"escenas": [{{"numero": 3, "narracion": "la escena reescrita"}}]}}"""
+
+
+def corregir_dudas(api_key: str, modelo: str, material: str, escenas: list, dudas: list, idioma: str) -> list:
+    """Las escenas con las frases dudosas reescritas (las demás, igual), o [] si no se ha podido."""
+    numeradas = "\n".join(f"{i}. {e['narracion']}" for i, e in enumerate(escenas, start=1))
+    marcadas = "\n".join(f"- escena {d.get('escena')}: «{d.get('frase')}» → {d.get('motivo')}" for d in dudas)
+    try:
+        datos = json.loads(llamar_groq(api_key, modelo, PROMPT_CORREGIR.format(idioma=IDIOMAS.get(idioma, idioma)),
+                                       f"MATERIAL:\n{material}\n\nGUION:\n{numeradas}\n\nFRASES MARCADAS:\n{marcadas}"))
+        cambios = {int(c["numero"]): " ".join(str(c["narracion"]).split()) for c in datos.get("escenas", [])
+                   if isinstance(c, dict) and str(c.get("numero", "")).isdigit() and c.get("narracion")}
+    except (ValueError, KeyError, TypeError, AttributeError, RuntimeError, requests.RequestException):
+        return []
+    permitidas = {d.get("escena") for d in dudas}
+    cambios = {n: t for n, t in cambios.items() if n in permitidas and 1 <= n <= len(escenas)}
+    if not cambios:
+        return []
+    return [{**e, "narracion": cambios.get(i, e["narracion"])} for i, e in enumerate(escenas, start=1)]
+
+
+MIN_ESCENAS_TRAS_QUITAR = 3
+
+
+def quitar_dudas(escenas: list, dudas: list) -> list:
+    """Las escenas sin las frases marcadas: se quita la frase (si la escena tiene más) o la escena entera.
+
+    Nunca se quita la primera escena (el gancho) ni se deja el vídeo con menos de MIN_ESCENAS_TRAS_QUITAR; si no se
+    puede quitar nada, devuelve []."""
+    def plano(texto):
+        return re.sub(r"\W+", " ", str(texto).lower()).strip()
+
+    marcadas = {}
+    for d in dudas:
+        if isinstance(d.get("escena"), int):
+            marcadas.setdefault(d["escena"], []).append(plano(d.get("frase", "")))
+    resultado, quitadas = [], 0
+    for numero, escena in enumerate(escenas, start=1):
+        if numero not in marcadas:
+            resultado.append(escena)
+            continue
+        frases = re.split(r"(?<=[.!?…])\s+", escena["narracion"].strip())
+        buenas = [f for f in frases
+                  if not any(plano(f) and (plano(f) in m or m in plano(f)) for m in marcadas[numero] if m)]
+        if buenas and len(buenas) < len(frases):  # quedan frases sanas en la escena
+            resultado.append({**escena, "narracion": " ".join(buenas)})
+            quitadas += 1
+        elif numero > 1 and len(escenas) - quitadas - 1 >= MIN_ESCENAS_TRAS_QUITAR:
+            quitadas += 1  # la escena entera era la frase dudosa
+        else:
+            resultado.append(escena)
+    return resultado if quitadas else []
 
 
 # --- Salida --------------------------------------------------------------------
@@ -1048,6 +1120,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Genera guiones a partir de Wikipedia (efemérides o un tema libre)")
     parser.add_argument("--tema", help='tema libre, p. ej. "La caída de Constantinopla" (en vez de efemérides)')
     parser.add_argument("--partes", type=int, default=1, help="con --tema: dividirlo en varios vídeos de 40-45 s")
+    parser.add_argument("--fecha-confirmada", action="store_true",
+                        help="efemérides: solo eventos cuyo artículo confirma el día, el mes y el año")
     parser.add_argument("--indicaciones", default="",
                         help="con --tema: lo que quieres contar (por partes: «Parte 1: …», «Parte 2: …»)")
     parser.add_argument("--diario", metavar="PERSONAJE",
@@ -1138,7 +1212,7 @@ def main(argv=None) -> int:
             eventos = elegir_eventos(
                 descargar_efemerides(args.fecha, "selected"),
                 descargar_efemerides(args.fecha, "events"),
-                args.cantidad + (20 if args.sin_repetir else 0),
+                args.cantidad + 25,  # de sobra: se quitan los repetidos y los que no confirman la fecha
                 date.today().year,
             )
             if args.sin_repetir:  # los que ya tienen guion (hecho a mano o el día anterior), fuera
@@ -1149,7 +1223,25 @@ def main(argv=None) -> int:
                 repetidos = [e for e in eventos if existe(e)]
                 for e in repetidos:
                     print(f"  ya tiene guion, se salta: {e['year']} · {e['text'][:70]}")
-                eventos = [e for e in eventos if not existe(e)][:args.cantidad]
+                eventos = [e for e in eventos if not existe(e)]
+            # Solo los que algún artículo confirma que pasaron ese día; si faltan, los demás (salvo que se pida
+            # --fecha-confirmada: el piloto automático publica sin revisión y no se arriesga).
+            confirmados, dudosos = [], []
+            for evento in eventos:
+                if len(confirmados) >= args.cantidad:
+                    break
+                articulo = confirma_fecha(evento, args.fecha)
+                if articulo:
+                    confirmados.append({**evento, "confirma": articulo})
+                else:
+                    print(f"  fecha sin confirmar en sus artículos, se salta: {evento['year']} · {evento['text'][:70]}")
+                    dudosos.append(evento)
+            if len(confirmados) < args.cantidad and not args.fecha_confirmada:
+                relleno = dudosos[:args.cantidad - len(confirmados)]
+                for evento in relleno:
+                    print(f"  AVISO: se usa sin confirmar la fecha: {evento['year']} · {evento['text'][:70]}")
+                confirmados += relleno
+            eventos = confirmados
             if not eventos:
                 print("[error] No hay eventos con material suficiente para esa fecha", file=sys.stderr)
                 return 1
@@ -1206,6 +1298,30 @@ def main(argv=None) -> int:
                 dudas = [] if evento.get("video_ia") else verificar_guion(  # creativo: no hay fuente que verificar
                     api_key, modelo, material, guion["escenas"], humor=bool(evento.get("diario")),
                     noticia=bool(evento.get("actualidad")))
+                # Las frases que el material no respalda se reescriben solas (dos intentos) y se vuelve a verificar.
+                for _ in range(2):
+                    if not dudas or evento.get("diario"):
+                        break
+                    corregidas = corregir_dudas(api_key, modelo, material, guion["escenas"], dudas, idioma)
+                    if not corregidas:
+                        break
+                    nuevas = verificar_guion(api_key, modelo, material, corregidas,
+                                             noticia=bool(evento.get("actualidad")))
+                    if len(nuevas) < len(dudas):
+                        print(f"    corregidas {len(dudas) - len(nuevas)} de {len(dudas)} frase(s) sin respaldo")
+                        guion["escenas"], dudas = corregidas, nuevas
+                    else:
+                        break
+                # Lo que ni así tiene respaldo se quita: mejor un vídeo algo más corto que uno parado o con un dato
+                # inventado. (No en los diarios, que son humor.)
+                if dudas and not evento.get("diario"):
+                    podadas = quitar_dudas(guion["escenas"], dudas)
+                    if podadas:
+                        nuevas = verificar_guion(api_key, modelo, material, podadas,
+                                                 noticia=bool(evento.get("actualidad")))
+                        if len(nuevas) < len(dudas):
+                            print(f"    quitadas {len(dudas) - len(nuevas)} frase(s) que seguían sin respaldo")
+                            guion["escenas"], dudas = podadas, nuevas
                 ruta = guardar(guion, evento, fuentes, dudas, args.fecha, idioma, modelo_usado)
                 aviso = f" · {len(dudas)} frase(s) sin respaldo, revísalas" if dudas else " · verificado contra el material"
                 if evento.get("video_ia"):

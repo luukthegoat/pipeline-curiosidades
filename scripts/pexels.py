@@ -1,10 +1,11 @@
-"""Planos de ambiente de Pexels (mar, humo, mapas antiguos, ruinas…) para las escenas sin vídeo de archivo.
+"""Planos de ambiente de Pexels y Pixabay (mar, humo, mapas antiguos, ruinas…) para las escenas sin vídeo de archivo.
 
-Pexels es un banco de vídeo gratuito (licencia Pexels: uso libre, sin atribución obligatoria, aunque se agradece).
+Pexels y Pixabay son bancos de vídeo gratuitos (uso libre, sin atribución obligatoria, aunque se agradece).
 Es metraje actual, así que solo se buscan cosas que no delatan la época: naturaleza, fuego, cielo, papel antiguo,
 piedra… Nunca personas, ciudades ni vehículos, que en un vídeo de historia quedarían fuera de lugar.
 
-Hace falta una clave gratuita (pexels.com/api) en PEXELS_API_KEY; sin ella no se busca nada.
+Hace falta una clave gratuita de al menos uno: pexels.com/api (PEXELS_API_KEY) o pixabay.com/api/docs
+(PIXABAY_API_KEY). Con las dos, se buscan en ambos y hay más donde elegir.
 """
 import hashlib
 import json
@@ -44,12 +45,37 @@ AMBIENTES = {
 }
 
 
+URL_PIXABAY = "https://pixabay.com/api/videos/"
+
+
 class SinClave(Exception):
-    """No hay PEXELS_API_KEY."""
+    """No hay clave ni de Pexels ni de Pixabay."""
+
+
+def clave_pexels() -> str:
+    return os.getenv("PEXELS_API_KEY", "").strip()
+
+
+def clave_pixabay() -> str:
+    return os.getenv("PIXABAY_API_KEY", "").strip()
 
 
 def clave() -> str:
-    return os.getenv("PEXELS_API_KEY", "").strip()
+    """Alguna clave (de Pexels o de Pixabay): sin ninguna no hay planos de ambiente."""
+    return clave_pexels() or clave_pixabay()
+
+
+def _en_cache(nombre: str, pedir) -> dict:
+    """La respuesta guardada de una búsqueda (un mes) o una nueva."""
+    CARPETA_CACHE.mkdir(parents=True, exist_ok=True)
+    cache = CARPETA_CACHE / f"{hashlib.sha1(nombre.encode()).hexdigest()[:16]}.json"
+    if cache.exists() and time.time() - cache.stat().st_mtime < CADUCIDAD:
+        return json.loads(cache.read_text(encoding="utf-8"))
+    respuesta = pedir()
+    respuesta.raise_for_status()
+    datos = respuesta.json()
+    cache.write_text(json.dumps(datos), encoding="utf-8")
+    return datos
 
 
 def busquedas_para(visuales: list) -> list:
@@ -71,19 +97,67 @@ def _version_ligera(archivos: list) -> dict:
 
 
 def buscar(busqueda: str) -> list:
-    """Vídeos de Pexels para una búsqueda, con el mismo formato que los de Wikimedia (ver paso3_video)."""
+    """Vídeos de Pexels y Pixabay para una búsqueda, con el mismo formato que los de Wikimedia (ver paso3_video)."""
     if not clave():
-        raise SinClave("falta PEXELS_API_KEY")
-    CARPETA_CACHE.mkdir(parents=True, exist_ok=True)
-    cache = CARPETA_CACHE / f"{hashlib.sha1(busqueda.encode()).hexdigest()[:16]}.json"
-    if cache.exists() and time.time() - cache.stat().st_mtime < CADUCIDAD:
-        datos = json.loads(cache.read_text(encoding="utf-8"))
-    else:
-        respuesta = requests.get(URL_API, headers={"Authorization": clave()}, timeout=30,
-                                 params={"query": busqueda, "per_page": POR_BUSQUEDA * 2, "size": "medium"})
-        respuesta.raise_for_status()
-        datos = respuesta.json()
-        cache.write_text(json.dumps(datos), encoding="utf-8")
+        raise SinClave("falta PEXELS_API_KEY o PIXABAY_API_KEY")
+    videos = []
+    for nombre, buscar_en, hay_clave in (("Pexels", buscar_pexels, clave_pexels()),
+                                         ("Pixabay", buscar_pixabay, clave_pixabay())):
+        if not hay_clave:
+            continue
+        try:
+            videos += buscar_en(busqueda)
+        except (requests.RequestException, ValueError) as error:
+            if len([c for c in (clave_pexels(), clave_pixabay()) if c]) == 1:
+                raise  # era la única fuente: que se vea el fallo
+            print(f"  aviso: no se pudo buscar en {nombre} ({type(error).__name__}); sigo con la otra")
+    return videos
+
+
+def _version_pixabay(tamanos: dict) -> dict:
+    """El tamaño más cercano a 720 p (la franja central del vídeo vertical no pide más)."""
+    validos = [t for t in tamanos.values() if isinstance(t, dict) and t.get("url") and t.get("height")]
+    return min(validos, key=lambda t: (abs(min(t["height"], t.get("width") or t["height"]) - 720), t["height"]),
+               default={})
+
+
+def buscar_pixabay(busqueda: str) -> list:
+    """Vídeos de Pixabay (licencia de contenido de Pixabay: uso libre, sin atribución obligatoria)."""
+    datos = _en_cache(f"pixabay|{busqueda}", lambda: requests.get(
+        URL_PIXABAY, timeout=30, params={"key": clave_pixabay(), "q": busqueda, "per_page": max(3, POR_BUSQUEDA * 2),
+                                         "safesearch": "true", "video_type": "film"}))
+    videos = []
+    for video in datos.get("hits", []):
+        archivo = _version_pixabay(video.get("videos") or {})
+        if not archivo or not DURACION[0] <= (video.get("duration") or 0) <= DURACION[1]:
+            continue
+        descripcion = (video.get("tags") or busqueda).replace(",", "")
+        videos.append({
+            "archivo": f"Pixabay {video['id']} - {descripcion[:60]}",
+            "url": archivo["url"],
+            "miniatura": archivo.get("thumbnail", ""),
+            "video": True,
+            "ambiente": True,
+            "busqueda": busqueda,
+            "duracion": float(video.get("duration") or 0),
+            "anio": None,
+            "articulo": "Pixabay (ambiente)",
+            "pagina": video.get("pageURL", ""),
+            "autor": video.get("user") or "Pixabay",
+            "licencia": "Pixabay Content License",
+            "descripcion": descripcion[:200],
+            "claves": sorted(set(busqueda.split()) | set(descripcion.lower().split())),
+        })
+        if len(videos) >= POR_BUSQUEDA:
+            break
+    return videos
+
+
+def buscar_pexels(busqueda: str) -> list:
+    """Vídeos de Pexels (licencia Pexels: uso libre, sin atribución obligatoria)."""
+    datos = _en_cache(busqueda, lambda: requests.get(
+        URL_API, headers={"Authorization": clave_pexels()}, timeout=30,
+        params={"query": busqueda, "per_page": POR_BUSQUEDA * 2, "size": "medium"}))
     videos = []
     for video in datos.get("videos", []):
         archivo = _version_ligera(video.get("video_files", []))

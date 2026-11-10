@@ -11,6 +11,25 @@
 </p>
 {% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
 
+{% if dibujos_activos %}
+  <div class="tarjeta">
+    <h2>Muñeco del vídeo</h2>
+    <p>{% if todo_dibujos %}Este vídeo se hace entero con dibujos y lo cuenta
+      {% else %}Si alguna escena la cuenta un muñeco, es{% endif %}
+      <strong>{{ personajes[personaje].nombre }}</strong>
+      {% if personaje_a_mano %}<span class="etiqueta ok">elegido a mano</span>{% else %}<span class="etiqueta">automático</span>{% endif %}.</p>
+    <form method="post" action="{{ url_for('cambiar_personaje', nombre=nombre) }}" class="en-linea">
+      <select name="personaje" class="medio">
+        <option value="">Automático (según el tema)</option>
+        {% for clave, p in personajes.items() %}
+          <option value="{{ clave }}" {{ 'selected' if personaje_a_mano and clave == personaje }}>{{ p.nombre }} — {{ p.para }}</option>
+        {% endfor %}
+      </select>
+      <button class="secundario" type="submit">Cambiar</button>
+    </form>
+  </div>
+{% endif %}
+
 {% for item in escenas %}
   {% set e = item.escena %}
   <div class="tarjeta" id="escena-{{ e.numero }}">

@@ -7,6 +7,21 @@
   verticales de 40-45 segundos y en vídeos largos de unos 10 minutos explicados con dibujos.</p>
 
 <div class="tarjeta">
+  <h2>El piloto automático</h2>
+  <p>En <a href="{{ url_for('panel') }}">Inicio</a> hay un interruptor. Con el piloto encendido, al arrancar el
+    ordenador (y un rato antes de cada franja) hace solo los vídeos del día: la <strong>efeméride</strong> de hoy, dos
+    <strong>noticias</strong>, un <strong>acertijo</strong> y uno de <strong>fútbol</strong>. Cada uno se sube a
+    YouTube ya programado a su mejor hora (08:30, 14:00, 17:30, 19:30 y 21:30), así que sale aunque apagues el
+    ordenador. En Inicio ves los cinco con su estado: pendiente, programado, publicado o «revísalo».</p>
+  <p>Solo publica lo que pasa la verificación. Si el verificador marca una frase, la app intenta corregirla sola con
+    las fuentes; si aun así queda alguna, el vídeo se queda en Vídeos esperando tu revisión y te avisa. En
+    <a href="{{ url_for('ajustes') }}#piloto-automatico">Ajustes</a> eliges qué vídeos hace.</p>
+  <p>El menú tiene cuatro secciones: <strong>Inicio</strong>, <strong>Vídeos</strong> (Shorts, vídeos largos,
+    programados y estadísticas), <strong>Crear</strong> (a mano, con el asistente o un vídeo largo) y
+    <strong>Ajustes</strong>.</p>
+</div>
+
+<div class="tarjeta">
   <h2>Asistente</h2>
   <p>En <strong>Asistente</strong> le escribes lo que quieras, con tus palabras: «hazme un vídeo largo sobre los Reyes
     Católicos», «una serie de 3 sobre Napoleón», «las efemérides de mañana», «un diario de un soldado romano que odia el
@@ -51,7 +66,9 @@
       museos con obras de dominio público (The Met y el Art Institute of Chicago), con un zoom lento. En 2-3 escenas,
       a mitad de la frase, la imagen pasa a un <strong>dibujo animado</strong> (un mapa con el lugar, una cifra enorme,
       una fecha, causas y consecuencias, antes y después…) que se completa al ritmo de la voz; lo decide una IA solo con
-      lo que dice el texto, se puede quitar escena a escena en «Elegir imágenes» y desactivar en Ajustes. Encima van la voz,
+      lo que dice el texto, se puede quitar escena a escena en «Elegir imágenes» y desactivar en Ajustes. Las escenas largas
+      cambian de imagen a mitad de frase y entre escena y escena hay transiciones cortas (Ajustes → Montaje de los
+      Shorts). Encima van la voz,
       subtítulos que resaltan la palabra que suena, el gancho en grande al empezar y música que baja sola cuando se
       habla. Crea también la miniatura y la descripción con fuentes y créditos. En «Elegir imágenes» los clips salen
       marcados con ▶ para ponerlos a mano donde quieras.</li>

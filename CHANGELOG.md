@@ -3,6 +3,73 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.0.0] - 2026-11-10
+
+El canal cambia de rumbo: vídeos de dibujos con muñecos, acertijos, fútbol y un piloto que lo hace todo solo.
+
+### Añadido
+- **10 muñecos** (Bonesy, el profe, la reportera, el crack, el árbitro, el detective, la científica, el rey, el
+  soldado y la exploradora), cada uno para un tipo de vídeo, y **ropa nueva**: camiseta de fútbol, bata, gabardina,
+  chaleco, gorra y salacot. El muñeco se elige solo por el tema y se cambia en la página de imágenes.
+- **Shorts hechos enteros con dibujos**: cada escena es un dibujo animado (mapa, cifra, fecha, iconos, comparación,
+  línea de tiempo o el muñeco con un bocadillo) y no se busca ninguna foto. Es el estilo por defecto; en Ajustes →
+  Estilo de los Shorts se elige entre todo dibujos, fotos con 2-3 dibujos o solo fotos.
+- **Acertijos con cuenta atrás**: el detective plantea el acertijo, hay 5 segundos de cuenta atrás para pensar y
+  comentar, y después dice la solución. La IA solo propone acertijos clásicos, un segundo modelo descarta los flojos o
+  mal resueltos, y no se repiten. Botón en Crear.
+- **Un solo piloto automático** (`scripts/piloto.py`): arranca con Windows y hace y publica los 5 vídeos del día: la
+  efeméride de hoy, un acertijo, uno de fútbol y dos noticias de España o geopolítica (una por la mañana y otra por
+  la tarde). El antiguo piloto de actualidad queda dentro de este. Un vídeo con datos solo se publica solo si el
+  verificador no marca nada; si marca algo, prueba con otro tema o lo deja en Vídeos y avisa.
+- **Cada vídeo, a su mejor hora**: efeméride 08:30, noticia 14:00, acertijo 17:30, fútbol 19:30 y segunda noticia
+  21:30. Se suben a YouTube ya programados, así que salen aunque el ordenador esté apagado. Si el ordenador se
+  enciende tarde, van a la siguiente franja buena del día; si no queda ninguna, al momento.
+- **Menos vídeos parados en «revísalo»**: si tras corregir sigue habiendo una frase sin respaldo, se quita (la
+  frase o la escena, nunca el gancho) y se vuelve a verificar; fútbol y noticias prueban con otro tema si aun así no
+  pasan (las noticias que no salen no ocupan su hueco; como mucho 4 intentos al día).
+- **Revisar con un clic**: en Inicio, cada vídeo en «revísalo» enseña la frase marcada y el motivo, con tres botones:
+  quitar esas frases y publicar, publicar tal cual o descartar.
+- **Instagram en redes que lo bloquean**: si la red corta o suplanta la conexión con Facebook (la de un instituto, por
+  ejemplo), el Reel no gasta intentos: se reintenta cada media hora, hasta dos días, y avisa una vez.
+- **Limpieza automática** (`scripts/limpieza.py`): una vez al día el piloto borra del ordenador el vídeo, la voz y los
+  archivos de montaje de los Shorts publicados en YouTube hace más de 7 días (se cambia en Ajustes; 0 = nunca), y las
+  imágenes descargadas que no se usan. No toca los guiones, los vídeos largos, lo que está en cola ni lo pendiente de
+  Instagram. `--simular` dice lo que borraría sin borrar nada.
+- **Estilo por tipo**: las noticias y el fútbol pueden llevar su propio estilo (Ajustes → Estilo de los Shorts); por
+  defecto van como todos, con dibujos.
+- **Interfaz nueva**: pantalla de Inicio con el interruptor del piloto y los 5 vídeos de hoy con su estado; el menú
+  pasa de 7 secciones a 4 (Inicio, Vídeos, Crear, Ajustes) y el resto cuelga de ellas. Aspecto nuevo «cuaderno»:
+  papel crema, tinta, el rojo de los dibujos y la letra de los títulos de los vídeos.
+- **Fútbol**: la noticia de fútbol del día, contrastada en al menos 2 medios (se añaden Marca, AS, Mundo Deportivo,
+  Sport y Relevo a los reconocidos), con dibujos. Solo hechos que ya han pasado: se descartan previas, horarios,
+  rumores y quinielas.
+- **Voces más naturales**: el selector de voz ofrece las voces multilingües de Microsoft (Andrew, Brian, Florian,
+  Remy, Ava…), que suenan menos sintéticas y dan igualmente el tiempo de cada palabra para los subtítulos. Si una
+  de ellas falla con una frase, esa frase la dice la voz española de siempre en vez de quedarse sin vídeo.
+
+### Cambiado
+- **Efemérides con la fecha comprobada**: un evento solo vale si alguno de sus artículos dice el día, el mes y el año
+  (la lista de «tal día como hoy» de Wikipedia tiene errores). Ese artículo pasa a ser la fuente principal, en vez
+  del artículo del país. El piloto automático solo usa eventos confirmados.
+- Las **noticias** van con dibujos sobrios (sin sangre, armas ni calaveras; velas y ambulancias en los sucesos).
+
+## [2.3.0] - 2026-11-03
+
+Ideas tomadas de [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) (licencia MIT), rehechas para
+este programa.
+
+### Añadido
+- **Dos planos en las escenas largas**: las escenas de 6 s o más con foto pasan a una segunda imagen (nueva y que
+  también encaje) a mitad de frase, justo al empezar una palabra, con el zoom al revés para que se note el cambio. Solo
+  si hay una segunda imagen buena; no en las escenas con imagen elegida a mano, con dibujo o con vídeo.
+- **Transiciones entre escenas** de un cuarto de segundo (deslizar, fundido, círculo…), alternándose; la última,
+  hacia el cierre, siempre un fundido. El vídeo sigue cuadrando con la voz.
+- **Subtítulos con rebote**: cada bloque nuevo entra con un pequeño salto. Se pueden poner abajo o en el centro.
+- **Vídeo con la tarjeta gráfica** (Intel Quick Sync, NVIDIA o AMD) si funciona en el ordenador; si falla con un
+  vídeo, se repite con el procesador.
+- **Pixabay** como segunda fuente de planos de ambiente, con su clave gratuita (también vale sin Pexels).
+- **Ajustes → Montaje de los Shorts** para activar o quitar cada una de estas cosas.
+
 ## [2.2.0] - 2026-10-29
 
 ### Añadido

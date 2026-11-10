@@ -32,6 +32,7 @@ VOCES = {
     "es": os.getenv("VOZ_ES") or "es-ES-AlvaroNeural",
     "en": os.getenv("VOZ_EN") or "en-US-AndrewNeural",
 }
+VOZ_DE_RESERVA = "es-ES-AlvaroNeural"          # si la voz elegida falla con una frase
 VELOCIDAD = os.getenv("VELOCIDAD") or "+8%"   # algo más rápido: ritmo de vídeo corto
 PAUSA_ENTRE_ESCENAS = 0.25                     # segundos de silencio que el paso 3 pondrá entre escenas
 DURACION_MIN, DURACION_MAX = 28, 55            # aviso si queda fuera: noticias de ~30 s, el resto 40-45 s
@@ -58,6 +59,11 @@ async def sintetizar(texto: str, voz: str, ruta: Path, intentos: int = 3) -> lis
             return palabras
         except Exception as error:  # errores de red del servicio de voz
             if intento == intentos - 1:
+                # Las voces multilingües fallan alguna vez con una frase concreta («No audio was received»):
+                # esa frase la dice la voz española de siempre, mejor que quedarse sin vídeo.
+                if "Multilingual" in voz and voz != VOZ_DE_RESERVA:
+                    print(f"    la voz {voz} no ha podido con una frase: la dice {VOZ_DE_RESERVA}", flush=True)
+                    return await sintetizar(texto, VOZ_DE_RESERVA, ruta, intentos)
                 raise RuntimeError(f"no se pudo generar el audio ({type(error).__name__})") from error
             await asyncio.sleep(2 * (intento + 1))
 

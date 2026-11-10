@@ -41,6 +41,7 @@ import video_largo  # noqa: E402  (vídeos largos explicados con dibujos)
 import asistente  # noqa: E402  (el chat que entiende lo que quieres y lanza el vídeo)
 import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
 import dibujos_short  # noqa: E402  (dibujos animados dentro de los Shorts)
+import piloto  # noqa: E402  (piloto automático: los vídeos del día al encender el ordenador)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -50,7 +51,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "2.2.0"
+VERSION = "3.0.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -369,8 +370,11 @@ def voces() -> list:
         except Exception:
             return []
         _voces = sorted(
-            ({"id": v["ShortName"], "idioma": v["Locale"], "genero": "mujer" if v["Gender"] == "Female" else "hombre"}
-             for v in todas if v["Locale"].startswith(("es-", "en-"))),
+            # Las «Multilingual» son la generación nueva de Microsoft: hablan español (y cualquier idioma) con una
+            # entonación mucho más natural, aunque su nombre sea de otro país.
+            ({"id": v["ShortName"], "idioma": v["Locale"], "genero": "mujer" if v["Gender"] == "Female" else "hombre",
+              "multilingue": "Multilingual" in v["ShortName"]}
+             for v in todas if v["Locale"].startswith(("es-", "en-")) or "Multilingual" in v["ShortName"]),
             key=lambda v: (v["idioma"], v["id"]),
         )
     return _voces
@@ -379,6 +383,71 @@ def voces() -> list:
 # --- Páginas ----------------------------------------------------------------------
 
 @app.route("/")
+def panel():
+    """Inicio: el piloto automático y los vídeos de hoy, de un vistazo."""
+    config = piloto.configuracion()
+    try:
+        hoy = piloto.resumen_hoy()
+    except Exception:  # noqa: BLE001 — que un dato raro no deje la app sin portada
+        hoy = []
+    return render_template("panel.html", auto=config, encendido=config.get("activo") and piloto.arranca_con_windows(),
+                           hoy=hoy, franjas=piloto.FRANJAS, registro=piloto_actualidad.ultimas_lineas(14),
+                           trabajando=piloto.CERROJO.exists(), mensaje=request.args.get("mensaje", ""))
+
+
+@app.post("/piloto")
+def cambiar_piloto():
+    if request.form.get("activo") == "0":
+        piloto.desactivar()
+        return redirect(url_for("panel", mensaje="Piloto apagado: ya no hace ni publica vídeos solo."))
+    error = piloto.activar()
+    return redirect(url_for("panel", mensaje=f"Piloto encendido, con un aviso: {error}" if error else
+                            "Piloto encendido: hará y publicará solo los vídeos de cada día, a su mejor hora."))
+
+
+@app.post("/revisar/<nombre>")
+def revisar_rapido(nombre):
+    """Los tres botones de un vídeo en «revísalo» (Inicio): quitar las frases dudosas, publicarlo tal cual o descartarlo."""
+    datos = leer(nombre)
+    accion, tipo = request.form.get("accion", ""), request.form.get("tipo", "")
+    tipo = tipo if tipo in piloto.FRANJA_DE else "actualidad"
+    titulo = datos.get("titulo", nombre)
+    if accion == "descartar":
+        piloto.descartar(nombre)
+        return redirect(url_for("panel", mensaje=f"«{titulo}» descartado: sigue en Vídeos por si lo quieres borrar."))
+    rehacer = False
+    if accion == "quitar":
+        escenas = paso1_guiones.quitar_dudas(datos.get("escenas", []), datos.get("sin_respaldo", []))
+        if not escenas:
+            return redirect(url_for("ver_guion", nombre=nombre, mensaje="No puedo quitar esas frases sin romper el "
+                                    "vídeo (son el gancho o quedaría demasiado corto): corrígelas aquí a mano."))
+        datos["escenas"] = [{**e, "numero": i} for i, e in enumerate(escenas, start=1)]
+        rehacer = True
+    elif accion != "publicar":
+        abort(400)
+    datos["sin_respaldo"], datos["revisado_a_mano"] = [], accion
+    escribir(nombre, datos)
+
+    def trabajo(t: Trabajo) -> bool:
+        t.resultado = [nombre]
+        if rehacer or not ruta_video(datos):  # sin las frases quitadas: voz y vídeo de nuevo (solo lo que cambia)
+            if t.ejecutar("paso2_audio.py", str(GUIONES / f"{nombre}.json")) == 1:
+                return False
+            if t.ejecutar("paso3_video.py", str(AUDIO / nombre), "--forzar") != 0:
+                return False
+        if not piloto.publicar(tipo, GUIONES / f"{nombre}.json"):
+            t.escribir("No se ha podido programar: míralo en Vídeos.")
+            return False
+        piloto.noticia_publicada(nombre)
+        t.escribir("✔ Programado en YouTube a su mejor hora de hoy (lo ves en Inicio).")
+        despertar_programados()
+        return True
+
+    nuevo = cola.anadir(f"{'Quitar frases dudosas y publicar' if rehacer else 'Publicar'} «{titulo}»", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.route("/crear")
 def inicio():
     return render_template("inicio.html", recientes=todos()[:3], hoy=date.today().isoformat(),
                            herramientas=video_ia.HERRAMIENTAS, estilos=video_ia.NOMBRES_ESTILOS)
@@ -601,6 +670,75 @@ def guardar_piloto():
     return redirect(url_for("ajustes", mensaje=mensaje, _anchor="piloto"))
 
 
+@app.post("/ajustes/piloto-automatico")
+def guardar_piloto_automatico():
+    if request.form.get("activo") == "0":
+        piloto.desactivar()
+        return redirect(url_for("ajustes", mensaje="Piloto automático desactivado: ya no arranca con el ordenador.",
+                                _anchor="piloto-automatico"))
+    dias = request.form.get("limpieza_dias", type=int)
+    piloto.guardar_configuracion({**{t: request.form.get(t) == "1" for t in (*piloto.TIPOS, "actualidad")},
+                                  "limpieza_dias": min(max(dias if dias is not None else 7, 0), 365)})
+    return redirect(url_for("ajustes", mensaje="Guardado: el piloto hará los vídeos marcados.",
+                            _anchor="piloto-automatico"))
+
+
+@app.post("/ajustes/piloto-automatico/ahora")
+def piloto_automatico_ahora():
+    def trabajo(t: Trabajo) -> bool:
+        antes = set(GUIONES.glob("*.json")) if GUIONES.exists() else set()
+        codigo = t.ejecutar("piloto.py", "--ahora")
+        t.resultado = sorted(p.stem for p in set(GUIONES.glob("*.json")) - antes) if GUIONES.exists() else []
+        return codigo == 0
+
+    nuevo = cola.anadir("Piloto: los vídeos de hoy", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.post("/ajustes/estilo")
+def guardar_estilo():
+    estilo = request.form.get("estilo", "dibujos")
+    estilo = estilo if estilo in dibujos_short.ESTILOS else "dibujos"
+    cambios = {"ESTILO_SHORTS": estilo, "DIBUJOS_SHORTS": "0" if estilo == "fotos" else "1"}
+    for variable, campo in (("ESTILO_NOTICIAS", "noticias"), ("ESTILO_FUTBOL", "futbol")):
+        valor = request.form.get(campo, "")
+        cambios[variable] = valor if valor in dibujos_short.ESTILOS else ""  # vacío: como el general
+    guardar_env(cambios)
+    os.environ.update(cambios)
+    return redirect(url_for("ajustes", mensaje=f"Estilo de los Shorts: {dibujos_short.ESTILOS[estilo].lower()}.",
+                            _anchor="dibujos-shorts"))
+
+
+@app.post("/acertijo")
+def crear_acertijo():
+    cantidad = str(min(max(request.form.get("cantidad", type=int) or 1, 1), 5))
+
+    def trabajo(t: Trabajo) -> bool:
+        antes = set(GUIONES.glob("*.json")) if GUIONES.exists() else set()
+        codigo = t.ejecutar("acertijos.py", "--cantidad", cantidad)
+        nuevos = sorted(p.stem for p in set(GUIONES.glob("*.json")) - antes) if GUIONES.exists() else []
+        t.resultado = nuevos
+        if codigo != 0 or not nuevos or t.estado == "cancelada":
+            return codigo == 0
+        return producir(t, nuevos)
+
+    nuevo = cola.anadir(f"Acertijo{'s' if cantidad != '1' else ''} ({cantidad}) · guion, audio y vídeo", trabajo)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.post("/guion/<nombre>/personaje")
+def cambiar_personaje(nombre):
+    datos = leer(nombre)
+    clave = request.form.get("personaje", "")
+    if clave in dibujos.PERSONAJES:
+        datos["personaje"] = clave
+    else:
+        datos.pop("personaje", None)  # automático: el que toque por el tema
+    escribir(nombre, datos)
+    return redirect(url_for("imagenes_guion", nombre=nombre,
+                            mensaje="Muñeco cambiado. Rehaz el vídeo para verlo."))
+
+
 @app.post("/ajustes/piloto/ahora")
 def piloto_ahora():
     def trabajo(t: Trabajo) -> bool:
@@ -618,6 +756,29 @@ def guardar_tavily():
     guardar_env({"TAVILY_API_KEY": request.form.get("clave", "").strip()})
     return redirect(url_for("ajustes", mensaje="Clave de Tavily guardada." if request.form.get("clave", "").strip()
                             else "Clave de Tavily quitada: se usará Bing Noticias.", _anchor="actualidad"))
+
+
+@app.post("/ajustes/pixabay")
+def guardar_pixabay():
+    guardar_env({"PIXABAY_API_KEY": request.form.get("clave", "").strip()})
+    return redirect(url_for("ajustes", mensaje="Clave de Pixabay guardada: más planos de ambiente donde elegir."
+                            if request.form.get("clave", "").strip() else "Clave de Pixabay quitada.", _anchor="pexels"))
+
+
+@app.post("/ajustes/montaje")
+def guardar_montaje():
+    posicion = request.form.get("posicion", "abajo")
+    codificador = request.form.get("codificador", "auto")
+    cambios = {
+        "TRANSICIONES": "1" if request.form.get("transiciones") == "1" else "0",
+        "DOS_PLANOS": "1" if request.form.get("dos_planos") == "1" else "0",
+        "SUBTITULOS_POSICION": posicion if posicion in paso3_video.POSICIONES_SUBTITULOS else "abajo",
+        "VIDEO_CODIFICADOR": codificador if codificador in ("auto", "libx264") else "auto",
+    }
+    guardar_env(cambios)
+    os.environ.update(cambios)
+    return redirect(url_for("ajustes", mensaje="Montaje guardado: se nota en los vídeos que hagas o rehagas.",
+                            _anchor="montaje"))
 
 
 @app.post("/ajustes/pexels")
@@ -833,7 +994,10 @@ def imagenes_guion(nombre):
         escenas.append({"escena": escena, "actual": actual, "a_mano": bool(escena.get("imagen")), "opciones": opciones,
                         "dibujo": dibujo, "clip_dibujo": dibujo and ruta_dibujo(nombre, escena["numero"]).exists()})
     return render_template("imagenes.html", nombre=nombre, datos=datos, escenas=escenas,
-                           dibujos_activos=dibujos_short.activado(),
+                           dibujos_activos=dibujos_short.estilo_de(datos) != "fotos",
+                           personajes=dibujos.PERSONAJES, personaje=dibujos_short.personaje_de(datos),
+                           personaje_a_mano=datos.get("personaje") in dibujos.PERSONAJES,
+                           todo_dibujos=dibujos_short.estilo_de(datos) == "dibujos",
                            miniatura=paso3_video.miniatura_url, total=len(candidatas),
                            mensaje=request.args.get("mensaje", ""))
 
@@ -1552,8 +1716,17 @@ def ajustes():
         asistente_local=os.getenv("ASISTENTE_LOCAL", "1") == "1",
         tavily=bool(os.getenv("TAVILY_API_KEY")),
         pexels=bool(os.getenv("PEXELS_API_KEY")),
+        pixabay=bool(os.getenv("PIXABAY_API_KEY")),
+        montaje={"transiciones": paso3_video.transiciones_activadas(), "dos_planos": paso3_video.dos_planos_activados(),
+                 "posicion": paso3_video.posicion_subtitulos(),
+                 "codificador": "libx264" if os.getenv("VIDEO_CODIFICADOR") == "libx264" else "auto"},
         autoprogramar=os.getenv("AUTO_PROGRAMAR", "1") == "1",
         dibujos_shorts=dibujos_short.activado(),
+        estilo_shorts=dibujos_short.estilo(), estilos=dibujos_short.ESTILOS, personajes=dibujos.PERSONAJES,
+        estilo_noticias=os.getenv("ESTILO_NOTICIAS", ""), estilo_futbol=os.getenv("ESTILO_FUTBOL", ""),
+        limpieza_dias=piloto.configuracion().get("limpieza_dias", 7),
+        auto=piloto.configuracion(), auto_arranca=piloto.arranca_con_windows(), auto_hoy=piloto.hechos_hoy(),
+        auto_tipos=piloto.TIPOS,
         piloto=piloto_actualidad.configuracion(),
         piloto_tarea=piloto_actualidad.estado_tarea(),
         piloto_contados=list(reversed(piloto_actualidad.contados(2))),

@@ -9,6 +9,18 @@
   <div class="aviso">Hay {{ cola.activos() | length }} tarea(s) en marcha (<a href="{{ url_for('ver_tarea') }}">ver</a>). Lo que crees ahora se pondrá en la cola y empezará cuando terminen.</div>
 {% endif %}
 
+<section class="tarjeta">
+  <h2>🧩 Acertijo con cuenta atrás</h2>
+  <p>El detective plantea un acertijo, hay 5 segundos para pensar (y comentar) y después dice la solución. Todo con
+    dibujos. Sale directo con su voz y su vídeo en Mis vídeos.</p>
+  <form method="post" action="{{ url_for('crear_acertijo') }}" class="en-linea">
+    <select name="cantidad" class="corto" aria-label="Cuántos acertijos">
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+    </select>
+    <button type="submit">Crear acertijo</button>
+  </form>
+</section>
+
 <form method="post" action="{{ url_for('crear') }}">
   <section class="tarjeta paso-crear">
     <h2><span class="numero">1</span>¿Qué tipo de vídeo?</h2>

@@ -18,17 +18,26 @@
     <div>
       <label for="VOZ_ES">Voz para los vídeos en español</label>
       <select id="VOZ_ES" name="VOZ_ES">
-        {% for v in voces if v.idioma.startswith('es-') %}
-          <option value="{{ v.id }}" {{ 'selected' if v.id == voz_es }}>{{ v.id }} · {{ v.genero }}</option>
-        {% endfor %}
+        <optgroup label="Más naturales (multilingües)">
+          {% for v in voces if v.multilingue %}
+            <option value="{{ v.id }}" {{ 'selected' if v.id == voz_es }}>{{ v.id.split('-')[2].replace('MultilingualNeural', '') }} · {{ v.genero }} · multilingüe</option>
+          {% endfor %}
+        </optgroup>
+        <optgroup label="Español de siempre">
+          {% for v in voces if v.idioma.startswith('es-') and not v.multilingue %}
+            <option value="{{ v.id }}" {{ 'selected' if v.id == voz_es }}>{{ v.id }} · {{ v.genero }}</option>
+          {% endfor %}
+        </optgroup>
       </select>
+      <p class="ayuda-campo">Las multilingües son la generación nueva: suenan menos a robot (respiran, cambian el tono
+        en las preguntas). Alguna tiene un ligero acento: escúchalas antes de elegir.</p>
       <button class="secundario" type="submit" formaction="{{ url_for('muestra_voz') }}" name="voz" value=""
               onclick="this.value = document.getElementById('VOZ_ES').value" style="margin-top: 8px;">Escuchar</button>
     </div>
     <div>
       <label for="VOZ_EN">Voz para los vídeos en inglés</label>
       <select id="VOZ_EN" name="VOZ_EN">
-        {% for v in voces if v.idioma.startswith('en-') %}
+        {% for v in voces if v.idioma.startswith('en-') or v.multilingue %}
           <option value="{{ v.id }}" {{ 'selected' if v.id == voz_en }}>{{ v.id }} · {{ v.genero }}</option>
         {% endfor %}
       </select>
@@ -88,19 +97,78 @@
   </form>
 </div>
 
+<div class="tarjeta" id="piloto-automatico">
+  <h2>Qué hace el piloto</h2>
+  <p>El piloto se enciende y se apaga en <a href="{{ url_for('panel') }}">Inicio</a>. Aquí eliges qué vídeos hace cada
+    día; cada uno sale a su mejor hora.</p>
+  <form method="post" action="{{ url_for('guardar_piloto_automatico') }}">
+    <label class="casilla"><input type="checkbox" name="efemeride" value="1" {{ 'checked' if auto.efemeride }}>
+      <span><strong>Efeméride de hoy</strong> (08:30), con dibujos: algo que pasó tal día como hoy.</span></label>
+    <label class="casilla"><input type="checkbox" name="actualidad" value="1" {{ 'checked' if auto.actualidad }}>
+      <span><strong>2 noticias</strong> de España o geopolítica (14:00 y 21:30), contrastadas en 3 medios.</span></label>
+    <label class="casilla"><input type="checkbox" name="acertijo" value="1" {{ 'checked' if auto.acertijo }}>
+      <span><strong>Acertijo</strong> con cuenta atrás (17:30).</span></label>
+    <label class="casilla"><input type="checkbox" name="futbol" value="1" {{ 'checked' if auto.futbol }}>
+      <span><strong>Fútbol</strong> (19:30): la noticia de fútbol del día, con dibujos.</span></label>
+    <p class="ayuda-campo">Si el ordenador se enciende tarde, cada vídeo va a la siguiente hora buena del día. Un vídeo
+      con datos solo se publica si el verificador no marca nada; si marca algo, se queda en Vídeos y te avisa.</p>
+    <label for="limpieza">Liberar espacio: borrar del ordenador los vídeos con más de
+      <input type="number" id="limpieza" name="limpieza_dias" value="{{ limpieza_dias }}" min="0" max="365" class="hora-corta"> días
+      <span class="ayuda-campo">(0 = no borrar nunca)</span></label>
+    <p class="ayuda-campo">Solo se borran del ordenador (en YouTube siguen): el vídeo, la voz y los archivos de montaje de
+      los Shorts ya publicados, y las imágenes descargadas que no se usan. Los guiones y los vídeos largos no se tocan.</p>
+    <div class="acciones"><button class="secundario" type="submit">Guardar</button></div>
+  </form>
+</div>
+
 <div class="tarjeta" id="dibujos-shorts">
-  <h2>Dibujos en los Shorts</h2>
-  {% if dibujos_shorts %}
-    <p><span class="etiqueta ok">activado</span> En 2 o 3 escenas de cada Short, a mitad de la frase, la imagen pasa a un
-      dibujo animado (un mapa con el lugar, una cifra enorme, una fecha, causas y consecuencias…). Los decide la IA solo
-      con lo que dice el texto. En la página de imágenes de cada vídeo ves cada dibujo y puedes quitarlo.</p>
-  {% else %}
-    <p><span class="etiqueta">desactivado</span> Los Shorts van solo con imágenes y vídeos de archivo.</p>
-  {% endif %}
-  <p class="ayuda-campo">Se nota en los vídeos que se hagan (o rehagan) a partir de ahora. Los vídeos largos siempre van con dibujos.</p>
-  <form method="post" action="{{ url_for('guardar_dibujos_shorts') }}">
-    <input type="hidden" name="activo" value="{{ '0' if dibujos_shorts else '1' }}">
-    <button class="{{ 'secundario' if dibujos_shorts else '' }}" type="submit">{{ 'Desactivar' if dibujos_shorts else 'Activar' }}</button>
+  <h2>Estilo de los Shorts</h2>
+  <p>Cómo se ilustran los vídeos que se hagan (o rehagan) a partir de ahora. Los acertijos van siempre con dibujos.</p>
+  <form method="post" action="{{ url_for('guardar_estilo') }}">
+    <label for="estilo">Todos los vídeos</label>
+    <select id="estilo" name="estilo" class="medio">
+      {% for clave, nombre in estilos.items() %}
+        <option value="{{ clave }}" {{ 'selected' if clave == estilo_shorts }}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+    {% for campo, titulo, actual in [('noticias', 'Noticias', estilo_noticias), ('futbol', 'Fútbol', estilo_futbol)] %}
+      <label for="estilo-{{ campo }}">{{ titulo }}</label>
+      <select id="estilo-{{ campo }}" name="{{ campo }}" class="medio">
+        <option value="">Como todos los vídeos</option>
+        {% for clave, nombre in estilos.items() %}
+          <option value="{{ clave }}" {{ 'selected' if clave == actual }}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
+    {% endfor %}
+    <p class="ayuda-campo">En fútbol, «fotos y dibujos» usa fotos de archivo libres, que de fútbol actual hay pocas: a veces
+      sale un jugador o un partido que no es el de la noticia.</p>
+    <div class="acciones"><button class="secundario" type="submit">Guardar</button></div>
+  </form>
+  <p class="ayuda-campo">Con «todo dibujos», cada escena es un dibujo animado (mapa, cifra, fecha, comparación…) y lo
+    cuenta uno de los 10 muñecos del canal, según el tema:
+    {% for p in personajes.values() %}{{ p.nombre }} ({{ p.para }}){{ ', ' if not loop.last else '.' }}{% endfor %}
+    Se cambia en la página de imágenes de cada vídeo.</p>
+</div>
+
+<div class="tarjeta" id="montaje">
+  <h2>Montaje de los Shorts</h2>
+  <form method="post" action="{{ url_for('guardar_montaje') }}">
+    <label class="casilla"><input type="checkbox" name="transiciones" value="1" {{ 'checked' if montaje.transiciones }}>
+      Transiciones cortas entre escenas (deslizar, fundido, círculo…; un cuarto de segundo)</label>
+    <label class="casilla"><input type="checkbox" name="dos_planos" value="1" {{ 'checked' if montaje.dos_planos }}>
+      Dos imágenes en las escenas largas (de 6 s o más): a mitad de frase pasa a otra que también encaje</label>
+    <label for="posicion">Subtítulos</label>
+    <select id="posicion" name="posicion" class="medio">
+      <option value="abajo" {{ 'selected' if montaje.posicion == 'abajo' }}>Abajo, debajo de la imagen</option>
+      <option value="centro" {{ 'selected' if montaje.posicion == 'centro' }}>En el centro, encima de la imagen</option>
+    </select>
+    <label for="codificador">Codificar el vídeo con</label>
+    <select id="codificador" name="codificador" class="medio">
+      <option value="auto" {{ 'selected' if montaje.codificador == 'auto' }}>La tarjeta gráfica si se puede (más rápido)</option>
+      <option value="libx264" {{ 'selected' if montaje.codificador == 'libx264' }}>Solo el procesador (si la gráfica da problemas)</option>
+    </select>
+    <p class="ayuda-campo">Los subtítulos entran con un pequeño rebote. Se nota en los vídeos que hagas o rehagas a partir de ahora.</p>
+    <div class="acciones"><button class="secundario" type="submit">Guardar</button></div>
   </form>
 </div>
 
@@ -120,48 +188,6 @@
   </form>
 </div>
 
-<div class="tarjeta" id="piloto">
-  <h2>Piloto de actualidad</h2>
-  {% if piloto.activo and piloto_tarea.existe %}
-    <p><span class="etiqueta ok">activado</span> A las {{ piloto.horas | join(', ') }} busca la noticia de la que más se
-      habla, hace el vídeo y lo publica al momento (como mucho {{ piloto.max_dia }} al día).
-      {% if piloto_tarea.proxima %}Próxima vez: {{ piloto_tarea.proxima }}.{% endif %}</p>
-  {% else %}
-    <p><span class="etiqueta">desactivado</span> Las noticias solo se hacen cuando tú las buscas desde Crear.</p>
-  {% endif %}
-  <p class="ayuda-campo">Salvaguarda: solo publica si la noticia la cuentan al menos {{ piloto.min_medios }} medios
-    reconocidos y el verificador no encuentra ninguna frase sin respaldo en los artículos. Si algo no cuadra, el vídeo se
-    queda en Mis vídeos sin revisar y te llega un aviso de Windows. No hace deportes, famosos, encuestas ni crímenes con
-    particulares señalados, y el día antes y el día de unas elecciones ({{ piloto.elecciones | join(', ') }}) no hace política.
-    Las horas, las elecciones y el mínimo de medios se cambian en <code>piloto_actualidad.json</code>.</p>
-  <form method="post" action="{{ url_for('guardar_piloto') }}" class="programar-uno" style="max-width: 560px;">
-    {% if piloto.activo and piloto_tarea.existe %}
-      <input type="hidden" name="activo" value="0">
-      <button class="secundario" type="submit">Desactivar</button>
-    {% else %}
-      <label>Vídeos al día, como mucho
-        <input type="number" name="max_dia" min="1" max="5" value="{{ piloto.max_dia }}" style="width: 5em;"></label>
-      <button type="submit">Activar</button>
-    {% endif %}
-  </form>
-  <form method="post" action="{{ url_for('piloto_ahora') }}" style="margin-top: .6rem;">
-    <button class="secundario" type="submit">Buscar la noticia del día ahora</button>
-  </form>
-  {% if piloto_contados %}
-    <p style="margin-top: 1rem;"><strong>Últimas noticias</strong></p>
-    <ul>
-    {% for c in piloto_contados %}
-      <li>{{ c.fecha }} {{ c.hora }} · {{ c.titular }} ·
-        {% if c.publicado %}<span class="etiqueta ok">publicada</span>{% else %}<span class="etiqueta">a revisar</span>{% endif %}
-        <a href="{{ url_for('ver_guion', nombre=c.nombre) }}">ver</a></li>
-    {% endfor %}
-    </ul>
-  {% endif %}
-  {% if piloto_registro %}
-    <details><summary>Registro</summary><pre class="consola">{{ piloto_registro | join('\n') }}</pre></details>
-  {% endif %}
-</div>
-
 <div class="tarjeta" id="actualidad">
   <h2>Noticias de actualidad</h2>
   {% if tavily %}
@@ -179,8 +205,8 @@
 </div>
 
 <div class="tarjeta" id="pexels">
-  <h2>Planos de ambiente (Pexels)</h2>
-  {% if pexels %}
+  <h2>Planos de ambiente (Pexels y Pixabay)</h2>
+  {% if pexels or pixabay %}
     <p><span class="etiqueta ok">Pexels conectado</span> Cuando una escena no tiene una imagen que encaje bien, puede
       llevar un plano de ambiente en movimiento (mar, fuego, humo, mapas antiguos, ruinas…), como mucho 2 por vídeo.</p>
   {% else %}
@@ -192,6 +218,14 @@
     no pasa nada, los clips de vídeo se siguen buscando en Wikimedia Commons.</p>
   <form method="post" action="{{ url_for('guardar_pexels') }}" class="programar-uno" style="max-width: 560px;">
     <input type="password" name="clave" placeholder="{{ 'Clave guardada (escribe otra para cambiarla, o vacío para quitarla)' if pexels else 'Clave de Pexels' }}" autocomplete="off" style="flex: 1;">
+    <button class="secundario" type="submit">Guardar</button>
+  </form>
+  <p class="ayuda-campo" style="margin-top: 14px;">{% if pixabay %}<span class="etiqueta ok">Pixabay conectado</span>{% endif %}
+    También puedes añadir (o usar en vez de Pexels) una clave gratuita de
+    <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener">Pixabay</a> (crea una cuenta y la clave sale en esa
+    página): con las dos hay más planos donde elegir.</p>
+  <form method="post" action="{{ url_for('guardar_pixabay') }}" class="programar-uno" style="max-width: 560px;">
+    <input type="password" name="clave" placeholder="{{ 'Clave guardada (escribe otra para cambiarla, o vacío para quitarla)' if pixabay else 'Clave de Pixabay' }}" autocomplete="off" style="flex: 1;">
     <button class="secundario" type="submit">Guardar</button>
   </form>
 </div>

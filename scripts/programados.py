@@ -655,6 +655,17 @@ def _revisar() -> int:
     return subidos
 
 
+def _red_bloquea_instagram(error: Exception) -> bool:
+    """¿El fallo es de la red y no de Instagram? (un filtro que corta o suplanta la conexión con Facebook)"""
+    try:
+        import requests
+        if isinstance(error, (requests.exceptions.SSLError, requests.exceptions.ConnectionError)):
+            return True
+    except ImportError:
+        pass
+    return any(pista in str(error) for pista in ("CERTIFICATE_VERIFY_FAILED", "SSLError", "Max retries exceeded"))
+
+
 def _publicar_en_instagram() -> None:
     """Publica como Reel los vídeos de la cola cuya hora ya ha llegado (Instagram no deja programar)."""
     config = instagram_activo()
@@ -669,6 +680,22 @@ def _publicar_en_instagram() -> None:
         try:
             resultado = instagram.publicar_guion(v["nombre"])
         except Exception as error:  # noqa: BLE001 — se apunta y se reintenta en la siguiente revisión
+            if _red_bloquea_instagram(error):
+                # No es un fallo de Instagram: esta red (la del instituto o el trabajo, p. ej.) no deja llegar a
+                # Facebook. No gasta intentos: se vuelve a probar cada media hora, hasta dos días, por si cambias de red.
+                caducado = datetime.now() - _hora(v["hora"]) > timedelta(hours=48)
+                ig.update(estado="error", mensaje="Esta red bloquea Instagram y Facebook: se publicará cuando el "
+                          "ordenador esté en otra red (la de casa o el móvil).",
+                          intentos=INTENTOS_INSTAGRAM if caducado else ig.get("intentos", 0),
+                          reintentar=(datetime.now() + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M"))
+                _actualizar(v["nombre"], instagram=ig)
+                _log("  esta red bloquea Instagram/Facebook: se reintenta en 30 min (sin gastar intentos)")
+                if not ig.get("avisado"):
+                    ig["avisado"] = True
+                    _actualizar(v["nombre"], instagram=ig)
+                    _avisar("Instagram bloqueado en esta red",
+                            "Los Reels se publicarán cuando el ordenador se conecte a otra red.")
+                continue
             intentos = ig.get("intentos", 0) + 1
             espera = ESPERAS_INSTAGRAM_MIN[min(intentos, len(ESPERAS_INSTAGRAM_MIN)) - 1]
             ig.update(estado="error", intentos=intentos, mensaje=str(error)[:200],

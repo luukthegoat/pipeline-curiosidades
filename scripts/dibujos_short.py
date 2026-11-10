@@ -25,18 +25,73 @@ ABAJO = 880          # por debajo de esta altura van los subtítulos: ahí no se
 FOTO_MINIMA = 1.2    # s de foto antes del dibujo (en la primera escena, hasta que acaba el gancho)
 DIBUJO_MINIMO = 1.8  # s de dibujo como mínimo; si no caben, la escena se queda solo con la foto
 POP = (0.35, 0.75, 1.12, 1.04, 1.0)  # escala de cada elemento nuevo en sus primeros fotogramas
-VERSION = "1"        # súbela si cambia el aspecto de los dibujos: se rehacen los clips
-TIPOS = ("mapa", "cifra", "fecha", "iconos", "comparacion", "linea")
+VERSION = "2"        # súbela si cambia el aspecto de los dibujos: se rehacen los clips
+TIPOS = ("mapa", "cifra", "fecha", "iconos", "comparacion", "linea", "narrador", "acertijo", "cuenta", "solucion")
 R, T = D.COLORES["rojo"], D.TINTA
+ESTILOS = {"dibujos": "Todo con dibujos y muñecos", "mixto": "Fotos y 2-3 dibujos", "fotos": "Solo fotos y vídeos"}
+
+
+def estilo() -> str:
+    """Cómo se ilustran los Shorts (Ajustes): «dibujos» (todas las escenas dibujadas), «mixto» o «fotos»."""
+    if os.getenv("DIBUJOS_SHORTS", "1") != "1":
+        return "fotos"
+    valor = os.getenv("ESTILO_SHORTS", "dibujos")
+    return valor if valor in ESTILOS else "dibujos"
 
 
 def activado() -> bool:
-    return os.getenv("DIBUJOS_SHORTS", "1") == "1"
+    return estilo() != "fotos"
+
+
+def estilo_de(datos: dict) -> str:
+    """El estilo de un vídeo: los acertijos y los que lo piden en su guion van siempre con dibujos."""
+    if datos.get("acertijo"):
+        return "dibujos"
+    if datos.get("estilo") in ESTILOS:
+        return datos["estilo"]
+    if datos.get("futbol"):
+        return estilo_de_tipo("ESTILO_FUTBOL")
+    if datos.get("actualidad"):
+        return estilo_de_tipo("ESTILO_NOTICIAS")  # con dibujos, sobrios (lo manda el PROMPT: nada de sangre ni armas)
+    return estilo()
+
+
+def estilo_de_tipo(variable: str) -> str:
+    """El estilo de las noticias o del fútbol (Ajustes): el suyo si se ha elegido; si no, el general."""
+    valor = os.getenv(variable, "")
+    return valor if valor in ESTILOS else estilo()
+
+
+# Palabras del tema → muñeco que lo cuenta (el primero que encaje; se cambia en la página de imágenes).
+REGLAS_PERSONAJE = (
+    ("futbolista", r"f[uú]tbol|gol\b|goles|liga|mundial|champions|bal[oó]n|selecci[oó]n|madrid cf|bar[cç]a|estadio"),
+    ("soldado", r"guerra|batalla|ej[eé]rcito|soldado|invasi[oó]n|golpe de estado|bombardeo|tropas|militar"),
+    ("rey", r"\brey\b|reina|reyes|imperio|emperador|corona|dinast|monarqu"),
+    ("cientifica", r"cient[ií]fic|invent|descubrimiento cient|vacuna|experimento|f[ií]sica|qu[ií]mica|medicina|nasa|"
+                   r"espacio|luna|cohete|sat[eé]lite"),
+    ("exploradora", r"explora|expedici[oó]n|viaje|descubri|conquista|naveg|barco|oc[eé]ano|vuelta al mundo"),
+)
+
+
+def personaje_de(datos: dict) -> str:
+    """Qué muñeco cuenta el vídeo: el elegido a mano o, si no, el que toca por el tipo y el tema."""
+    if datos.get("personaje") in D.PERSONAJES:
+        return datos["personaje"]
+    if datos.get("acertijo"):
+        return "detective"
+    texto = " ".join([str(datos.get("titulo", "")), str(datos.get("evento", "")),
+                      *(e.get("narracion", "") for e in datos.get("escenas", [])[:3])]).lower()
+    for clave, patron in REGLAS_PERSONAJE:
+        if re.search(rf"\b(?:{patron})", texto):  # al principio de palabra: «liga» no es «obliga»
+            return clave
+    if datos.get("actualidad"):
+        return "reportera"
+    return "profesor" if datos.get("anio_evento") or datos.get("serie") else "bonesy"
 
 
 # --- Qué dibujar (IA) ------------------------------------------------------------------------------
 
-PROMPT = """Eres el montador de un canal de Shorts de historia y actualidad. Cada escena del vídeo tiene su foto; en
+_ELEGIR = """Eres el montador de un canal de Shorts de historia y actualidad. Cada escena del vídeo tiene su foto; en
 algunas, a mitad de la frase, la imagen pasa a un DIBUJO animado que explica mejor lo que se dice (los dibujos
 retienen mucho: el espectador entiende de un vistazo dónde, cuánto, cuándo o por qué).
 
@@ -50,14 +105,16 @@ Elige {cuantas} escenas (de las que te paso) donde un dibujo aporte más que una
 Si el texto nombra lugares (ciudades, regiones, países), uno de los dibujos TIENE que ser un mapa de esa escena: es lo
 que mejor funciona. Mejor no en la escena 1 (allí la foto engancha), salvo un mapa del lugar. Nunca dos dibujos del
 mismo tipo. «De 18 000 a menos de 5 000» o antes/después → "comparacion", no "iconos".
+- "desde": una palabra EXACTA del texto de la escena a partir de la cual se ve el dibujo (no la primera: antes se ve
+  la foto). Suele ser donde empieza lo que el dibujo enseña (el lugar, la cifra…).
+"""
 
+_REGLAS = """
 Reglas:
 - SOLO datos que dice el texto de la escena: no inventes cifras, fechas, lugares ni nombres.
 - Emojis que encajen con el tema, la época y el país: soldados españoles o de cualquier guerra → 🪖 (nunca 💂, que es
   la guardia británica); cada elemento con un emoji DISTINTO.
 - Textos en palabras normales, sin símbolos raros («menos de 5000», no «<5000»).
-- "desde": una palabra EXACTA del texto de la escena a partir de la cual se ve el dibujo (no la primera: antes se ve
-  la foto). Suele ser donde empieza lo que el dibujo enseña (el lugar, la cifra…).
 - Textos del dibujo cortísimos (2-5 palabras). Emojis estándar de Twemoji (🚄 🏛️ 🗳️ ⚔️ 👑 💰 🔥 🕯️ 🚑 📜 🌍 ⚠️ ❌ …), nunca texto.
 - Sucesos con víctimas: tono sobrio (🕯️, 🚑), nunca sangre, armas apuntando ni calaveras.
 
@@ -73,24 +130,56 @@ Formatos de "visual":
 - {{"tipo": "comparacion", "izquierda": {{"titulo": "...", "color": "azul", "iconos": ["emoji"], "puntos": ["2-4 palabras"]}},
    "derecha": {{"titulo": "...", "color": "rojo", "iconos": ["emoji"], "puntos": ["..."]}}}}  (1-2 puntos por lado)
 - {{"tipo": "linea", "hitos": [{{"fecha": "1931", "texto": "2-4 palabras", "icono": "emoji"}}]}}  (2-4 hitos)
+"""
 
-Responde SOLO con JSON: {{"dibujos": [{{"escena": 2, "desde": "palabra", "visual": {{...}}}}]}}"""
+PROMPT = (_ELEGIR + _REGLAS
+          + '\nResponde SOLO con JSON: {{"dibujos": [{{"escena": 2, "desde": "palabra", "visual": {{...}}}}]}}')
 
 
 def _cuantas(escenas: int) -> str:
     return "1" if escenas <= 2 else ("2" if escenas <= 5 else "3")
 
 
+# En los vídeos hechos enteros con dibujos, cada escena lleva el suyo y el muñeco del canal lo va contando.
+PROMPT_TODO = ("""Eres el montador de un canal de Shorts de historia, fútbol y actualidad. El vídeo se hace
+ENTERO con dibujos animados: TODAS las escenas llevan un dibujo (ninguna foto), y un muñeco narrador lo va contando.
+
+Para CADA escena elige el dibujo que mejor enseñe lo que dice:
+- lugares, rutas, fronteras o avances → "mapa"
+- una cifra importante → "cifra"
+- una fecha clave → "fecha"
+- causas y consecuencias, pasos o 2-3 ideas → "iconos"
+- antes/después o dos bandos → "comparacion"
+- varias fechas seguidas → "linea"
+- lo demás (el gancho, una anécdota, la pregunta final) → "narrador": el muñeco dice una frase corta en un bocadillo
+Varía: nunca el mismo tipo dos escenas seguidas, y como mucho la mitad de las escenas con "narrador". Si el texto
+nombra lugares, al menos una escena es un mapa.
+""" + _REGLAS + """- {{"tipo": "narrador", "bocadillo": "frase corta que dice el muñeco (3-8 palabras, con gancho)",
+   "pose": "explica|senala|sorpresa|piensa|saluda", "iconos": ["1-2 emojis de lo que cuenta"]}}
+
+Responde SOLO con JSON, con un dibujo por escena: {{"dibujos": [{{"escena": 1, "visual": {{...}}}}]}}""")
+
+
 def planificar(datos: dict, trabajo: Path, huella) -> dict:
-    """{número de escena: {"desde": palabra, "visual": {...}}}; {} si no hay IA o no está activado."""
-    if not activado() or datos.get("video_ia"):
+    """{número de escena: {"desde": palabra, "visual": {...}}}; {} si no hay IA o no está activado.
+
+    Las escenas que ya traen su dibujo en el guion (los acertijos) lo usan tal cual, sin preguntar a la IA."""
+    if datos.get("video_ia"):
         return {}
+    propios = {e["numero"]: {"desde": "", "visual": v, "todo": True} for e in datos.get("escenas", [])
+               if (v := validar(e.get("dibujo")))}
+    if len(propios) == len(datos.get("escenas", [])) and propios:
+        return propios
+    if estilo_de(datos) == "fotos":
+        return propios
+    todo = estilo_de(datos) == "dibujos"
     escenas = [{"escena": e["numero"], "texto": e["narracion"]} for e in datos.get("escenas", [])]
     if not escenas:
         return {}
     pedido = json.dumps({"titulo": datos.get("titulo", ""), "escenas": escenas}, ensure_ascii=False)
     guardado = trabajo / "dibujos_ia.json"
-    firma = huella(VERSION, PROMPT, pedido)  # si cambian las instrucciones, se vuelve a preguntar
+    instrucciones = PROMPT_TODO if todo else PROMPT
+    firma = huella(VERSION, instrucciones, pedido)  # si cambian las instrucciones, se vuelve a preguntar
     respuesta = None
     if guardado.exists():
         anterior = json.loads(guardado.read_text(encoding="utf-8"))
@@ -102,16 +191,21 @@ def planificar(datos: dict, trabajo: Path, huella) -> dict:
             if not api_key:
                 raise RuntimeError("sin GROQ_API_KEY")
             texto = paso1_guiones.llamar_groq(api_key, os.getenv("MODELO") or paso1_guiones.MODELO_POR_DEFECTO,
-                                              PROMPT.format(cuantas=_cuantas(len(escenas))), pedido)
+                                              instrucciones.format(cuantas=_cuantas(len(escenas))), pedido)
             respuesta = json.loads(re.sub(r"^```(?:json)?|```$", "", texto.strip())).get("dibujos", [])
-        except Exception as error:  # noqa: BLE001 — sin dibujos el vídeo sale igual, solo con fotos
-            print(f"  aviso: no se han podido planificar los dibujos ({type(error).__name__}); van solo fotos")
-            return {}
-        guardado.parent.mkdir(parents=True, exist_ok=True)
-        guardado.write_text(json.dumps({"firma": firma, "respuesta": respuesta}, ensure_ascii=False, indent=2),
-                            encoding="utf-8")
+        except Exception as error:  # noqa: BLE001 — sin IA el vídeo sale igual
+            if not todo:
+                print(f"  aviso: no se han podido planificar los dibujos ({type(error).__name__}); van solo fotos")
+                return propios
+            # Vídeo de dibujos: el muñeco cuenta todas las escenas (no se guarda: la próxima vez se vuelve a pedir)
+            print(f"  aviso: la IA no ha podido elegir los dibujos ({type(error).__name__}): lo cuenta todo el muñeco")
+            respuesta = []
+        else:
+            guardado.parent.mkdir(parents=True, exist_ok=True)
+            guardado.write_text(json.dumps({"firma": firma, "respuesta": respuesta}, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
     numeros = {e["escena"] for e in escenas}
-    plan = {}
+    plan = dict(propios)
     for item in respuesta if isinstance(respuesta, list) else []:
         try:
             numero = int(item.get("escena"))
@@ -119,7 +213,13 @@ def planificar(datos: dict, trabajo: Path, huella) -> dict:
             continue
         visual = validar(item.get("visual"))
         if numero in numeros and numero not in plan and visual:
-            plan[numero] = {"desde": str(item.get("desde") or ""), "visual": visual}
+            plan[numero] = {"desde": str(item.get("desde") or ""), "visual": visual, "todo": todo}
+    if todo:  # ninguna escena se queda sin dibujo: a las que falten, el muñeco con las primeras palabras
+        for e in datos.get("escenas", []):
+            if e["numero"] not in plan:
+                frase = " ".join(e["narracion"].split()[:6]).rstrip(".,;:") + "…"
+                plan[e["numero"]] = {"desde": "", "todo": True,
+                                     "visual": {"tipo": "narrador", "bocadillo": frase, "pose": "explica", "iconos": []}}
     return plan
 
 
@@ -149,6 +249,23 @@ def validar(visual) -> dict:
     tipo = D.normalizar(str(visual.get("tipo") or "")).replace(" ", "")
     if tipo not in TIPOS:
         return {}
+    if tipo == "narrador":
+        pose = D.normalizar(str(visual.get("pose") or "explica"))
+        return {"tipo": tipo, "bocadillo": _corto(visual.get("bocadillo") or visual.get("texto"), 70),
+                "pose": pose if pose in D.POSES else "explica", "iconos": D.iconos_validos(visual.get("iconos"))[:2]}
+    if tipo == "acertijo":  # el enunciado en una pizarra, con el muñeco pensando
+        texto = _corto(visual.get("texto"), 260)
+        return {"tipo": tipo, "texto": texto, "titulo": _corto(visual.get("titulo") or "Acertijo", 24)} if texto else {}
+    if tipo == "cuenta":  # cuenta atrás mientras el espectador piensa
+        try:
+            desde = min(max(int(visual.get("desde") or 5), 3), 10)
+        except (TypeError, ValueError):
+            desde = 5
+        return {"tipo": tipo, "desde": desde, "texto": _corto(visual.get("texto"), 260)}
+    if tipo == "solucion":
+        texto = _corto(visual.get("texto"), 60)
+        icono = visual.get("icono") if D.iconos_validos([visual.get("icono")]) else ""
+        return {"tipo": tipo, "texto": texto, "explicacion": _corto(visual.get("explicacion"), 110), "icono": icono} if texto else {}
     if tipo == "mapa":
         zona = D.normalizar(str(visual.get("zona") or "espana")).replace(" ", "")
         zona = zona if zona in D.ZONAS else "espana"
@@ -202,7 +319,8 @@ def validar(visual) -> dict:
         lados = []
         for clave in ("izquierda", "derecha"):
             lado = visual.get(clave) if isinstance(visual.get(clave), dict) else {}
-            lados.append({"titulo": _corto(lado.get("titulo"), 26),  # la letra se ajusta al ancho "color": lado.get("color") or "",
+            lados.append({"titulo": _corto(lado.get("titulo"), 26),  # la letra se ajusta al ancho
+                          "color": lado.get("color") or "",
                           "iconos": D.iconos_validos(lado.get("iconos"))[:2],
                           "puntos": [_corto(p, 30) for p in (lado.get("puntos") or [])[:2]]})
         if not all(l["titulo"] for l in lados):
@@ -216,12 +334,62 @@ def validar(visual) -> dict:
 
 # --- Cómo se dibuja (lienzo 1080×1036) ------------------------------------------------------------
 
-def escena(visual: dict):
+REEMPLAZA = "\x00reemplaza"  # clave de un paso que sustituye al anterior en vez de sumarse (la cuenta atrás)
+
+
+def _pizarra(texto: str, y0: int, y1: int, tam_max: int = 62) -> str:
+    """El enunciado en una tarjeta blanca entre y0 e y1, con la letra más grande que quepa."""
+    alto = y1 - y0 - 50
+    tam = next((t for t in range(tam_max, 30, -4) if D.lineas_de(texto, t, 900) * t * 1.2 <= alto), 32)
+    return (f'<g filter="url(#mano)"><rect x="40" y="{y0}" width="1000" height="{y1 - y0}" rx="28" fill="white" '
+            f'stroke="{T}" stroke-width="6"/></g>'
+            + D.texto(540, (y0 + y1) / 2 + 6, texto, tam, 900, interlineado=1.2, max_lineas=9, centrar_vertical=True))
+
+
+def escena(visual: dict, personaje: str = None):
     """(capas base, [(capa, centro del «pop» o None, clave)]): la base se ve desde el principio y cada paso se suma
-    cuando la voz dice su clave."""
+    cuando la voz dice su clave.
+
+    `personaje`: el muñeco del vídeo (en los vídeos hechos enteros con dibujos): cuenta las escenas «narrador» y se
+    asoma en una esquina en los mapas, las cifras y las fechas."""
     tipo = visual["tipo"]
     base, pasos = [], []
-    if tipo == "mapa":
+    quien = personaje or "bonesy"
+    if tipo == "narrador":
+        base.append(D.personaje(quien, 270, 1005, 600, visual.get("pose") or "explica"))
+        if visual.get("bocadillo"):
+            pasos.append((D.bocadillo(60, 50, 960, visual["bocadillo"], (330, 440), 64), (540, 180), visual["bocadillo"]))
+        iconos = visual.get("iconos") or []
+        if iconos:
+            xs = (790,) if len(iconos) == 1 else (680, 920)
+            tam = 290 if len(iconos) == 1 else 220
+            pasos.append(("".join(D.icono(e, x, 690, tam) for x, e in zip(xs, iconos)), (800, 690), ""))
+    elif tipo == "acertijo":
+        base += [D.etiqueta(540, 70, visual.get("titulo") or "Acertijo", 58, fondo="#ffd23f"),
+                 _pizarra(visual["texto"], 130, 650), D.personaje(quien, 190, 1015, 350, "piensa")]
+        pasos.append((D.texto(560, 800, "?", 190, fuente="titulo", relleno=R)
+                      + D.texto(730, 760, "?", 250, fuente="titulo", relleno=D.COLORES["azul"])
+                      + D.texto(900, 810, "?", 170, fuente="titulo", relleno=D.COLORES["amarillo"]), (730, 780), ""))
+    elif tipo == "cuenta":
+        if visual.get("texto"):
+            base.append(_pizarra(visual["texto"], 40, 400, 46))
+        base += [D.personaje(quien, 170, 1015, 340, "piensa"), D.icono("⏳", 910, 660, 170)]
+        for n in range(visual["desde"], 0, -1):
+            pasos.append((f'<g filter="url(#mano)"><circle cx="540" cy="650" r="175" fill="#ffd23f" stroke="{T}" '
+                          f'stroke-width="10"/></g>' + D.texto(540, 662, str(n), 250, fuente="titulo", relleno=R),
+                          (540, 650), REEMPLAZA))
+    elif tipo == "solucion":
+        texto = visual["texto"]
+        tam = 150 if len(texto) <= 12 else (104 if len(texto) <= 26 else 76)
+        base += [D.etiqueta(540, 70, "Solución", 58, fondo="#b8e6c1"), D.personaje(quien, 200, 1015, 380, "sorpresa")]
+        pasos.append((D.texto(540, 290, texto, tam, 1000, "titulo", relleno=R, max_lineas=3, centrar_vertical=True),
+                      (540, 290), texto))
+        extra = D.texto(540, 540, visual["explicacion"], 50, 940, max_lineas=3, centrar_vertical=True) if visual.get("explicacion") else ""
+        if visual.get("icono"):
+            extra += D.icono(visual["icono"], 760, 800, 240)
+        if extra:
+            pasos.append((extra, (540, 600), visual.get("explicacion", "")))
+    elif tipo == "mapa":
         caja = (30, 130, 1020, 750)
         fondo, capas, leyenda = D.mapa(visual, caja)
         base.append(fondo)
@@ -253,10 +421,13 @@ def escena(visual: dict):
         pasos.append((capa, (540, 360), numero))
         if visual.get("iconos"):
             n, tam_i = visual["repetir"], 120
+            medio = 540
+            if personaje:  # el muñeco está en la esquina de abajo a la derecha: la fila, más corta y a la izquierda
+                n, medio = min(n, 5), 420
             ancho = n * (tam_i + 14)
-            fila = "".join(D.icono(visual["iconos"][i % len(visual["iconos"])], 540 - ancho / 2 + tam_i / 2 + i * (tam_i + 14),
+            fila = "".join(D.icono(visual["iconos"][i % len(visual["iconos"])], medio - ancho / 2 + tam_i / 2 + i * (tam_i + 14),
                                    740, tam_i) for i in range(n))
-            pasos.append((fila, (540, 740), visual.get("texto", "")))
+            pasos.append((fila, (medio, 740), visual.get("texto", "")))
     elif tipo == "fecha":
         dia, mes, anio = D._partes_fecha(visual["fecha"])
         pasos.append((D._calendario(540, 320, dia, mes, anio), (540, 320), anio or visual["fecha"]))
@@ -266,8 +437,10 @@ def escena(visual: dict):
             if visual.get("icono"):
                 capa += D.icono(visual["icono"], 150, 730, 170)
                 x = 610
-            capa += D.texto(x, 730, visual["texto"], 66, 760 if visual.get("icono") else 980, "titulo",
-                            centrar_vertical=True, max_lineas=2)
+            ancho = 760 if visual.get("icono") else 980
+            if personaje:  # sitio para el muñeco de la esquina
+                x, ancho = x - 90, ancho - 200
+            capa += D.texto(x, 730, visual["texto"], 66, ancho, "titulo", centrar_vertical=True, max_lineas=2)
             pasos.append((capa, (540, 730), visual["texto"]))
     elif tipo == "iconos":
         elementos = visual["elementos"]
@@ -326,6 +499,8 @@ def escena(visual: dict):
             if h.get("icono"):
                 capa += D.icono(h["icono"], x, y + signo * 290, 130)
             pasos.append((capa, (x, y), h["fecha"]))
+    if personaje and tipo in ("mapa", "cifra", "fecha"):  # por delante del dibujo, asomado en la esquina
+        base.append(D.personaje(personaje, 975, 1000, 300, "senala", "izquierda"))
     return base, pasos
 
 
@@ -344,16 +519,25 @@ def _momento(palabras: list, clave, desde: float = 0.0):
     return None
 
 
-def tiempos(plan: dict, palabras: list, duracion: float, primera: bool, gancho: float):
-    """(segundo en que empieza el dibujo, [segundo de cada paso relativo al dibujo]) o None si no cabe."""
-    minimo = max(FOTO_MINIMA, gancho + 0.2 if primera else 0)
-    if duracion - minimo < DIBUJO_MINIMO:
-        return None
-    inicio = _momento(palabras, plan["desde"])
-    if inicio is None or inicio < minimo or duracion - inicio < DIBUJO_MINIMO:
-        inicio = max(minimo, min(duracion * 0.45, duracion - DIBUJO_MINIMO))
-    inicio = max(minimo, inicio - 0.1)
-    _, pasos = escena(plan["visual"])
+def tiempos(plan: dict, palabras: list, duracion: float, primera: bool, gancho: float, personaje: str = None):
+    """(segundo en que empieza el dibujo, [segundo de cada paso relativo al dibujo]) o None si no cabe.
+
+    Con plan["todo"] (vídeos hechos enteros con dibujos) el dibujo ocupa la escena entera, desde el segundo 0."""
+    _, pasos = escena(plan["visual"], personaje)
+    if plan["visual"]["tipo"] == "cuenta":  # los números, repartidos en el silencio que queda al acabar la voz
+        fin_voz = (palabras[-1]["fin_s"] + 0.3) if palabras else 0.3
+        hueco = max(duracion - fin_voz - 0.3, 1.0) / len(pasos)
+        return 0.0, [round(fin_voz + k * hueco, 2) for k in range(len(pasos))]
+    if plan.get("todo"):
+        inicio = 0.0
+    else:
+        minimo = max(FOTO_MINIMA, gancho + 0.2 if primera else 0)
+        if duracion - minimo < DIBUJO_MINIMO:
+            return None
+        inicio = _momento(palabras, plan["desde"])
+        if inicio is None or inicio < minimo or duracion - inicio < DIBUJO_MINIMO:
+            inicio = max(minimo, min(duracion * 0.45, duracion - DIBUJO_MINIMO))
+        inicio = max(minimo, inicio - 0.1)
     largo = duracion - inicio
     momentos, anterior = [], 0.0
     for k, (_, _, clave) in enumerate(pasos):
@@ -386,11 +570,13 @@ def _fotogramas_foto(ruta, duracion: float):
         yield grande.resize((ANCHO, ALTO), Image.BILINEAR, box=(x0, y0, x0 + aw, y0 + ah))
 
 
-def _fotogramas_dibujo(visual: dict, momentos: list, duracion: float, carpeta: Path, prefijo: str):
+def _fotogramas_dibujo(visual: dict, momentos: list, duracion: float, carpeta: Path, prefijo: str, personaje=None):
     """Solo se renderizan los fotogramas distintos (cada paso y los de su «pop»); el resto se repiten."""
-    base, pasos = escena(visual)
+    base, pasos = escena(visual, personaje)
     lineas, acumulado = [(0.0, list(base))], list(base)
-    for t, (capa, centro, _) in zip(momentos, pasos):
+    for t, (capa, centro, clave) in zip(momentos, pasos):
+        if clave == REEMPLAZA:
+            acumulado = list(base)  # la cuenta atrás: cada número sustituye al anterior
         if centro:
             for k, escala in enumerate(POP[:-1]):
                 lineas.append((t + k / FPS, acumulado + [_pop(capa, centro, escala)]))
@@ -412,14 +598,16 @@ def _fotogramas_dibujo(visual: dict, momentos: list, duracion: float, carpeta: P
         ruta.unlink(missing_ok=True)
 
 
-def clip(trabajo: Path, numero: int, ruta_imagen, plan: dict, momento, duracion: float, huella, info_archivo) -> Path:
+def clip(trabajo: Path, numero: int, ruta_imagen, plan: dict, momento, duracion: float, huella, info_archivo,
+         personaje: str = None) -> Path:
     """El clip de la escena (1080×1036): la foto con zoom lento y, desde `momento[0]`, el dibujo. Con caché."""
     inicio, momentos = momento
     if not ruta_imagen:
         inicio = 0.0  # sin foto: todo el rato el dibujo
     destino = trabajo / f"dibujo_{numero:02d}.mp4"
     clave = trabajo / f"dibujo_{numero:02d}.clave"
-    firma = huella(VERSION, info_archivo(ruta_imagen), plan["visual"], inicio, momentos, round(duracion, 2))
+    firma = huella(VERSION, info_archivo(ruta_imagen) if inicio > 0 else None, plan["visual"], inicio, momentos,
+                   round(duracion, 2), personaje)
     if destino.exists() and clave.exists() and clave.read_text() == firma:
         return destino
     proceso = subprocess.Popen(
@@ -431,7 +619,8 @@ def clip(trabajo: Path, numero: int, ruta_imagen, plan: dict, momento, duracion:
         if inicio > 0:
             for cuadro in _fotogramas_foto(ruta_imagen, inicio):
                 proceso.stdin.write(cuadro.tobytes())
-        for cuadro in _fotogramas_dibujo(plan["visual"], momentos, duracion - inicio, trabajo, f"dib{numero:02d}"):
+        for cuadro in _fotogramas_dibujo(plan["visual"], momentos, duracion - inicio, trabajo, f"dib{numero:02d}",
+                                         personaje):
             proceso.stdin.write(cuadro.tobytes())
     finally:
         proceso.stdin.close()

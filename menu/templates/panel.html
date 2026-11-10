@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block titulo %}MenteInquieta67{% endblock %}
+{% block contenido %}
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+
+<section class="piloto {{ 'encendido' if encendido }}">
+  <div>
+    <p class="piloto-estado">{{ 'Piloto encendido' if encendido else 'Piloto apagado' }}</p>
+    <h1>{% if encendido %}Yo me encargo de los vídeos de hoy{% else %}Enciéndelo y me encargo yo{% endif %}</h1>
+    <p>{% if encendido %}Al encender el ordenador hago los vídeos del día y los dejo programados en YouTube a su mejor
+      hora ({{ franjas | join(' · ') }}). Salen aunque después apagues el ordenador.
+      {% else %}Cada día haré 5 vídeos (efeméride, acertijo, fútbol y 2 noticias) y los publicaré solos en YouTube, cada
+      uno a su mejor hora. Solo publico lo que pasa la verificación; lo dudoso te lo dejo para revisar.{% endif %}</p>
+  </div>
+  <div class="piloto-botones">
+    <form method="post" action="{{ url_for('cambiar_piloto') }}"
+          {% if not encendido %}onsubmit="return confirm('El piloto publicará vídeos en tu canal de YouTube sin preguntarte. ¿Encenderlo?')"{% endif %}>
+      <input type="hidden" name="activo" value="{{ '0' if encendido else '1' }}">
+      <button class="interruptor" type="submit">{{ 'Apagar' if encendido else 'Encender' }}</button>
+    </form>
+    <form method="post" action="{{ url_for('piloto_automatico_ahora') }}"
+          onsubmit="return confirm('Voy a hacer ahora los vídeos de hoy que falten y a programarlos en YouTube. ¿Seguir?')">
+      <button class="secundario" type="submit" {{ 'disabled' if trabajando }}>{{ 'Trabajando…' if trabajando else 'Hacer ahora lo de hoy' }}</button>
+    </form>
+  </div>
+</section>
+
+<h2 class="titulo-seccion">Hoy</h2>
+<div class="hoy">
+  {% for v in hoy %}
+    <div class="hoy-fila {{ v.estado }}">
+      <span class="hoy-hora">{{ v.hora or v.franja }}</span>
+      <div class="hoy-texto">
+        <strong>{{ v.que }}</strong>
+        {% if v.nombre %}<a href="{{ url_for('ver_guion', nombre=v.nombre) }}">{{ v.titulo }}</a>
+        {% else %}<span class="ayuda-campo">todavía sin hacer</span>{% endif %}
+      </div>
+      {% if v.estado == 'publicado' %}<a class="etiqueta ok" href="{{ v.url or url_for('ver_guion', nombre=v.nombre) }}" target="_blank" rel="noopener">publicado</a>
+      {% elif v.estado == 'programado' %}<span class="etiqueta prog">programado</span>
+      {% elif v.estado == 'revisar' %}<a class="etiqueta mal" href="{{ url_for('ver_guion', nombre=v.nombre) }}">revísalo</a>
+      {% elif v.estado == 'error' %}<a class="etiqueta error" href="{{ url_for('ver_programados') }}">error al subir</a>
+      {% elif v.estado == 'hecho' %}<span class="etiqueta">hecho, sin programar</span>
+      {% else %}<span class="etiqueta">pendiente</span>{% endif %}
+      {% if v.estado == 'revisar' %}
+        <div class="hoy-revisar">
+          <p>El verificador no encuentra esto en las fuentes:</p>
+          <ul>{% for d in v.dudas %}<li><strong>«{{ d.frase }}»</strong><br><span class="ayuda-campo">{{ d.motivo }}</span></li>{% endfor %}</ul>
+          <div class="acciones">
+            {% for accion, texto, clase in [('quitar', 'Quitar esas frases y publicar', ''), ('publicar', 'Publicar tal cual', 'secundario'), ('descartar', 'Descartar', 'secundario')] %}
+              <form method="post" action="{{ url_for('revisar_rapido', nombre=v.nombre) }}" class="en-linea"
+                    {% if accion == 'publicar' %}onsubmit="return confirm('Se publicará con esas frases, que el verificador no ha podido comprobar. ¿Seguro?')"{% endif %}>
+                <input type="hidden" name="accion" value="{{ accion }}"><input type="hidden" name="tipo" value="{{ v.tipo }}">
+                <button class="{{ clase }} pequeno" type="submit">{{ texto }}</button>
+              </form>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">El piloto no tiene ningún vídeo marcado. Elígelos en <a href="{{ url_for('ajustes') }}#piloto-automatico">Ajustes</a>.</div>
+  {% endfor %}
+</div>
+
+<div class="atajos">
+  <a class="atajo" href="{{ url_for('mis_videos') }}"><strong>Vídeos</strong><span>Todo lo hecho y lo que espera revisión{% if num_pendientes %} ({{ num_pendientes }}){% endif %}</span></a>
+  <a class="atajo" href="{{ url_for('inicio') }}"><strong>Crear a mano</strong><span>Un tema, un acertijo, una noticia o un vídeo largo</span></a>
+  <a class="atajo" href="{{ url_for('ver_estadisticas') }}"><strong>Cómo va el canal</strong><span>Vistas, retención y camino a monetizar</span></a>
+</div>
+
+{% if registro %}
+  <details class="tarjeta">
+    <summary>Qué ha hecho el piloto (registro)</summary>
+    <pre class="registro">{{ registro | join('\n') }}</pre>
+  </details>
+{% endif %}
+{% endblock %}

@@ -32,6 +32,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -89,6 +90,8 @@ COLA_TRAS_ULTIMA_PALABRA = 0.2  # s de audio que se dejan tras la última palabr
 PAUSA_ENTRE_ESCENAS = 0.15      # s
 DURACION_GANCHO = 2.2           # s que el gancho se ve en grande al empezar
 DURACION_TITULO = 3.0           # s del título arriba (solo si el guion no tiene gancho)
+DOS_PLANOS_DESDE = 6.0          # s: las escenas así de largas cambian de imagen a mitad de frase (más retención)
+PLANO_MINIMO = 2.2              # s que dura como mínimo cada uno de los dos planos
 VOLUMEN_MUSICA = 0.22           # volumen de la música bajo la voz (además baja sola cuando se habla)
 HILOS = max(1, min(4, (os.cpu_count() or 2) // 2))  # escenas que se montan a la vez
 VERSION_ESCENA = "3"            # cámbiala si cambia el aspecto de las escenas: invalida la caché
@@ -406,10 +409,10 @@ def candidatas(nombre: str, datos: dict, renovar: bool = False) -> list:
             try:
                 encontrados = pexels.buscar(busqueda)
             except (requests.RequestException, ValueError) as error:
-                print(f"  aviso: no se pudo buscar en Pexels ({type(error).__name__})")
+                print(f"  aviso: no se pudo buscar en Pexels/Pixabay ({type(error).__name__})")
                 break
             imagenes += encontrados
-            print(f"  Pexels: {len(encontrados)} planos de ambiente para «{busqueda}»")
+            print(f"  Pexels/Pixabay: {len(encontrados)} planos de ambiente para «{busqueda}»")
     # Museos: si fallan, se sigue sin ellos (no dependen de Wikimedia).
     en_ingles = busqueda_museos(en_ingles)
     for museo, buscar in (("The Met", imagenes_del_met), ("Art Institute of Chicago", imagenes_del_art_institute)):
@@ -613,6 +616,20 @@ class SelectorImagenes:
                     return resultado
         return None
 
+    def segunda(self, escena: dict):
+        """(imagen, ruta) de otra imagen nueva que encaje con la escena, para partirla en dos planos; o None."""
+        claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
+        for indice in self.ranking(escena):
+            imagen = self.imagenes[indice]
+            if (indice in self.usadas or indice in self.fallidas or indice in self.reservadas or imagen.get("video")
+                    or imagen.get("ambiente") or self._bloqueada(indice)):
+                continue
+            if not self._vale(indice, claves):
+                return None  # las fotos van de mejor a peor: las que quedan encajan aún menos
+            if resultado := self._descargar(indice):
+                return resultado
+        return None
+
     def para_escena(self, escena: dict):
         """Devuelve (imagen, ruta) de la mejor imagen disponible, o (None, None)."""
         claves = palabras_clave(f"{escena['narracion']} {escena.get('visual', '')}") | self.claves_evento
@@ -798,6 +815,23 @@ def escapar_ass(texto: str) -> str:
     return texto.replace("\\", "").replace("{", "(").replace("}", ")")
 
 
+# Dónde van los subtítulos (Ajustes → Subtítulos): (alineación ASS, margen vertical). «abajo»: justo bajo la imagen;
+# «centro»: encima de la imagen, donde más se miran (como en muchos Shorts).
+POSICIONES_SUBTITULOS = {"abajo": (2, 430), "centro": (5, 0)}
+# El bloque de subtítulos que aparece entra con un pequeño rebote (85 % → 106 % → 100 %).
+REBOTE = r"{\fscx85\fscy85\t(0,110,\fscx106\fscy106)\t(110,190,\fscx100\fscy100)}"
+
+
+def posicion_subtitulos() -> str:
+    posicion = os.getenv("SUBTITULOS_POSICION", "abajo")
+    return posicion if posicion in POSICIONES_SUBTITULOS else "abajo"
+
+
+def cabecera_ass() -> str:
+    alineacion, margen = POSICIONES_SUBTITULOS[posicion_subtitulos()]
+    return CABECERA_ASS.replace(",0,0,1,6,2,2,70,70,430,1", f",0,0,1,6,2,{alineacion},70,70,{margen},1", 1)
+
+
 CABECERA_ASS = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {ANCHO}
@@ -867,19 +901,62 @@ def texto_ass(palabras: list, total: float, gancho: str = "", titulo: str = "", 
                     partes.append(f"{AMARILLO}{texto_palabra}{BLANCO}")
                 else:
                     partes.append(texto_palabra)
-            texto = " ".join(partes)
+            texto = (REBOTE if i == 0 else "") + " ".join(partes)  # rebote solo cuando aparece el bloque
             eventos.append(f"Dialogue: 0,{tiempo_ass(inicio)},{tiempo_ass(fin)},Sub,,0,0,0,,{texto}")
-    return CABECERA_ASS + "\n".join(eventos) + "\n"
+    return cabecera_ass() + "\n".join(eventos) + "\n"
 
 
 # --- Vídeo -------------------------------------------------------------------------
 
+# Codificadores de vídeo: el de la tarjeta gráfica (mucho más rápido) si funciona en este ordenador; si no, libx264.
+CODIFICADORES = {
+    "h264_qsv": ["-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "22", "-look_ahead", "0"],  # Intel
+    "h264_nvenc": ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"],          # NVIDIA
+    "h264_amf": ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "21", "-qp_p", "23"],   # AMD
+    "libx264": ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"],                                     # CPU
+}
+_codificador = None  # el elegido en esta ejecución (se prueba una vez)
+_eligiendo = threading.Lock()
+
+
+def _funciona(nombre: str) -> bool:
+    """¿Este ordenador codifica de verdad con él? (que ffmpeg lo traiga no basta: hace falta la gráfica)."""
+    prueba = subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+         "color=c=black:s=320x240:d=0.2", "-pix_fmt", "yuv420p", *CODIFICADORES[nombre], "-f", "null", "-"],
+        capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=30)
+    return prueba.returncode == 0
+
+
+def opciones_video() -> list:
+    """Las opciones de ffmpeg del codificador de vídeo. VIDEO_CODIFICADOR=libx264 (o h264_qsv…) lo fija a mano."""
+    global _codificador
+    with _eligiendo:  # las escenas se montan a la vez: que solo una pruebe la gráfica
+        if _codificador is None:
+            pedido = os.getenv("VIDEO_CODIFICADOR", "auto").strip()
+            candidatos = [pedido] if pedido in CODIFICADORES else ["h264_qsv", "h264_nvenc", "h264_amf"]
+            _codificador = next((c for c in candidatos if c == "libx264" or _funciona(c)), "libx264")
+            if _codificador != "libx264":
+                print(f"  vídeo con la tarjeta gráfica ({_codificador})")
+    return CODIFICADORES[_codificador]
+
+
 def ffmpeg(argumentos: list, cwd: Path) -> None:
+    global _codificador
     comando = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y", *argumentos]
     resultado = subprocess.run(
         comando, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
+    grafica = next((c for c in CODIFICADORES if c != "libx264" and c in argumentos), None)
+    if resultado.returncode != 0 and grafica:
+        # La gráfica ha fallado con este vídeo (memoria, controlador…): se repite con libx264 y ya no se vuelve a usar.
+        print(f"    {grafica} ha fallado; sigo con libx264")
+        _codificador = "libx264"
+        i = argumentos.index(grafica) - 1
+        argumentos = argumentos[:i] + CODIFICADORES["libx264"] + argumentos[i + len(CODIFICADORES[grafica]):]
+        ffmpeg(argumentos, cwd)
+        return
     if resultado.returncode != 0:
         raise RuntimeError(f"ffmpeg falló: {resultado.stderr.strip()[-500:]}")
 
@@ -896,31 +973,57 @@ def info_archivo(ruta) -> list:
     return [str(ruta), estado.st_size, int(estado.st_mtime)]
 
 
+def dos_planos_activados() -> bool:
+    return os.getenv("DOS_PLANOS", "1") == "1"
+
+
+def momento_de_corte(palabras: list, util: float, gancho: float = 0.0):
+    """Segundo (al empezar una palabra, cerca de la mitad) en que pasa al segundo plano; None si no cabe."""
+    minimo = max(PLANO_MINIMO, gancho + 0.3)
+    posibles = [p["inicio_s"] for p in palabras if minimo <= p["inicio_s"] <= util - PLANO_MINIMO]
+    return min(posibles, key=lambda t: abs(t - util / 2)) if posibles else None
+
+
+def _zoompan(fotogramas: int, hacia_dentro: bool = True) -> str:
+    """Zoom lento (hacia dentro o hacia fuera) de una imagen durante `fotogramas`."""
+    paso = f"{ZOOM_FINAL - 1:.3f}*on/{fotogramas}"
+    zoom = f"min(1+{paso},{ZOOM_FINAL})" if hacia_dentro else f"max({ZOOM_FINAL}-{paso},1)"
+    return (f"scale={ANCHO * 2}:{ALTO * 2},"
+            f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={fotogramas}:s={ANCHO}x{ALTO}:fps={FPS}")
+
+
 def segmento_escena(trabajo: Path, numero: int, ruta_imagen, audio: Path, util: float, total: float,
-                    subtitulos: str, etiqueta: str = "") -> Path:
-    """Vídeo de una escena (imagen con zoom lento + su audio + subtítulos ya grabados), con caché."""
+                    subtitulos: str, etiqueta: str = "", ruta_imagen2=None, corte=None) -> Path:
+    """Vídeo de una escena (imagen con zoom lento + su audio + subtítulos ya grabados), con caché.
+
+    Con `ruta_imagen2`, en el segundo `corte` pasa a esa otra imagen (con el zoom al revés, para que se note el cambio)."""
     salida = trabajo / f"seg_{numero:02d}.mp4"
     clave = trabajo / f"seg_{numero:02d}.clave"
     firma = huella(VERSION_ESCENA, info_archivo(ruta_imagen), info_archivo(audio), round(util, 3),
-                   round(total, 3), subtitulos, etiqueta)
+                   round(total, 3), subtitulos, etiqueta, info_archivo(ruta_imagen2) if ruta_imagen2 else None, corte)
     if salida.exists() and clave.exists() and clave.read_text() == firma:
         return salida  # nada ha cambiado en esta escena
 
     fotograma = componer_fotograma(ruta_imagen, trabajo / f"frame_{numero:02d}.png", etiqueta)
     (trabajo / f"sub_{numero:02d}.ass").write_text(subtitulos, encoding="utf-8")
     fotogramas = max(1, round(total * FPS))
-    zoom = f"min(1+{ZOOM_FINAL - 1:.3f}*on/{fotogramas},{ZOOM_FINAL})"
-    filtro_video = (
-        f"scale={ANCHO * 2}:{ALTO * 2},"
-        f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={fotogramas}:s={ANCHO}x{ALTO}:fps={FPS},"
-        f"ass=sub_{numero:02d}.ass,format=yuv420p"
-    )
+    entradas = ["-i", fotograma.name]
+    if ruta_imagen2 and corte:
+        segundo = componer_fotograma(ruta_imagen2, trabajo / f"frame_{numero:02d}b.png", etiqueta)
+        primeros = max(1, round(corte * FPS))
+        entradas += ["-i", segundo.name]
+        imagen = (f"[0:v]{_zoompan(primeros)}[p1];[1:v]{_zoompan(fotogramas - primeros, False)}[p2];"
+                  f"[p1][p2]concat=n=2:v=1:a=0,ass=sub_{numero:02d}.ass,format=yuv420p[v]")
+        voz = len(entradas) // 2
+    else:
+        imagen = f"[0:v]{_zoompan(fotogramas)},ass=sub_{numero:02d}.ass,format=yuv420p[v]"
+        voz = 1
     ffmpeg(
         [
-            "-i", fotograma.name, "-i", str(audio.resolve()),
-            "-filter_complex", f"[0:v]{filtro_video}[v];[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
+            *entradas, "-i", str(audio.resolve()),
+            "-filter_complex", f"{imagen};[{voz}:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            *opciones_video(), "-r", str(FPS),
             "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
             salida.name,
         ],
@@ -969,7 +1072,7 @@ def segmento_video(trabajo: Path, numero: int, clip, audio: Path, util: float, t
             "-i", str(Path(clip).resolve()), "-i", str(audio.resolve()), *entradas,
             "-filter_complex", f"{video};[1:a]atrim=0:{util:.3f},apad=whole_dur={total:.3f}[a]",
             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            *opciones_video(), "-r", str(FPS),
             "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
             salida.name,
         ],
@@ -995,25 +1098,66 @@ def fotograma_de_video(clip, destino: Path) -> Path:
     return destino
 
 
+TRANSICION = 0.25  # s de cada transición entre escenas
+# Se van alternando para que no se note la repetición; la última (hacia el cierre) siempre es un fundido.
+# (Sin «zoomin»: amplía tanto el centro de la imagen que se ve un fogonazo de un solo color.)
+TRANSICIONES = ("slideleft", "fade", "slideup", "smoothleft", "circleopen", "slideright")
+
+
+def transiciones_activadas() -> bool:
+    return os.getenv("TRANSICIONES", "1") == "1"
+
+
+def _filtro_transiciones(segmentos: list) -> tuple:
+    """(filtro, etiqueta del vídeo, etiqueta de la voz): las escenas encadenadas con transiciones cortas.
+
+    Cada escena (menos la última) alarga su último fotograma lo que dura la transición, y la transición empieza justo
+    donde acababa: así la escena siguiente arranca a su hora y el vídeo sigue cuadrando con la voz."""
+    duraciones = [imageio_ffmpeg.count_frames_and_secs(str(s))[0] / FPS for s in segmentos]
+    partes = []
+    for i in range(len(segmentos)):
+        alargar = f"tpad=stop_mode=clone:stop_duration={TRANSICION}," if i < len(segmentos) - 1 else ""
+        partes.append(f"[{i}:v]{alargar}fps={FPS},format=yuv420p,setsar=1,settb=AVTB[v{i}]")
+    anterior, inicio = "v0", 0.0
+    for i in range(1, len(segmentos)):
+        inicio += duraciones[i - 1]
+        tipo = "fade" if i == len(segmentos) - 1 else TRANSICIONES[(i - 1) % len(TRANSICIONES)]
+        partes.append(f"[{anterior}][v{i}]xfade=transition={tipo}:duration={TRANSICION}:offset={inicio:.3f}[x{i}]")
+        anterior = f"x{i}"
+    partes.append("".join(f"[{i}:a]" for i in range(len(segmentos))) + f"concat=n={len(segmentos)}:v=0:a=1[voz0]")
+    return ";".join(partes), anterior, "voz0"
+
+
 def unir(trabajo: Path, segmentos: list, destino: Path, pista, duracion: float) -> None:
-    """Une las escenas sin recodificar el vídeo y mezcla la música (que baja cuando habla la voz)."""
-    (trabajo / "lista.txt").write_text("".join(f"file '{s.name}'\n" for s in segmentos), encoding="utf-8")
+    """Une las escenas (con transiciones cortas, si están activadas) y mezcla la música, que baja cuando habla la voz."""
+    if transiciones_activadas() and len(segmentos) > 1:
+        filtro, video, voz = _filtro_transiciones(segmentos)
+        entradas = [a for s in segmentos for a in ("-i", s.name)]
+        salida_video = ["-map", f"[{video}]", *opciones_video(), "-r", str(FPS)]
+        n = len(segmentos)
+    else:
+        (trabajo / "lista.txt").write_text("".join(f"file '{s.name}'\n" for s in segmentos), encoding="utf-8")
+        filtro, video, voz = "", "0:v", "0:a"
+        entradas = ["-f", "concat", "-safe", "0", "-i", "lista.txt"]
+        salida_video = ["-map", "0:v", "-c:v", "copy"]
+        n = 1
     if pista is None:
-        argumentos = ["-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy"]
+        mezcla = f"[{voz}]anull[a]" if filtro else ""
+        argumentos = [*entradas, *(["-filter_complex", f"{filtro};{mezcla}"] if filtro else []), *salida_video,
+                      "-map", "[a]" if filtro else "0:a", "-c:a", "aac", "-b:a", "192k"]
     else:
         fundido = max(0.0, duracion - 1.5)
-        filtro = (
-            f"[1:a]volume={VOLUMEN_MUSICA},afade=t=in:d=1,afade=t=out:st={fundido:.2f}:d=1.5,"
+        mezcla = (
+            f"[{n}:a]volume={VOLUMEN_MUSICA},afade=t=in:d=1,afade=t=out:st={fundido:.2f}:d=1.5,"
             "aformat=sample_rates=44100:channel_layouts=stereo[musica];"
-            "[0:a]asplit=2[voz][guia];"
+            f"[{voz}]asplit=2[voz][guia];"
             "[musica][guia]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=350[fondo];"
             "[voz][fondo]amix=inputs=2:duration=first:normalize=0[a]"
         )
         argumentos = [
-            "-f", "concat", "-safe", "0", "-i", "lista.txt",
-            "-stream_loop", "-1", "-i", str(Path(pista).resolve()),
-            "-filter_complex", filtro, "-map", "0:v", "-map", "[a]",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion:.3f}",
+            *entradas, "-stream_loop", "-1", "-i", str(Path(pista).resolve()),
+            "-filter_complex", f"{filtro};{mezcla}" if filtro else mezcla, *salida_video, "-map", "[a]",
+            "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion:.3f}",
         ]
     ffmpeg([*argumentos, "-movflags", "+faststart", "final.mp4"], trabajo)
     shutil.move(str(trabajo / "final.mp4"), destino)
@@ -1170,9 +1314,9 @@ def _creditos_guardados(nombre: str) -> list:
         return []
     creditos = []
     for eleccion in json.loads(ruta.read_text(encoding="utf-8")).values():
-        imagen = eleccion.get("imagen")
-        if imagen and imagen["archivo"] not in [c["archivo"] for c in creditos]:
-            creditos.append(imagen)
+        for imagen in (eleccion.get("imagen"), eleccion.get("imagen2")):  # imagen2: el segundo plano de la escena
+            if imagen and imagen["archivo"] not in [c["archivo"] for c in creditos]:
+                creditos.append(imagen)
     return creditos
 
 
@@ -1251,8 +1395,17 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     if datos.get("video_ia"):  # clips generados con una IA de vídeo en vez de imágenes
         return montar_clips(carpeta_audio, datos, nombre, ruta_video, trabajo)
 
-    # 1. Imagen de cada escena: la elegida a mano o la que mejor encaja
-    imagenes = candidatas(nombre, datos)
+    # 0. Los dibujos: qué escenas llevan uno (todas, en los vídeos hechos enteros con dibujos) y qué muñeco lo cuenta
+    plan_dibujos = dibujos_short.planificar(datos, trabajo, huella)
+    personaje = dibujos_short.personaje_de(datos)
+    solo_dibujos = bool(datos["escenas"]) and all(
+        plan_dibujos.get(e["numero"], {}).get("todo") and not e.get("sin_dibujo") and not e.get("imagen")
+        for e in datos["escenas"])
+    if any(p.get("todo") for p in plan_dibujos.values()):
+        print(f"  vídeo de dibujos · lo cuenta: {dibujos_short.D.PERSONAJES[personaje]['nombre']}")
+
+    # 1. Imagen de cada escena: la elegida a mano o la que mejor encaja (si todo son dibujos, no se busca ninguna)
+    imagenes = [] if solo_dibujos else candidatas(nombre, datos)
     print(f"  {len(imagenes)} imágenes candidatas")
     selector = SelectorImagenes(imagenes, datos.get("evento", ""), datos.get("anio_evento"))
     anios = [int(a) for e in datos["escenas"] for a in re.findall(r"(1[0-9]{3}|20[0-9]{2})", e["narracion"])]
@@ -1282,17 +1435,30 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         if ruta is None and selector.bloqueados:
             # Mejor esperar que montar un vídeo con escenas sin imagen.
             raise wikimedia.WikimediaEnEspera(wikimedia.en_espera_hasta() or time.time() + 120)
+    # 1b. Las escenas largas con foto, en dos planos: una segunda imagen (nueva y que encaje) a mitad de la frase. Se
+    # eligen después de las principales para no quitarle a otra escena su mejor imagen.
+    if dos_planos_activados() and not datos.get("diario"):
+        for escena in datos["escenas"]:
+            eleccion = elegidas[escena["numero"]]
+            con_dibujo = escena["numero"] in plan_dibujos and not escena.get("sin_dibujo")
+            if (eleccion["imagen"] and not eleccion["imagen"].get("video") and not eleccion["a_mano"]
+                    and not con_dibujo and escena["duracion_s"] >= DOS_PLANOS_DESDE):
+                imagen2, ruta2 = selector.segunda(escena) or (None, None)
+                if imagen2:
+                    eleccion.update(imagen2=imagen2, ruta2=str(ruta2))
+                    if imagen2["archivo"] not in [c["archivo"] for c in creditos]:
+                        creditos.append(imagen2)
     elegidas_path(nombre).write_text(json.dumps(elegidas, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 2. Un segmento por escena (en paralelo y con caché), con la línea de tiempo ya recortada
     gancho = str(datos.get("gancho") or "").strip()
-    plan_dibujos = dibujos_short.planificar(datos, trabajo, huella)
     trabajos, cursor = [], 0.0
     for indice, escena in enumerate(datos["escenas"]):
         tiempos = escena.get("palabras_tiempos", [])
         ultima = (tiempos[-1]["fin_s"] - escena["inicio_s"]) if tiempos else escena["duracion_s"]
         util = min(escena["duracion_s"], ultima + COLA_TRAS_ULTIMA_PALABRA)
-        total = util + PAUSA_ENTRE_ESCENAS
+        # «espera_s»: segundos de silencio tras la voz (la cuenta atrás de los acertijos, para que la gente piense)
+        total = util + PAUSA_ENTRE_ESCENAS + min(max(float(escena.get("espera_s") or 0), 0), 15)
         relativas = [{"texto": p["texto"], "inicio_s": p["inicio_s"] - escena["inicio_s"],
                       "fin_s": p["fin_s"] - escena["inicio_s"]} for p in tiempos]
         subtitulos = texto_ass(relativas, total, gancho if indice == 0 else "",
@@ -1308,20 +1474,41 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         marca += " [vídeo]" if es_clip else ""
         # Los clips de vídeo se quedan como están, y las escenas a las que les quitaste el dibujo, con su foto.
         plan = None if es_clip or escena.get("sin_dibujo") else plan_dibujos.get(escena["numero"])
-        momento = plan and dibujos_short.tiempos(plan, relativas, total, indice == 0, DURACION_GANCHO if gancho else 0)
+        quien = personaje if plan and plan.get("todo") else None  # el muñeco, solo en los vídeos hechos con dibujos
+        momento = plan and dibujos_short.tiempos(plan, relativas, total, indice == 0, DURACION_GANCHO if gancho else 0,
+                                                 quien)
         if momento:
             try:
-                ruta = dibujos_short.clip(trabajo, escena["numero"], ruta, plan, momento, total, huella, info_archivo)
+                ruta = dibujos_short.clip(trabajo, escena["numero"], ruta, plan, momento, total, huella, info_archivo,
+                                          quien)
                 hacer = segmento_video
                 eleccion["dibujo"] = plan["visual"]
-                marca += f" + dibujo ({plan['visual']['tipo']}, desde el s {momento[0]:.1f})"
+                eleccion["clip_dibujo"] = str(ruta)
+                if momento[0] == 0:  # la escena es toda dibujo: su foto no sale, así que tampoco su crédito
+                    eleccion.update(imagen=None, ruta=None)
+                    imagen = None
+                    marca = f"dibujo ({plan['visual']['tipo']})"
+                else:
+                    marca += f" + dibujo ({plan['visual']['tipo']}, desde el s {momento[0]:.1f})"
             except Exception as error:  # noqa: BLE001 — sin el dibujo la escena sale igual, con su foto
                 print(f"    no se pudo hacer el dibujo de la escena {escena['numero']} ({type(error).__name__}: {error})")
+        extra = ()
+        if hacer is segmento_escena and eleccion.get("ruta2"):
+            corte = momento_de_corte(relativas, util, DURACION_GANCHO if indice == 0 and gancho else 0)
+            if corte:
+                extra = (eleccion["ruta2"], corte)
+                marca += f" + 2.º plano desde el s {corte:.1f} ({eleccion['imagen2']['archivo'][:30]})"
         trabajos.append((hacer, trabajo, escena["numero"], ruta, carpeta_audio / escena["audio"],
-                         util, total, subtitulos, etiqueta))
-        print(f"  escena {escena['numero']}: {total:.2f} s · {imagen['archivo'][:55] if imagen else 'sin imagen'}{marca}")
+                         util, total, subtitulos, etiqueta, *extra))
+        print(f"  escena {escena['numero']}: {total:.2f} s · "
+              f"{imagen['archivo'][:55] if imagen else ('' if eleccion.get('dibujo') else 'sin imagen')}{marca}")
         cursor += total
     elegidas_path(nombre).write_text(json.dumps(elegidas, ensure_ascii=False, indent=2), encoding="utf-8")  # con dibujos
+    creditos = []  # solo de lo que al final se ve (las escenas que son todo dibujo no llevan foto)
+    for eleccion in elegidas.values():
+        for usada in (eleccion["imagen"], eleccion.get("imagen2")):
+            if usada and usada["archivo"] not in [c["archivo"] for c in creditos]:
+                creditos.append(usada)
 
     inicio = time.time()
     with ThreadPoolExecutor(max_workers=HILOS) as hilos:
@@ -1344,7 +1531,9 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
         etiqueta = f"{'PART' if datos.get('idioma') == 'en' else 'PARTE'} {serie['parte']}/{serie['total']}"
     primera = trabajo / f"frame_{datos['escenas'][0]['numero']:02d}.png"
     eleccion = elegidas[datos["escenas"][0]["numero"]]
-    if (eleccion["imagen"] or {}).get("video") and eleccion["ruta"]:
+    if eleccion.get("clip_dibujo") and not eleccion["ruta"]:
+        fotograma_de_video(eleccion["clip_dibujo"], primera)  # la primera escena es un dibujo
+    elif (eleccion["imagen"] or {}).get("video") and eleccion["ruta"]:
         fotograma_de_video(eleccion["ruta"], primera)  # la primera escena es un vídeo: su fotograma
     elif not primera.exists():
         componer_fotograma(eleccion["ruta"], primera)
@@ -1381,7 +1570,7 @@ def segmento_clip(trabajo: Path, numero: int, clip: Path, audio: Path, util: flo
             *bucle, "-i", str(clip.resolve()), "-i", str(audio.resolve()),
             "-filter_complex", f"{video};{sonido}",
             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+            *opciones_video(), "-r", str(FPS),
             "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
             salida.name,
         ],

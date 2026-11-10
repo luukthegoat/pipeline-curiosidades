@@ -44,12 +44,40 @@ LINO = "#f3efe6"
 # Lo que puede llevar Bonesy (y los personajes): el vídeo largo elige según su época; se cambia en la app.
 ROPAS = {"sudadera": "Sudadera roja (la de siempre)", "traje": "Traje", "uniforme": "Uniforme", "obrero": "Ropa de obrero",
          "toga": "Toga", "armadura": "Armadura", "capa_real": "Capa real", "sotana": "Hábito o sotana",
-         "vestido": "Vestido"}
+         "vestido": "Vestido", "camiseta": "Camiseta de fútbol", "bata": "Bata de laboratorio",
+         "gabardina": "Gabardina de detective", "chaleco": "Chaleco de reportero"}
 SOMBREROS = {"": "Nada", "corona": "Corona", "gorra_militar": "Gorra militar", "casco": "Casco de soldado",
              "boina": "Boina", "chistera": "Chistera", "sombrero": "Sombrero", "tricornio": "Tricornio",
-             "morrion": "Morrión de conquistador", "casco_romano": "Casco romano", "mitra": "Mitra"}
+             "morrion": "Morrión de conquistador", "casco_romano": "Casco romano", "mitra": "Mitra",
+             "gorra": "Gorra", "salacot": "Salacot de explorador"}
 COLOR_ROPA = {"sudadera": "rojo", "traje": "gris", "uniforme": "caqui", "obrero": "gris", "toga": "rojo",
-              "armadura": "rojo", "capa_real": "morado", "sotana": "negro", "vestido": "rojo"}
+              "armadura": "rojo", "capa_real": "morado", "sotana": "negro", "vestido": "rojo", "camiseta": "rojo",
+              "bata": "celeste", "gabardina": "#c9a877", "chaleco": "azul"}
+
+# Los muñecos del canal: cada tipo de vídeo tiene el suyo (se cambia en la página de imágenes de cada vídeo).
+# Con «aspecto» es una persona; sin él, Bonesy (el esqueleto) con el «traje» que se indique.
+PERSONAJES = {
+    "bonesy": {"nombre": "Bonesy", "para": "curiosidades y vídeos largos", "traje": {}},
+    "profesor": {"nombre": "El profe", "para": "historia",
+                 "aspecto": {"pelo": "canoso", "gafas": True, "bigote": True, "ropa": "traje", "color_ropa": "marron"}},
+    "reportera": {"nombre": "La reportera", "para": "noticias",
+                  "aspecto": {"pelo": "largo", "color_pelo": "marron", "ropa": "chaleco", "color_ropa": "azul"}},
+    "futbolista": {"nombre": "El crack", "para": "fútbol",
+                   "aspecto": {"pelo": "corto", "ropa": "camiseta", "color_ropa": "rojo"}},
+    "arbitro": {"nombre": "El árbitro", "para": "fútbol (polémicas, reglas y récords)",
+                "aspecto": {"pelo": "calvo", "ropa": "camiseta", "color_ropa": "amarillo"}},
+    "detective": {"nombre": "El detective", "para": "acertijos y misterios",
+                  "aspecto": {"pelo": "corto", "bigote": True, "ropa": "gabardina", "sombrero": "sombrero",
+                              "color_sombrero": "marron"}},
+    "cientifica": {"nombre": "La científica", "para": "ciencia e inventos",
+                   "aspecto": {"pelo": "rizado", "color_pelo": "naranja", "gafas": True, "ropa": "bata"}},
+    "rey": {"nombre": "El rey", "para": "reyes, reinas e imperios",
+            "aspecto": {"pelo": "corto", "color_pelo": "marron", "barba": True, "ropa": "capa_real", "sombrero": "corona"}},
+    "soldado": {"nombre": "El soldado", "para": "guerras y batallas",
+                "aspecto": {"pelo": "corto", "ropa": "uniforme", "sombrero": "casco"}},
+    "exploradora": {"nombre": "La exploradora", "para": "viajes y descubrimientos",
+                    "aspecto": {"pelo": "largo", "ropa": "chaleco", "color_ropa": "caqui", "sombrero": "salacot"}},
+}
 
 
 def color(nombre: str, defecto: str = "rojo") -> str:
@@ -267,6 +295,38 @@ def _cuerpo(ropa_color, tipo="sudadera") -> str:
         partes = [f'<path d="M-50,-292 Q0,-306 50,-292 Q70,-200 72,-30 Q0,-20 -72,-30 Q-70,-200 -50,-292 Z" '
                   f'fill="{COLORES["negro"]}" stroke="{TINTA}" stroke-width="6"/>',
                   f'<rect x="-12" y="-300" width="24" height="12" fill="white" stroke="{TINTA}" stroke-width="3"/>']
+    elif tipo == "camiseta":  # de fútbol: cuello blanco, franja y el 10
+        partes += [f'<path d="M-24,-298 Q0,-276 24,-298" fill="none" stroke="white" stroke-width="9"/>',
+                   f'<path d="M-24,-298 Q0,-276 24,-298" fill="none" stroke="{TINTA}" stroke-width="3"/>',
+                   f'<rect x="-63" y="-176" width="126" height="12" fill="white" stroke="{TINTA}" stroke-width="3"/>',
+                   f'<text x="0" y="-212" font-family="Lilita" font-size="62" fill="white" stroke="{TINTA}" '
+                   f'stroke-width="3" paint-order="stroke" text-anchor="middle">10</text>']
+    elif tipo == "bata":  # blanca y abierta, con la camisa del color de la ropa y un boli en el bolsillo
+        partes = [f'<path d="{contorno}" fill="white" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>',
+                  f'<path d="M-20,-298 L0,-150 L20,-298 Z" fill="{ropa_color}" stroke="{TINTA}" stroke-width="4"/>',
+                  f'<path d="M-20,-298 L-34,-250 L-6,-232" fill="none" stroke="{TINTA}" stroke-width="4"/>',
+                  f'<path d="M20,-298 L34,-250 L6,-232" fill="none" stroke="{TINTA}" stroke-width="4"/>',
+                  f'<rect x="26" y="-232" width="26" height="30" rx="3" fill="white" stroke="{TINTA}" stroke-width="3"/>',
+                  f'<line x1="34" y1="-244" x2="34" y2="-226" stroke="{COLORES["azul"]}" stroke-width="5" '
+                  f'stroke-linecap="round"/>']
+    elif tipo == "gabardina":  # larga, con solapas, botones y cinturón
+        partes = [f'<path d="M-50,-292 Q0,-306 50,-292 Q68,-220 70,-96 Q0,-84 -70,-96 Q-68,-220 -50,-292 Z" '
+                  f'fill="{ropa_color}" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>',
+                  f'<path d="M-26,-298 L0,-252 L26,-298" fill="none" stroke="{TINTA}" stroke-width="5"/>',
+                  f'<line x1="0" y1="-252" x2="0" y2="-92" stroke="{TINTA}" stroke-width="3"/>',
+                  f'<rect x="-67" y="-196" width="134" height="16" fill="{COLORES["marron"]}" stroke="{TINTA}" '
+                  f'stroke-width="3"/>',
+                  f'<rect x="-10" y="-200" width="20" height="24" rx="3" fill="{COLORES["dorado"]}" stroke="{TINTA}" '
+                  f'stroke-width="3"/>']
+        partes += [f'<circle cx="{x}" cy="{y}" r="5" fill="{TINTA}"/>' for x in (-16, 16) for y in (-236, -216)]
+    elif tipo == "chaleco":  # camisa blanca y chaleco con bolsillos
+        partes = [f'<path d="{contorno}" fill="white" stroke="{TINTA}" stroke-width="6" stroke-linejoin="round"/>',
+                  f'<path d="M-50,-292 L-18,-296 L-6,-150 Q-40,-144 -64,-150 Q-66,-250 -50,-292 Z" fill="{ropa_color}" '
+                  f'stroke="{TINTA}" stroke-width="5" stroke-linejoin="round"/>',
+                  f'<path d="M50,-292 L18,-296 L6,-150 Q40,-144 64,-150 Q66,-250 50,-292 Z" fill="{ropa_color}" '
+                  f'stroke="{TINTA}" stroke-width="5" stroke-linejoin="round"/>']
+        partes += [f'<rect x="{x}" y="-214" width="30" height="26" rx="3" fill="none" stroke="{TINTA}" stroke-width="3"/>'
+                   for x in (-54, 24)]
     return "".join(partes)
 
 
@@ -340,6 +400,16 @@ def _sombrero(tipo, color_s) -> str:
                 f'stroke-width="4"/>'
                 + "".join(f'<rect x="{-58 if lado < 0 else 44}" y="-402" width="14" height="42" rx="5" fill="{c}" '
                           f'stroke="{TINTA}" stroke-width="4"/>' for lado in (-1, 1)))
+    if tipo == "gorra":
+        c = color_s or COLORES["rojo"]
+        return (f'<path d="M-50,-398 Q-50,-456 0,-458 Q50,-456 50,-398 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<path d="M30,-400 Q70,-404 92,-386 Q60,-384 30,-388 Z" fill="{c}" stroke="{TINTA}" stroke-width="5" '
+                f'stroke-linejoin="round"/>')
+    if tipo == "salacot":
+        c = color_s or "#d9c59a"
+        return (f'<path d="M-52,-400 Q-50,-470 0,-474 Q50,-470 52,-400 Z" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<ellipse cx="0" cy="-400" rx="78" ry="13" fill="{c}" stroke="{TINTA}" stroke-width="5"/>'
+                f'<path d="M-50,-416 Q0,-404 50,-416" fill="none" stroke="{COLORES["marron"]}" stroke-width="7"/>')
     if tipo == "mitra":
         return (f'<path d="M-36,-406 Q-34,-460 0,-480 Q34,-460 36,-406 Z" fill="white" stroke="{TINTA}" stroke-width="5"/>'
                 f'<line x1="0" y1="-478" x2="0" y2="-406" stroke="{COLORES["dorado"]}" stroke-width="8"/>')
@@ -390,8 +460,15 @@ def _vestir(ropa: str, color_ropa: str):
     """(ropa válida, color del cuerpo, color de las mangas)."""
     ropa = ropa if ropa in ROPAS else "traje"
     cuerpo = color(color_ropa or COLOR_ROPA[ropa], "gris")
-    manga = {"sotana": COLORES["negro"], "toga": LINO, "armadura": METAL}.get(ropa, cuerpo)
+    manga = {"sotana": COLORES["negro"], "toga": LINO, "armadura": METAL, "bata": "#ffffff",
+             "chaleco": "#ffffff"}.get(ropa, cuerpo)
     return ropa, cuerpo, manga
+
+
+def personaje(clave: str, x, y, alto, pose="neutro", mirar="derecha") -> str:
+    """Uno de los muñecos del canal (PERSONAJES), con los pies en (x, y); si no existe, Bonesy."""
+    modelo = PERSONAJES.get(clave) or PERSONAJES["bonesy"]
+    return figura(x, y, alto, pose, modelo.get("aspecto"), mirar, modelo.get("traje"))
 
 
 def figura(x, y, alto, pose="neutro", aspecto=None, mirar="derecha", traje=None) -> str:

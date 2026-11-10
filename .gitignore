@@ -16,6 +16,7 @@ musica/
 
 # Configuración personal del piloto de actualidad (se crea sola con valores por defecto)
 piloto_actualidad.json
+piloto.json
 
 # Lanzador compilado (se crea con lanzador\crear_exe.bat) y accesos directos (lanzador\crear_accesos.bat):
 # llevan las rutas de cada ordenador
