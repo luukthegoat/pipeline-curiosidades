@@ -1657,7 +1657,8 @@ def _hashtags(datos: dict, maximo: int) -> str:
     etiquetas = []
     for h in [*datos.get("hashtags", []), *extra]:
         h = "#" + re.sub(r"[^\w]", "", str(h).lstrip("#"))
-        if len(h) > 1 and h.lower() not in [e.lower() for e in etiquetas]:
+        # sin repetir, tampoco con y sin tilde («#futbol» y «#fútbol»)
+        if len(h) > 1 and normalizar_nombre(h.lower()) not in [normalizar_nombre(e.lower()) for e in etiquetas]:
             etiquetas.append(h)
     return " ".join(etiquetas[:maximo])
 
@@ -1707,34 +1708,12 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
     pregunta = str(datos.get("pregunta") or "").strip()  # la del final del vídeo: da más comentarios que una genérica
     tiktok += ["", f"💬 {pregunta}" if pregunta else
                ("💬 Did you know? Tell me in the comments." if ingles else "💬 ¿Lo sabías? Te leo en comentarios."), ""]
-    nombres_fuentes = ", ".join(f["titulo"] for f in datos.get("fuentes", []))
-    if datos.get("actualidad"):
-        medios = ", ".join(dict.fromkeys(f.get("medio") or f["titulo"] for f in datos.get("fuentes", [])))
-        fecha_datos = datos["actualidad"].get("fecha_datos", "")
-        tiktok.append(f"{'Sources' if ingles else 'Fuentes'}: {medios}"
-                      + (f" ({'as of' if ingles else 'datos a'} {fecha_datos})" if fecha_datos else ""))
-        tiktok.append("Archive images from Wikimedia Commons: they do not show the events." if ingles
-                      else "Imágenes de archivo de Wikimedia Commons: no muestran los hechos.")
-    elif datos.get("video_ia"):
-        tiktok.append(_linea_video_ia(datos))
-    else:
-        tiktok.append(f"{'Source' if ingles else 'Fuente'}: Wikipedia ({nombres_fuentes})" if nombres_fuentes else "")
-    autores = set()
-    for c in creditos:
-        if isinstance(c, str):  # «archivo — autor — licencia — página»
-            partes = c.split(" — ")
-            autores.add(partes[1].strip() if len(partes) > 1 else "")
-        else:
-            autores.add(str(c.get("autor", "")).strip())
-    autores = sorted(a for a in autores - {"", "Propia", "Autor desconocido", "Generada con IA (Pollinations)"}
-                     if len(a) < 60)
-    if any(isinstance(c, dict) and c.get("ia") for c in creditos):
-        tiktok.append("Images: AI-generated (Pollinations)." if ingles else "Imágenes: generadas con IA (Pollinations).")
-    elif creditos:
-        tiktok.append(f"{'Images' if ingles else 'Imágenes'}: Wikimedia Commons / museos"
-                      + (f" ({', '.join(autores[:6])})" if autores else "")
-                      + (". Full credits on YouTube." if ingles else ". Créditos completos en YouTube."))
-    tiktok += ["", _hashtags(datos, 5)]
+    # Corto, como en YouTube: sin fuentes ni avisos; solo los autores de las fotos de otros, si las hay.
+    autores = _autores_de_fotos(creditos)
+    if autores:
+        tiktok.append(f"{'Images' if ingles else 'Imágenes'}: {autores}")
+        tiktok.append("")
+    tiktok.append(_hashtags(datos, 5))
 
     youtube = publicacion_youtube(datos, creditos, pista)
 
@@ -1750,6 +1729,29 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
         "DESCRIPTION (paste in «Description»):" if ingles else "DESCRIPCIÓN (pégala en «Descripción»):",
         youtube["descripcion"],
     ]) + "\n"
+
+
+def _autores_de_fotos(creditos: list) -> str:
+    """«Autor A, Autor B (Wikimedia Commons, CC BY-SA 4.0)» de las fotos de terceros usadas, o «» si no hay."""
+    fotos = []
+    for c in creditos:
+        if isinstance(c, dict):
+            fotos += c["creditos"] if c.get("creditos") else [c]
+    autores, licencias = [], []
+    for foto in fotos:
+        if not isinstance(foto, dict) or foto.get("ia") or foto.get("ruta") or foto.get("ambiente"):
+            continue  # generadas con IA, propias o de Pexels/Pixabay (no piden atribución)
+        licencia = str(foto.get("licencia") or "")
+        if re.search(r"public domain|dominio público|CC0|PD", licencia, re.I):
+            continue
+        autor = limpiar_html(str(foto.get("autor") or "")).strip()
+        if autor and autor not in ("Propia", "Autor desconocido") and autor[:40] not in autores:
+            autores.append(autor[:40])
+        if licencia and licencia not in licencias:
+            licencias.append(licencia)
+    if not autores:
+        return ""
+    return f"{', '.join(autores[:8])} (Wikimedia Commons, {', '.join(licencias[:3])})"
 
 
 def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
@@ -1773,24 +1775,13 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
                                                            else " · Parte final")]
     if datos.get("diario"):
         lineas += ["", _linea_diario(datos, "en mi canal", "on my channel")]
-    if datos.get("fuentes"):
-        lineas += ["", "Sources:" if ingles else "Fuentes:", *[f"- {f['titulo']}: {f['url']}" for f in datos["fuentes"]]]
-    if datos.get("actualidad"):
-        fecha_datos = datos["actualidad"].get("fecha_datos", "")
-        lineas += ["", (f"Information as of {fecha_datos}: the situation may change. Archive images from Wikimedia "
-                        "Commons: they do not show the events." if ingles else
-                        f"Información a {fecha_datos}: la situación puede cambiar. Imágenes de archivo de Wikimedia "
-                        "Commons: no muestran los hechos.")]
-    if creditos:
-        lineas += ["", "Images:" if ingles else "Imágenes:", *[_linea_credito(c, ingles) for c in creditos]]
-    lineas.append("")
-    if pista in musica.TONOS:
-        lineas.append("Music: generated, royalty-free." if ingles else "Música: generada, sin derechos de autor.")
-    elif pista:
-        lineas.append(f"{'Music' if ingles else 'Música'}: {pista}")
-    lineas += [_linea_video_ia(datos) if datos.get("video_ia") else ("Synthetic voice (AI)." if ingles
-                                                                       else "Voz sintética (IA)."),
-               "", _hashtags(datos, 4)]  # 3-5 en total con el #Shorts del título: más parece spam
+    # Descripción corta: la primera frase, la pregunta y los hashtags. Sin fuentes, música ni avisos (las fuentes
+    # quedan en el guion). Solo si el vídeo lleva fotos de otros con licencia Creative Commons va una línea con sus
+    # autores: esas licencias obligan a citarlos. Los vídeos de dibujos no llevan nada.
+    autores = _autores_de_fotos(creditos)
+    if autores:
+        lineas += ["", f"{'Images' if ingles else 'Imágenes'}: {autores}"]
+    lineas += ["", _hashtags(datos, 4)]  # 3-5 en total con el #Shorts del título: más parece spam
     # YouTube rechaza «<» y «>» en título y descripción, y corta la descripción a 5.000 caracteres.
     descripcion = "\n".join(lineas).replace("<", "‹").replace(">", "›")[:4900]
     etiquetas, largo = [], 0

@@ -3,6 +3,15 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.0.1] - 2026-11-11
+
+### Cambiado
+- **Descripciones cortas** en YouTube y TikTok: la primera frase, la pregunta y los hashtags. Ya no llevan fuentes,
+  música ni «voz sintética» (las fuentes siguen en el guion). Solo si el vídeo usa fotos de otros con licencia
+  Creative Commons se añade una línea con sus autores, porque esas licencias obligan a citarlos; los vídeos de dibujos
+  no llevan nada.
+- Los hashtags ya no se repiten con y sin tilde (`#futbol` y `#fútbol`).
+
 ## [3.0.0] - 2026-11-10
 
 El canal cambia de rumbo: vídeos de dibujos con muñecos, acertijos, fútbol y un piloto que lo hace todo solo.

@@ -51,7 +51,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
