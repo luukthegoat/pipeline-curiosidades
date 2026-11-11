@@ -37,8 +37,10 @@ CARPETA_SALIDA = Path("salida/guiones")
 # Una narración de unos 40 s (40-45 s con el cierre) a ritmo de vídeo corto (~2,5 palabras por segundo): los Shorts que se ven enteros son
 # los que YouTube reparte, y con 60-75 s casi nadie llegaba al final.
 PALABRAS_POR_SEGUNDO = 2.5
-PALABRAS_MIN, PALABRAS_MAX = 95, 115
-PALABRAS_OBJETIVO = 105
+# Vídeos de 20-25 s: se ven enteros mucho más que los de 40 (y el porcentaje visto es lo que decide si YouTube
+# sigue enseñándolos). La voz va a unas 2,6 palabras por segundo.
+PALABRAS_MIN, PALABRAS_MAX = 52, 70
+PALABRAS_OBJETIVO = 60
 
 ANTIGUEDAD_MINIMA = 20      # años: evita fichajes y noticias recientes
 MAX_PAGINAS_POR_EVENTO = 3
@@ -61,17 +63,18 @@ Estilo:
 - La PRIMERA FRASE decide si la gente se queda: piensa antes 3 opciones y usa la más intrigante. Funcionan:
   un dato sorprendente, una contradicción («la ciudad que resistió mil años cayó en 53 días») o una pregunta
   que el espectador necesite resolver. Nunca empieces con «Hoy te voy a contar», «¿Sabías que…?», una fecha suelta
-  («En 1936, …») o un saludo. La primera frase es el gancho y tiene como mucho 18 palabras.
+  («En 1936, …») o un saludo. La primera frase es el gancho y tiene como mucho 12 palabras: empieza por lo MÁS impactante
+  (la consecuencia, la cifra o la pregunta); el contexto (quién, dónde, cuándo) va después, en la segunda frase.
   El gancho tiene que ser cierto según el MATERIAL.
 - Frases cortas, fáciles de narrar en voz alta. Tono curioso y cercano, sin exagerar.
 - Ve al grano: nada de introducciones ni de contexto que no sea imprescindible. Cada escena aporta un dato nuevo.
-- A MITAD del vídeo (escena 3 o 4) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
+- A MITAD del vídeo (escena 3) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
   frase tipo «pero lo raro no fue eso…», «y entonces pasó algo que nadie esperaba». Mucha gente desliza cuando cree que
   ya lo ha entendido todo: deja la mejor respuesta para el final. El giro también tiene que ser cierto.
 - La ÚLTIMA escena termina con una PREGUNTA directa al espectador, corta y fácil de contestar en los comentarios
   (una opinión o una apuesta: «¿Tú habrías firmado?», «¿Héroe o traidor?»). Nunca «¿Lo sabías?» ni «Comenta abajo».
-- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (40-45 segundos). Apunta a unas {objetivo}.
-- Entre 5 y 6 escenas, de 17 a 22 palabras de narración cada una. Cuenta las palabras antes de responder.
+- Longitud TOTAL de la narración: entre {min_palabras} y {max_palabras} palabras (20-25 segundos). Apunta a unas {objetivo}.
+- 4 o 5 escenas, de 11 a 16 palabras de narración cada una. Cuenta las palabras antes de responder.
 - Si te sobra material, quédate con lo más sorprendente; nunca rellenes con datos inventados.
 
 Responde SOLO con un objeto JSON con esta forma:
@@ -130,7 +133,7 @@ Los VALORES de "titulo", "nombre_corto", "gancho", "narracion", "palabras_clave"
 
 PALABRAS_DIARIO = (95, 115, 105)  # mínimo, máximo y objetivo: unos 40-45 s
 # Noticias: lo que pida cada una (un Short sin relleno retiene más que uno largo): unos 30-45 s.
-PALABRAS_ACTUALIDAD = (70, 112, 85)
+PALABRAS_ACTUALIDAD = (50, 72, 60)
 
 PROMPT_ACTUALIDAD = """Eres guionista de vídeos cortos de ACTUALIDAD (YouTube Shorts, TikTok) para un canal de divulgación.
 Recibirás un MATERIAL con varios artículos de prensa recientes, cada uno con su medio y su fecha. Hoy es {hoy}.
@@ -153,19 +156,20 @@ Reglas de veracidad, obligatorias (es una noticia en curso: un error aquí es gr
 
 Estilo:
 - La PRIMERA FRASE engancha con un hecho cierto y concreto del MATERIAL (una cifra, una imagen, una contradicción).
-  Nunca empieces con «Hoy te voy a contar», una fecha suelta ni un saludo. Como mucho 18 palabras. Sin titulares
-  engañosos.
+  Nunca empieces con «Hoy te voy a contar», una fecha suelta ni un saludo. Como mucho 12 palabras. Sin titulares
+  engañosos, y sin sonar a titular de periódico («Renfe anuncia…», «El Gobierno aprueba…»): empieza por la cifra, por
+  lo que le cambia al espectador o por una pregunta, y di después quién lo hace.
 - Frases cortas, fáciles de narrar. Cuenta: qué ha pasado, dónde y cuándo, cifras, reacciones y qué puede pasar ahora
   (solo si el MATERIAL lo dice).
 - La ÚLTIMA escena, después de la fecha, lanza al espectador una pregunta abierta sobre la polémica para que opine
   en los comentarios («¿Quién crees que tiene razón?», «¿Tú qué harías?»), sin sugerir la respuesta.
 - Ve al grano: lo esencial de la noticia, sin rodeos.
-- A MITAD del vídeo (escena 3 o 4) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
+- A MITAD del vídeo (escena 3) mete un GIRO que reabra la intriga: un dato que contradiga lo anterior o una
   frase tipo «pero lo raro no fue eso…», «y entonces pasó algo que nadie esperaba». Mucha gente desliza cuando cree que
   ya lo ha entendido todo: deja la mejor respuesta para el final. El giro tiene que salir del MATERIAL.
 - Longitud: lo que pida la noticia, ni una palabra de relleno. Una noticia sencilla se cuenta en unas {min_palabras}
-  palabras (30 segundos); una con varias partes o posturas, hasta {max_palabras} (45 segundos).
-- Entre 4 y 6 escenas, de 15 a 22 palabras de narración cada una.
+  palabras (20 segundos); una con varias partes o posturas, hasta {max_palabras} (28 segundos).
+- 4 o 5 escenas, de 11 a 16 palabras de narración cada una.
 
 Responde SOLO con un objeto JSON con esta forma:
 {{
@@ -495,7 +499,7 @@ def contar_palabras(escenas: list) -> int:
     return sum(len(e["narracion"].split()) for e in escenas)
 
 
-MAX_PALABRAS_GANCHO = 18  # la primera frase tiene que caber en los 3-4 primeros segundos
+MAX_PALABRAS_GANCHO = 12  # la primera frase tiene que caber en los 3 primeros segundos
 _MESES = "|".join(MESES_ES) + "|january|february|march|april|may|june|july|august|september|october|november|december"
 # Arranques que hacen deslizar: saludos, presentaciones, «había una vez» y fechas sueltas («En 1936,», «El 11 de
 # septiembre de 2001,», «Corría el año…»). Un año dentro de un dato sorprendente sí vale («En 1936 cayó…» no).
@@ -516,16 +520,28 @@ PRESENTACION = re.compile(
     r"nacid|reconocid|destacad|important|c[eé]lebre|known|famous|born)\w*")
 
 
+# «En 1519 Magallanes partió…»: en un vídeo de 20 s, abrir con el año es regalar el primer segundo.
+EMPIEZA_POR_ANIO = re.compile(r"^(en|in|el|hacia|corr[ií]a)\s+(el\s+)?(a[ñn]o\s+)?\d{3,4}\b", re.I)
+# «Renfe anuncia servicios mínimos…», «El Gobierno aprueba…»: un titular informa, pero no engancha.
+TITULAR = re.compile(
+    r"^(el |la |los |las )?([A-ZÁÉÍÓÚÑ][\w.'-]*\s+){1,4}(anuncia|anunci[oó]|informa|inform[oó]|comunica|comunic[oó]|aprueba|"
+    r"aprob[oó]|presenta|present[oó]|confirma|confirm[oó]|declara|declar[oó]|announces|announced|confirms|approves)\b")
+
+
 def problema_gancho(narracion: str) -> str:
     """Por qué la primera frase de la escena 1 no sirve de gancho, o "" si vale."""
     texto = narracion.strip().lstrip("«\"'¡")
     primera = re.split(r"(?<=[.!?…])\s+", texto, maxsplit=1)[0]
     if INICIOS_FLOJOS.match(texto):
         return f"empieza con «{' '.join(primera.split()[:4])}…», que hace deslizar"
-    if fecha := FECHA_SUELTA.match(texto):
-        return f"empieza con una fecha suelta («{fecha.group(0).rstrip(' ,')}»)"
+    if fecha := FECHA_SUELTA.match(texto) or EMPIEZA_POR_ANIO.match(texto):
+        return (f"empieza con una fecha («{fecha.group(0).rstrip(' ,')}»): empieza por lo más impactante y deja el año "
+                "para después")
     if PRESENTACION.match(texto):
         return "empieza presentando al protagonista como una enciclopedia («X, figura clave de…»)"
+    if TITULAR.match(texto):
+        return ("suena a titular de periódico («X anuncia…»): empieza por la cifra, por lo que le cambia al espectador "
+                "o por una pregunta, y di después quién lo hace")
     if len(primera.split()) > MAX_PALABRAS_GANCHO:
         return f"tiene {len(primera.split())} palabras y debe tener {MAX_PALABRAS_GANCHO} como mucho"
     return ""

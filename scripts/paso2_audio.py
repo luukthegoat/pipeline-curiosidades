@@ -35,7 +35,7 @@ VOCES = {
 VOZ_DE_RESERVA = "es-ES-AlvaroNeural"          # si la voz elegida falla con una frase
 VELOCIDAD = os.getenv("VELOCIDAD") or "+8%"   # algo más rápido: ritmo de vídeo corto
 PAUSA_ENTRE_ESCENAS = 0.25                     # segundos de silencio que el paso 3 pondrá entre escenas
-DURACION_MIN, DURACION_MAX = 28, 55            # aviso si queda fuera: noticias de ~30 s, el resto 40-45 s
+DURACION_MIN, DURACION_MAX = 15, 55            # aviso si queda fuera: noticias de ~30 s, el resto 40-45 s
 
 PALABRAS_POR_SUBTITULO = 4
 CORTE_POR_SILENCIO = 0.35  # s: una pausa larga en la voz también cierra el subtítulo

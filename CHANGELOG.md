@@ -3,6 +3,20 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.1.0] - 2026-11-11
+
+Los vídeos se quedaban en unas 1.000 vistas: la mitad de la gente deslizaba en el primer segundo y pocos los veían
+enteros.
+
+### Cambiado
+- **Acertijos como una historia**: el detective cuenta el caso en 3-4 viñetas (dibujos grandes y un rótulo), sale una
+  tarjeta con la pregunta y las pistas con la cuenta atrás «Piensa · puedes pausar», y después la solución. Son
+  acertijos clásicos de ingenio («¿por qué hace eso?»); el filtro descarta los que no dan todos los datos o delatan la
+  solución en los dibujos o las pistas.
+- **Vídeos de 20-25 segundos** en vez de 40-45: guiones de 52-70 palabras en 4-5 escenas (noticias, 50-72).
+- **Arranque más fuerte**: la primera frase tiene 12 palabras como mucho y empieza por lo más impactante. Se rechaza
+  y se reescribe si abre con el año («En 1519…») o suena a titular («Renfe anuncia…»).
+
 ## [3.0.1] - 2026-11-11
 
 ### Cambiado

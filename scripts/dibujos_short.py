@@ -25,8 +25,9 @@ ABAJO = 880          # por debajo de esta altura van los subtítulos: ahí no se
 FOTO_MINIMA = 1.2    # s de foto antes del dibujo (en la primera escena, hasta que acaba el gancho)
 DIBUJO_MINIMO = 1.8  # s de dibujo como mínimo; si no caben, la escena se queda solo con la foto
 POP = (0.35, 0.75, 1.12, 1.04, 1.0)  # escala de cada elemento nuevo en sus primeros fotogramas
-VERSION = "2"        # súbela si cambia el aspecto de los dibujos: se rehacen los clips
-TIPOS = ("mapa", "cifra", "fecha", "iconos", "comparacion", "linea", "narrador", "acertijo", "cuenta", "solucion")
+VERSION = "3"        # súbela si cambia el aspecto de los dibujos: se rehacen los clips
+TIPOS = ("mapa", "cifra", "fecha", "iconos", "comparacion", "linea", "narrador", "acertijo", "cuenta", "solucion",
+         "vineta")
 R, T = D.COLORES["rojo"], D.TINTA
 ESTILOS = {"dibujos": "Todo con dibujos y muñecos", "mixto": "Fotos y 2-3 dibujos", "fotos": "Solo fotos y vídeos"}
 
@@ -261,7 +262,12 @@ def validar(visual) -> dict:
             desde = min(max(int(visual.get("desde") or 5), 3), 10)
         except (TypeError, ValueError):
             desde = 5
-        return {"tipo": tipo, "desde": desde, "texto": _corto(visual.get("texto"), 260)}
+        return {"tipo": tipo, "desde": desde, "texto": _corto(visual.get("texto"), 260),
+                "pregunta": _corto(visual.get("pregunta"), 70),
+                "pistas": [_corto(p, 60) for p in (visual.get("pistas") or []) if str(p).strip()][:3]}
+    if tipo == "vineta":  # una viñeta de la historia: dibujos grandes y una frase corta debajo
+        iconos = D.iconos_validos(visual.get("iconos"))[:3]
+        return {"tipo": tipo, "iconos": iconos, "texto": _corto(visual.get("texto"), 60)} if iconos else {}
     if tipo == "solucion":
         texto = _corto(visual.get("texto"), 60)
         icono = visual.get("icono") if D.iconos_validos([visual.get("icono")]) else ""
@@ -370,14 +376,34 @@ def escena(visual: dict, personaje: str = None):
         pasos.append((D.texto(560, 800, "?", 190, fuente="titulo", relleno=R)
                       + D.texto(730, 760, "?", 250, fuente="titulo", relleno=D.COLORES["azul"])
                       + D.texto(900, 810, "?", 170, fuente="titulo", relleno=D.COLORES["amarillo"]), (730, 780), ""))
-    elif tipo == "cuenta":
+    elif tipo == "vineta":
+        iconos = visual["iconos"]
+        xs = {1: (540,), 2: (310, 770), 3: (200, 540, 880)}[len(iconos)]
+        tam = {1: 440, 2: 360, 3: 280}[len(iconos)]
         if visual.get("texto"):
+            base.append(D.texto(540, 730, visual["texto"], 72, 1000, "titulo", max_lineas=2, centrar_vertical=True))
+        base.append(D.personaje(quien, 110, 1025, 230, "explica"))
+        for x, emoji in zip(xs, iconos):
+            pasos.append((D.icono(emoji, x, 340, tam), (x, 340), ""))
+    elif tipo == "cuenta":
+        if visual.get("pistas"):  # tarjeta de pistas: la pregunta arriba y lo que se sabe, punto por punto
+            tarjeta = (f'<g filter="url(#mano)"><rect x="40" y="30" width="1000" height="440" rx="28" fill="white" '
+                       f'stroke="{T}" stroke-width="6"/></g>')
+            if visual.get("pregunta"):
+                tarjeta += D.texto(540, 92, visual["pregunta"], 58, 940, "titulo", relleno=R, max_lineas=1)
+            for i, pista in enumerate(visual["pistas"]):
+                y = 190 + i * 96
+                tarjeta += (f'<circle cx="100" cy="{y}" r="13" fill="{R}"/>'
+                            + D.texto(135, y, pista, 50, 870, ancla="start", max_lineas=2, centrar_vertical=True))
+            base.append(tarjeta)
+        elif visual.get("texto"):
             base.append(_pizarra(visual["texto"], 40, 400, 46))
-        base += [D.personaje(quien, 170, 1015, 340, "piensa"), D.icono("⏳", 910, 660, 170)]
+        base += [D.personaje(quien, 170, 1015, 320, "piensa"), D.icono("⏳", 910, 640, 160),
+                 D.texto(540, 850, "PIENSA · PUEDES PAUSAR", 42, fuente="titulo")]
         for n in range(visual["desde"], 0, -1):
-            pasos.append((f'<g filter="url(#mano)"><circle cx="540" cy="650" r="175" fill="#ffd23f" stroke="{T}" '
-                          f'stroke-width="10"/></g>' + D.texto(540, 662, str(n), 250, fuente="titulo", relleno=R),
-                          (540, 650), REEMPLAZA))
+            pasos.append((f'<g filter="url(#mano)"><circle cx="540" cy="645" r="150" fill="#ffd23f" stroke="{T}" '
+                          f'stroke-width="10"/></g>' + D.texto(540, 656, str(n), 220, fuente="titulo", relleno=R),
+                          (540, 645), REEMPLAZA))
     elif tipo == "solucion":
         texto = visual["texto"]
         tam = 150 if len(texto) <= 12 else (104 if len(texto) <= 26 else 76)
