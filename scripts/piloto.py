@@ -50,8 +50,13 @@ ESTADO = RAIZ / "salida" / "_trabajo" / "piloto_estado.json"
 CERROJO = RAIZ / "salida" / "_trabajo" / "piloto.lock"
 TAREA = "Mente Inquieta - piloto automatico"
 ACCESO = Path(os.getenv("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs/Startup/MenteInquieta67 piloto.lnk"
-TIPOS = {"efemeride": "Efeméride del día", "acertijo": "Acertijo", "futbol": "Fútbol"}
-NOMBRES = {**TIPOS, "actualidad": "Actualidad", "actualidad_2": "Actualidad (tarde)"}
+TIPOS = {"efemeride": "Efeméride del día", "acertijo": "Acertijo", "futbol": "Fútbol", "gta6": "GTA 6"}
+# GTA 6: varios al día (scripts/gta6.py). 6 es lo que deja subir la cuota gratuita de la API de YouTube (10.000
+# unidades al día; cada subida gasta 1.600).
+GTA_AL_DIA = int(os.getenv("GTA6_AL_DIA") or 6)
+FRANJAS_GTA = ("10:30", "13:00", "15:00", "17:30", "19:30", "21:30")  # el público de juegos, sobre todo por la tarde
+GTA_TIPOS = {f"gta6_{i}": f"GTA 6 ({i})" for i in range(1, GTA_AL_DIA + 1)}
+NOMBRES = {**TIPOS, "actualidad": "Actualidad", "actualidad_2": "Actualidad (tarde)", **GTA_TIPOS}
 ACTUALIDAD_AL_DIA = 2
 INTENTOS_NOTICIAS = 4  # noticias que se intentan al día como mucho (las que no pasan la verificación no cuentan)
 SEGUNDA_NOTICIA_DESDE = 16  # hora: la segunda noticia del día se hace por la tarde, para que sea de lo último
@@ -63,13 +68,14 @@ FRANJAS = ("08:30", "14:00", "17:30", "19:30", "21:30")
 # La franja de cada vídeo: la efeméride, temprano («tal día como hoy» vale todo el día); la noticia de la mañana, a
 # la hora de comer; el acertijo, por la tarde (se comenta con calma); el fútbol, antes de los partidos de la noche;
 # la segunda noticia, en el pico de la noche.
-FRANJA_DE = {"efemeride": "08:30", "actualidad": "14:00", "acertijo": "17:30", "futbol": "19:30", "actualidad_2": "21:30"}
+FRANJA_DE = {"efemeride": "08:30", "actualidad": "14:00", "acertijo": "17:30", "futbol": "19:30", "actualidad_2": "21:30",
+             **{t: FRANJAS_GTA[min(i, len(FRANJAS_GTA) - 1)] for i, t in enumerate(GTA_TIPOS)}}
 MARGEN_MIN = 20       # una franja a menos de esto ya no da tiempo: se pasa a la siguiente
 SEPARACION_MIN = 45   # dos vídeos no salen más juntos que esto
 
 CONFIG_INICIAL = {
     "activo": False,
-    "efemeride": True, "acertijo": True, "futbol": True, "actualidad": True,
+    "efemeride": True, "acertijo": True, "futbol": True, "actualidad": True, "gta6": False,
     # Cuándo trabaja, además de al encender el ordenador: un rato antes de cada franja de publicación
     "revisiones": ["07:45", "12:45", "16:30", "20:15"],
 }
@@ -144,7 +150,8 @@ def mejor_hora(tipo: str, ahora: datetime = None):
             continue
         if hora.date() == hoy:
             ocupadas.append(hora)
-    franjas = [datetime.combine(hoy, datetime.strptime(f, "%H:%M").time()) for f in FRANJAS]
+    franjas = [datetime.combine(hoy, datetime.strptime(f, "%H:%M").time())
+               for f in (FRANJAS_GTA if tipo.startswith("gta6") else FRANJAS)]
     propia = datetime.combine(hoy, datetime.strptime(FRANJA_DE.get(tipo, FRANJAS[0]), "%H:%M").time())
     # Primero la suya; después, las siguientes del día (y, si no, las anteriores que aún no hayan pasado)
     orden = [propia] + [f for f in franjas if f > propia] + [f for f in franjas if f < propia]
@@ -184,8 +191,10 @@ def _hacer(tipo: str, config: dict, crear_guion, intentos: int = 2) -> bool:
         ruta = crear_guion()
         if not ruta:
             return False
-        if not montar(ruta):
-            avisos.notificar("MenteInquieta67 · piloto automático", f"No se pudo montar el vídeo de {TIPOS[tipo].lower()}.")
+        # Los de GTA 6 ya salen montados de gta6.py (sus planos dependen de la duración de la voz)
+        if not tipo.startswith("gta6") and not montar(ruta):
+            avisos.notificar("MenteInquieta67 · piloto automático",
+                             f"No se pudo montar el vídeo de {NOMBRES.get(tipo, tipo).lower()}.")
             return False
         apuntar(tipo, ruta.stem)
         if publicar(tipo, ruta, config):
@@ -194,7 +203,8 @@ def _hacer(tipo: str, config: dict, crear_guion, intentos: int = 2) -> bool:
         registrar(f"«{guion.get('titulo')}» tiene {len(guion['sin_respaldo'])} frase(s) sin respaldo: no se publica solo."
                   + (" Pruebo con otro tema." if intento + 1 < intentos else ""))
     avisos.notificar("MenteInquieta67 · revisa un vídeo",
-                     f"El de {TIPOS[tipo].lower()} de hoy tiene frases dudosas: está en Mis vídeos esperando tu revisión.")
+                     f"El de {NOMBRES.get(tipo, tipo).lower()} de hoy tiene frases dudosas: está en Mis vídeos esperando "
+                     "tu revisión.")
     return False
 
 
@@ -267,6 +277,16 @@ def _guion_futbol():
     return None
 
 
+def _guion_gta6():
+    """El siguiente tema de GTA 6 que aún no tenga vídeo, ya montado (None si no quedan temas o falla)."""
+    inicio = time.time() - 1
+    pa.ejecutar("gta6.py", "--siguiente")
+    nuevos = [r for r in _guiones_nuevos(inicio) if "_gta6_" in r.name]
+    if not nuevos:
+        registrar("GTA 6: no quedan temas nuevos con el material oficial (o ha fallado); mira el registro.")
+    return nuevos[-1] if nuevos else None
+
+
 CREADORES = {"efemeride": _guion_efemeride, "acertijo": _guion_acertijo, "futbol": _guion_futbol}
 
 
@@ -302,7 +322,9 @@ def trabajar(config: dict, solo: str = "") -> None:
         registrar("Piloto automático: no hay internet; lo intento en la próxima revisión.")
         return
     registrar("=== Piloto automático: los vídeos de hoy ===")
-    for tipo in TIPOS:
+    if config.get("gta6") and solo in ("", "gta6"):
+        _gta6_del_dia(config)
+    for tipo in CREADORES:
         if (solo and tipo != solo) or not config.get(tipo):
             continue
         if tipo in hechos_hoy() and not solo:
@@ -321,6 +343,19 @@ def trabajar(config: dict, solo: str = "") -> None:
     if not solo:
         _liberar_espacio(config)
     registrar("=== Piloto automático: hecho por ahora ===")
+
+
+def _gta6_del_dia(config: dict) -> None:
+    """Los vídeos de GTA 6 que falten hoy, uno detrás de otro; para en cuanto no quedan temas."""
+    for tipo in GTA_TIPOS:
+        if tipo in hechos_hoy():
+            continue
+        try:
+            if not _hacer(tipo, config, _guion_gta6, intentos=1) and tipo not in hechos_hoy():
+                return  # sin temas o con un fallo: no tiene sentido seguir hoy
+        except Exception:
+            registrar(f"Error con {NOMBRES[tipo]}:\n" + traceback.format_exc())
+            return
 
 
 def _liberar_espacio(config: dict) -> None:
@@ -411,7 +446,8 @@ def resumen_hoy() -> list:
 
     noticias = sorted((n for n in noticias_hoy() if vale(n["nombre"])),
                       key=lambda n: not n.get("publicado"))  # las que han salido, primero
-    filas = [(t, hechos.get(t) if hechos.get(t) and vale(hechos[t]) else None) for t in TIPOS if config.get(t)]
+    tipos = [t for t in CREADORES if config.get(t)] + (list(GTA_TIPOS) if config.get("gta6") else [])
+    filas = [(t, hechos.get(t) if hechos.get(t) and vale(hechos[t]) else None) for t in tipos]
     if config.get("actualidad"):
         filas += [(f"actualidad{'_2' if i else ''}", noticias[i]["nombre"] if i < len(noticias) else None)
                   for i in range(ACTUALIDAD_AL_DIA)]

@@ -102,6 +102,9 @@
   <p>El piloto se enciende y se apaga en <a href="{{ url_for('panel') }}">Inicio</a>. Aquí eliges qué vídeos hace cada
     día; cada uno sale a su mejor hora.</p>
   <form method="post" action="{{ url_for('guardar_piloto_automatico') }}">
+    <label class="casilla"><input type="checkbox" name="gta6" value="1" {{ 'checked' if auto.gta6 }}>
+      <span><strong>GTA 6</strong>: hasta 6 al día (de 10:30 a 21:30), con las capturas y textos oficiales de
+        Rockstar Games.</span></label>
     <label class="casilla"><input type="checkbox" name="efemeride" value="1" {{ 'checked' if auto.efemeride }}>
       <span><strong>Efeméride de hoy</strong> (08:30), con dibujos: algo que pasó tal día como hoy.</span></label>
     <label class="casilla"><input type="checkbox" name="actualidad" value="1" {{ 'checked' if auto.actualidad }}>

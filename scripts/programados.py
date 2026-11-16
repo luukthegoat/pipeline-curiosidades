@@ -44,7 +44,8 @@ TAREA = "Mente Inquieta - publicar programados"
 # Cuánto antes de su hora puede subirse: por defecto 30 días, es decir, en cuanto haya hueco en el límite diario.
 # Así casi todo queda programado en YouTube (se publica aunque el ordenador esté apagado).
 ANTELACION_H = float(os.getenv("PROGRAMADOS_ANTELACION_H") or 720)
-MAX_SUBIDAS_DIA = int(os.getenv("PROGRAMADOS_MAX_DIA") or 5)        # subidas como mucho en 24 h
+# Subidas como mucho en 24 h: la cuota gratuita de la API (10.000 unidades al día, 1.600 por subida) da para 6
+MAX_SUBIDAS_DIA = int(os.getenv("PROGRAMADOS_MAX_DIA") or 6)
 MARGEN_MIN = 15  # YouTube necesita que la hora de publicación sea futura: por debajo de esto, se publica ya
 FORMATO = "%Y-%m-%dT%H:%M"
 

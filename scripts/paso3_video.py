@@ -1392,7 +1392,8 @@ def montar(carpeta_audio: Path, forzar: bool) -> Path:
     trabajo = CARPETA_TRABAJO / nombre
     trabajo.mkdir(parents=True, exist_ok=True)
 
-    if datos.get("video_ia"):  # clips generados con una IA de vídeo en vez de imágenes
+    # Un clip por escena: generados con una IA de vídeo o preparados aparte (p. ej. capturas oficiales de un juego)
+    if datos.get("video_ia") or datos.get("clips_propios"):
         return montar_clips(carpeta_audio, datos, nombre, ruta_video, trabajo)
 
     # 0. Los dibujos: qué escenas llevan uno (todas, en los vídeos hechos enteros con dibujos) y qué muñeco lo cuenta
@@ -1586,10 +1587,13 @@ def montar_clips(carpeta_audio: Path, datos: dict, nombre: str, ruta_video: Path
     faltan = video_ia.faltan(nombre, datos["escenas"])
     if faltan:
         raise ValueError(f"faltan los clips de las escenas {', '.join(map(str, faltan))}: súbelos en la página del guion")
-    ia = datos["video_ia"]
+    ia = datos.get("video_ia") or {}
     voz_del_clip = ia.get("voz") == "ia"
-    print(f"  vídeo con IA ({video_ia.herramienta(ia.get('herramienta', ''))['nombre']}) · "
-          f"voz {'de los clips' if voz_del_clip else 'de la app'}")
+    if ia:
+        print(f"  vídeo con IA ({video_ia.herramienta(ia.get('herramienta', ''))['nombre']}) · "
+              f"voz {'de los clips' if voz_del_clip else 'de la app'}")
+    else:
+        print(f"  vídeo con clips propios ({(datos.get('clips_propios') or {}).get('origen', '')})")
     gancho = str(datos.get("gancho") or "").strip()
     trabajos, cursor = [], 0.0
     for indice, escena in enumerate(datos["escenas"]):
@@ -1713,6 +1717,8 @@ def texto_publicacion(datos: dict, creditos: list, pista: str) -> str:
     if autores:
         tiktok.append(f"{'Images' if ingles else 'Imágenes'}: {autores}")
         tiktok.append("")
+    if str(datos.get("credito") or "").strip():
+        tiktok += [datos["credito"].strip(), ""]
     tiktok.append(_hashtags(datos, 5))
 
     youtube = publicacion_youtube(datos, creditos, pista)
@@ -1781,6 +1787,8 @@ def publicacion_youtube(datos: dict, creditos: list, pista: str) -> dict:
     autores = _autores_de_fotos(creditos)
     if autores:
         lineas += ["", f"{'Images' if ingles else 'Imágenes'}: {autores}"]
+    if str(datos.get("credito") or "").strip():  # p. ej. «Imágenes: Rockstar Games (material oficial)»
+        lineas += ["", datos["credito"].strip()]
     lineas += ["", _hashtags(datos, 4)]  # 3-5 en total con el #Shorts del título: más parece spam
     # YouTube rechaza «<» y «>» en título y descripción, y corta la descripción a 5.000 caracteres.
     descripcion = "\n".join(lineas).replace("<", "‹").replace(">", "›")[:4900]

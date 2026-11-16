@@ -3,6 +3,23 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.2.0] - 2026-11-16
+
+El canal se centra en GTA 6, que sale el 19 de noviembre de 2026.
+
+### Añadido
+- **Shorts de GTA 6** (`scripts/gta6.py`) con el material oficial de prensa de Rockstar Games (capturas y textos de
+  rockstargames.com/VI, que Rockstar publica para descargar y compartir): 18 temas entre personajes, zonas del mapa y
+  novedades. El guion sale solo del material oficial; el verificador revisa también el título y el gancho. Cada
+  captura se convierte en un plano vertical a pantalla completa que se desliza despacio, elegida por su descripción
+  oficial para acompañar cada frase. Se dejan fuera las capturas con desnudez o contenido sexual.
+- **Piloto de GTA 6**: hasta 6 vídeos al día (10:30, 13:00, 15:00, 17:30, 19:30 y 21:30); se activa en Ajustes.
+- El montaje acepta clips propios por escena (sin el aviso de «vídeo generado con IA») y una línea de crédito en la
+  descripción.
+
+### Cambiado
+- Hasta 6 subidas a YouTube en 24 h (lo que da la cuota gratuita de la API).
+
 ## [3.1.1] - 2026-11-16
 
 Revisión general de la app y del piloto automático.

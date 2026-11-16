@@ -51,7 +51,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "3.1.1"
+VERSION = "3.2.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -430,7 +430,10 @@ def revisar_rapido(nombre):
 
     def trabajo(t: Trabajo) -> bool:
         t.resultado = [nombre]
-        if rehacer or not ruta_video(datos):  # sin las frases quitadas: voz y vídeo de nuevo (solo lo que cambia)
+        if (rehacer or not ruta_video(datos)) and datos.get("clips_propios"):  # GTA 6: los planos van con la voz
+            if t.ejecutar("gta6.py", "--rehacer", str(GUIONES / f"{nombre}.json")) != 0:
+                return False
+        elif rehacer or not ruta_video(datos):  # sin las frases quitadas: voz y vídeo de nuevo (solo lo que cambia)
             if t.ejecutar("paso2_audio.py", str(GUIONES / f"{nombre}.json")) == 1:
                 return False
             if t.ejecutar("paso3_video.py", str(AUDIO / nombre), "--forzar") != 0:
