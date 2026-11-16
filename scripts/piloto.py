@@ -277,8 +277,25 @@ def _guion_futbol():
     return None
 
 
+def _gta6_listo():
+    """Un vídeo de GTA 6 ya hecho de antemano (desde el menú o a mano) que aún no se ha publicado ni descartado."""
+    estado = pa.leer_json(ESTADO, {})
+    del_piloto = {n for dia in estado.values() if isinstance(dia, dict) for n in dia.values()}
+    for ruta in sorted(paso3_video.CARPETA_GUIONES.glob("*_gta6_*.json"), key=lambda r: r.stat().st_mtime):
+        guion = pa.leer_json(ruta, {})
+        if (ruta.stem not in del_piloto and guion.get("video") and Path(guion["video"]).exists()
+                and not guion.get("youtube") and not guion.get("descartado") and not guion.get("sin_respaldo")):
+            return ruta
+    return None
+
+
 def _guion_gta6():
-    """El siguiente tema de GTA 6 que aún no tenga vídeo, ya montado (None si no quedan temas o falla)."""
+    """El siguiente vídeo de GTA 6: uno ya hecho que esté esperando o, si no, el del siguiente tema (ya montado).
+    None si no quedan temas o falla."""
+    listo = _gta6_listo()
+    if listo:
+        registrar(f"GTA 6: publico uno que ya estaba hecho ({listo.stem}).")
+        return listo
     inicio = time.time() - 1
     pa.ejecutar("gta6.py", "--siguiente")
     nuevos = [r for r in _guiones_nuevos(inicio) if "_gta6_" in r.name]
@@ -347,6 +364,13 @@ def trabajar(config: dict, solo: str = "") -> None:
 
 def _gta6_del_dia(config: dict) -> None:
     """Los vídeos de GTA 6 que falten hoy, uno detrás de otro; para en cuanto no quedan temas."""
+    ultima = datetime.combine(date.today(), datetime.strptime(FRANJAS_GTA[-1], "%H:%M").time())
+    if (ultima - datetime.now()).total_seconds() < MARGEN_MIN * 60:
+        # Ya no queda ninguna hora buena hoy: mejor guardarlos para mañana que publicarlos de noche de golpe
+        registrar("GTA 6: ya no quedan horas buenas hoy; los vídeos se hacen mañana.")
+        return
+    if any(t not in hechos_hoy() for t in GTA_TIPOS):
+        pa.ejecutar("gta6_trailers.py")  # planos de los tráileres nuevos de salida/gta6/trailers (si hay)
     for tipo in GTA_TIPOS:
         if tipo in hechos_hoy():
             continue

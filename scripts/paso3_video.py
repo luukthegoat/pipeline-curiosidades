@@ -888,10 +888,13 @@ def texto_ass(palabras: list, total: float, gancho: str = "", titulo: str = "", 
         eventos.append(
             f"Dialogue: 1,{tiempo_ass(0)},{tiempo_ass(fin)},Titulo,,0,0,0,,{{\\fad(200,400)}}{escapar_ass(titulo)}"
         )
-    for bloque in bloques_de_palabras(palabras):
+    bloques = bloques_de_palabras(palabras)
+    for n, bloque in enumerate(bloques):
+        # El bloque se queda un poco tras su última palabra, pero nunca encima del siguiente (se verían los dos)
+        siguiente = bloques[n + 1][0]["inicio_s"] if n + 1 < len(bloques) else total
         for i, palabra in enumerate(bloque):
             inicio = palabra["inicio_s"]
-            fin = bloque[i + 1]["inicio_s"] if i + 1 < len(bloque) else min(palabra["fin_s"] + 0.15, total)
+            fin = bloque[i + 1]["inicio_s"] if i + 1 < len(bloque) else min(palabra["fin_s"] + 0.15, total, siguiente)
             partes = []
             for j, p in enumerate(bloque):
                 texto_palabra = escapar_ass(p["texto"])

@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -42,20 +43,44 @@ CORTE_POR_SILENCIO = 0.35  # s: una pausa larga en la voz también cierra el sub
 
 TICKS_POR_SEGUNDO = 10_000_000  # edge-tts da los tiempos en unidades de 100 ns
 
+# Cómo se dicen en España los nombres en inglés que las voces leen a la española (comprobado con Whisper: todas las
+# voces dicen «Jasón»). Solo cambia lo que se oye: los subtítulos llevan la palabra original.
+PRONUNCIACION = {
+    "Jason": "Yéison", "Vice": "Vais", "City": "Siti", "Boobie": "Bubi", "Ike": "Aik", "Brian": "Bráian",
+    "Heder": "Jéder", "Hampton": "Jámpton", "Dre'Quan": "Drecuán", "Dimez": "Daims", "Grassrivers": "Grasrívers",
+    "Gellhorn": "Guélhorn", "Keys": "Kis", "Ocean": "Ouchan", "Beach": "Bich", "Rockstar": "Rocstar",
+    "Ultimate": "Áltimet", "Vintage": "Víntach", "Edition": "Edíchon",
+}
+_DE_VUELTA = {v.lower(): k for k, v in PRONUNCIACION.items()}
+_PATRON_PRONUNCIACION = re.compile(r"(?<![\w'])(" + "|".join(re.escape(k) for k in PRONUNCIACION) + r")(?![\w'])")
+
+
+def para_decir(texto: str) -> str:
+    return _PATRON_PRONUNCIACION.sub(lambda m: PRONUNCIACION[m.group(1)], texto)
+
+
+def palabra_original(dicha: str) -> str:
+    """La palabra tal como va en el guion (para los subtítulos), aunque se haya dicho con otra grafía."""
+    limpia = dicha.strip(".,;:!?¡¿«»\"'")
+    original = _DE_VUELTA.get(limpia.lower())
+    return dicha.replace(limpia, original) if original else dicha
+
 
 async def sintetizar(texto: str, voz: str, ruta: Path, intentos: int = 3) -> list:
     """Genera el mp3 y devuelve [(palabra, inicio_s, fin_s)] relativos al inicio del audio."""
+    hablado = para_decir(texto)
     for intento in range(intentos):
         palabras = []
         try:
-            comunicador = edge_tts.Communicate(texto, voz, rate=VELOCIDAD, boundary="WordBoundary")
+            comunicador = edge_tts.Communicate(hablado, voz, rate=VELOCIDAD, boundary="WordBoundary")
             with open(ruta, "wb") as archivo:
                 async for trozo in comunicador.stream():
                     if trozo["type"] == "audio":
                         archivo.write(trozo["data"])
                     elif trozo["type"] == "WordBoundary":
                         inicio = trozo["offset"] / TICKS_POR_SEGUNDO
-                        palabras.append((trozo["text"], inicio, inicio + trozo["duration"] / TICKS_POR_SEGUNDO))
+                        palabras.append((palabra_original(trozo["text"]), inicio,
+                                         inicio + trozo["duration"] / TICKS_POR_SEGUNDO))
             return palabras
         except Exception as error:  # errores de red del servicio de voz
             if intento == intentos - 1:
@@ -155,6 +180,39 @@ def audio_de_los_clips(ruta_guion: Path, guion: dict) -> Path:
     return ruta_salida
 
 
+# La voz de cada tipo de vídeo (VOZ_AUTOMATICA=0 en .env para usar siempre VOZ_ES). Voces nativas de España: las
+# multilingües (americanas, francesas…) se entienden, pero se les nota el acento y no gustaron.
+VOZ_AUTOMATICA = os.getenv("VOZ_AUTOMATICA", "1") == "1"
+VOZ_HOMBRE, VOZ_MUJER = "es-ES-AlvaroNeural", "es-ES-XimenaNeural"
+VOCES_POR_TIPO = {
+    "gta6": VOZ_HOMBRE,
+    "gta6_mujer": VOZ_MUJER,     # cuando la protagonista del vídeo es una mujer
+    "acertijo": VOZ_HOMBRE,
+    "futbol": VOZ_HOMBRE,
+    "actualidad": VOZ_HOMBRE,
+}
+GTA6_MUJERES = {"lucia", "realdimez"}
+
+
+def voz_para(guion: dict, nombre: str) -> str:
+    """La voz del guion: la que tenga puesta a mano; si no, la que pega con su tipo de vídeo; si no, la de .env."""
+    idioma = guion.get("idioma", "es")
+    if guion.get("voz"):
+        return guion["voz"]
+    if not VOZ_AUTOMATICA or idioma != "es":
+        return VOCES[idioma]
+    if guion.get("clips_propios"):  # GTA 6
+        tema = (guion["clips_propios"] or {}).get("personaje", "")
+        return VOCES_POR_TIPO["gta6_mujer" if tema in GTA6_MUJERES else "gta6"]
+    if "acertijo" in guion:
+        return VOCES_POR_TIPO["acertijo"]
+    if guion.get("futbol"):
+        return VOCES_POR_TIPO["futbol"]
+    if "_actualidad_" in nombre:
+        return VOCES_POR_TIPO["actualidad"]
+    return VOCES[idioma]  # efemérides e historia: la voz elegida en Ajustes
+
+
 async def procesar_guion(ruta_guion: Path, forzar: bool) -> Path:
     guion = json.loads(ruta_guion.read_text(encoding="utf-8"))
     if (guion.get("video_ia") or {}).get("voz") == "ia":
@@ -162,7 +220,9 @@ async def procesar_guion(ruta_guion: Path, forzar: bool) -> Path:
     idioma = guion.get("idioma", "es")
     if idioma not in VOCES:
         raise ValueError(f"idioma sin voz configurada: {idioma!r}")
-    voz = VOCES[idioma]
+    voz = voz_para(guion, ruta_guion.stem)
+    if voz != VOCES[idioma]:
+        print(f"  voz: {voz}")
 
     carpeta = CARPETA_AUDIO / ruta_guion.stem
     ruta_salida = carpeta / "escenas.json"

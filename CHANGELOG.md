@@ -3,6 +3,32 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.3.0] - 2026-11-16
+
+### Añadido
+- **Clips de los tráileres oficiales en los Shorts de GTA 6.** Rockstar ofrece sus tráileres para descargar;
+  `scripts/gta6_trailers.py` los corta en planos, una IA con visión describe cada uno y descarta logos, rótulos,
+  negro, desnudez y violencia gráfica. Cada frase lleva el plano de tráiler o la captura que mejor encaja; la primera,
+  siempre un plano en movimiento. Los planos van sin el audio del tráiler (sus canciones son de otros artistas y
+  harían saltar Content ID) y no se repiten entre vídeos mientras queden otros sin usar. Se recortan dentro del
+  área con imagen (sin las franjas negras de cine).
+- **Voz automática según el vídeo**, con voces nativas de España: Álvaro y, cuando la protagonista es una mujer,
+  Ximena. Álvaro pasa a ser también la voz por defecto (las multilingües se entendían, pero con acento extranjero).
+  Se desactiva con `VOZ_AUTOMATICA=0`; un guion con `"voz"` usa esa.
+- **Pronunciación** de nombres en inglés: «Jason» se dice «Yéison», «Vice City» «Vais Siti», etc.; los subtítulos
+  mantienen la grafía original.
+
+- El piloto publica primero los vídeos de GTA 6 que ya estén hechos y sin dudas, antes de hacer otros nuevos.
+- Groq deja describir unas 90 imágenes al día con el modelo de visión: el troceado de los tráileres para al llegar
+  al límite y sigue en la siguiente revisión del piloto, desde donde lo dejó.
+
+### Corregido
+- Durante unos fotogramas se veían dos subtítulos montados cuando el siguiente bloque empezaba justo detrás.
+- El límite de subidas se cuenta como lo cuenta YouTube (desde que se renueva la cuota a las 9:00, hora de España) y
+  no en las últimas 24 h: lo subido por la noche ya no bloquea las subidas de la mañana siguiente.
+- El piloto ya no hace ni publica de golpe los vídeos de GTA 6 si arranca cuando ya no quedan horas buenas: los deja
+  para el día siguiente.
+
 ## [3.2.0] - 2026-11-16
 
 El canal se centra en GTA 6, que sale el 19 de noviembre de 2026.

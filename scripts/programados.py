@@ -92,22 +92,19 @@ def momento_de_subida(video: dict) -> datetime:
     return _hora(video["hora"]) - timedelta(hours=ANTELACION_H)
 
 
-def subidas_ultimas_24h() -> int:
-    """Vídeos subidos a YouTube en las últimas 24 h (por la cola o a mano), según los guiones."""
-    limite = datetime.now() - timedelta(hours=24)
-    total = 0
-    for ruta in GUIONES.glob("*.json"):
-        try:
-            subido = (json.loads(ruta.read_text(encoding="utf-8")).get("youtube") or {}).get("subido")
-            if subido and datetime.fromisoformat(subido) > limite:
-                total += 1
-        except (OSError, ValueError):
-            continue
-    return total
+def inicio_cuota() -> datetime:
+    """Cuándo empezó el «día» de la cuota de YouTube: se renueva a medianoche de California (las 9:00 en España)."""
+    from datetime import timezone
+    try:
+        from zoneinfo import ZoneInfo
+        california = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles"))
+    except Exception:  # noqa: BLE001 — sin la base de husos horarios: hora del Pacífico de invierno
+        california = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-8)))
+    medianoche = california.replace(hour=0, minute=0, second=0, microsecond=0)
+    return medianoche.astimezone().replace(tzinfo=None)
 
 
-def proxima_subida_libre() -> datetime:
-    """Cuándo vuelve a haber hueco si ya se ha llegado al máximo de subidas en 24 h."""
+def _horas_de_subida() -> list:
     horas = []
     for ruta in GUIONES.glob("*.json"):
         try:
@@ -116,10 +113,21 @@ def proxima_subida_libre() -> datetime:
                 horas.append(datetime.fromisoformat(subido))
         except (OSError, ValueError):
             continue
-    recientes = sorted(h for h in horas if h > datetime.now() - timedelta(hours=24))
-    if len(recientes) < MAX_SUBIDAS_DIA:
+    return horas
+
+
+def subidas_ultimas_24h() -> int:
+    """Vídeos subidos a YouTube (por la cola o a mano) desde que se renovó la cuota de hoy. Se cuenta como YouTube:
+    desde la medianoche de California, no en las últimas 24 h (si no, lo subido por la noche bloquearía la mañana)."""
+    desde = inicio_cuota()
+    return sum(1 for h in _horas_de_subida() if h >= desde)
+
+
+def proxima_subida_libre() -> datetime:
+    """Cuándo vuelve a haber hueco si ya se ha llegado al máximo de subidas del día: al renovarse la cuota."""
+    if subidas_ultimas_24h() < MAX_SUBIDAS_DIA:
         return datetime.now()
-    return recientes[len(recientes) - MAX_SUBIDAS_DIA] + timedelta(hours=24, minutes=1)
+    return inicio_cuota() + timedelta(hours=24, minutes=1)
 
 
 # --- Cambios desde el menú ------------------------------------------------------------

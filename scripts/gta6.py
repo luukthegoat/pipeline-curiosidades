@@ -43,8 +43,9 @@ nada del juego (ni misiones, ni escenas, ni relaciones, ni detalles que no esté
   con el tono de un fan que cuenta algo que poca gente sabe.
 - La PRIMERA frase (12 palabras como mucho) engancha con lo más llamativo. No empieces por «En GTA 6…» ni por el
   nombre a secas.
-- Si te paso CAPTURAS con su descripción, elige para cada escena la que mejor acompañe lo que se dice ("captura": su
-  número), sin repetir si puedes.
+- Para cada escena elige de la lista de IMÁGENES la que mejor acompañe lo que se dice ("visual": su código), sin
+  repetir. Las «T…» son planos en movimiento de los tráileres (enganchan más); las «F…», capturas del tema.
+  La escena 1 lleva SIEMPRE un plano «T» con acción. Usa al menos 2 «T» y, si hay «F», al menos 1 «F».
 - Di «GTA 6» al menos una vez (así lo busca la gente).
 - Respeta QUIÉN hace cada cosa y A QUIÉN, tal como lo dice el material (si dice que A deja vivir gratis a B a cambio
   de algo, no escribas que B trabaja gratis para A). Ante la duda, usa casi las mismas palabras del material.
@@ -54,7 +55,7 @@ nada del juego (ni misiones, ni escenas, ni relaciones, ni detalles que no esté
 - La última escena es SOLO una pregunta al espectador para que comente (termina en «?»).
 - Las frases del personaje se citan tal cual, sin decir a quién se las dice si el material no lo dice.
 Responde SOLO con JSON: {{"titulo": "título con gancho que incluya «GTA 6» (máx. 60 caracteres)",
-"gancho": "texto grande del primer segundo (3 a 6 palabras)", "escenas": [{{"narracion": "…", "captura": 1}}],
+"gancho": "texto grande del primer segundo (3 a 6 palabras)", "escenas": [{{"narracion": "…", "visual": "T3"}}],
 "pregunta": "la pregunta final", "musica": "epico, misterio o neutro"}}"""
 
 
@@ -81,6 +82,45 @@ def capturas(tema: dict) -> list:
     return rutas
 
 
+USADOS = Path("salida/_trabajo/gta6_planos_usados.json")
+PLANOS_A_ELEGIR = 30  # planos de tráiler que se ofrecen a la IA en cada guion (no caben todos)
+
+
+def planos() -> dict:
+    """{id: plano} de los planos útiles de los tráileres (los prepara gta6_trailers.py)."""
+    try:
+        lista = json.loads((CARPETA / "planos.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {pl["id"]: pl for pl in lista if pl.get("util") and not pl.get("sexual") and Path(pl["video"]).exists()}
+
+
+def planos_para_elegir() -> list:
+    """Unos cuantos planos para este guion: primero los que aún no han salido en ningún vídeo (y, de ellos, los de
+    acción), en orden al azar para que cada vídeo sea distinto."""
+    import random
+    try:
+        usados = set(json.loads(USADOS.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        usados = set()
+    # Sin sangre ni disparos: YouTube quita anuncios si hay violencia gráfica al principio, y así no hay que mirarlo
+    todos = [pl for pl in planos().values() if not pl.get("violento")]
+    random.shuffle(todos)
+    todos.sort(key=lambda pl: (pl["id"] in usados, not pl["accion"]))
+    return todos[:PLANOS_A_ELEGIR]
+
+
+def apuntar_planos(ruta_guion: Path) -> None:
+    guion = json.loads(ruta_guion.read_text(encoding="utf-8"))
+    try:
+        usados = json.loads(USADOS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        usados = []
+    usados += [e["visual"].split(":", 1)[1] for e in guion["escenas"] if str(e.get("visual", "")).startswith("trailer:")]
+    USADOS.parent.mkdir(parents=True, exist_ok=True)
+    USADOS.write_text(json.dumps(sorted(set(usados))), encoding="utf-8")
+
+
 TIPOS_TEMA = {"personaje": "un personaje del juego", "lugar": "una zona del mapa del juego", "extra": "una novedad"}
 
 
@@ -98,9 +138,12 @@ def escribir_guion(clave: str) -> Path:
     texto_material = f"GENERAL: {datos['general']}\n\n{p['nombre'].upper()}: {p['texto']}"
     fotos = capturas(p)
     descripciones = datos.get("descripciones", {})
-    con_texto = [f for f in fotos if f.stem in descripciones]
-    lista_capturas = ("\n\nCAPTURAS:\n" + "\n".join(f"{i}. {descripciones[f.stem]}" for i, f in enumerate(con_texto, 1))
-                      if con_texto else "")
+    # Lo que se puede ver en cada escena: capturas del tema (F) y planos de los tráileres (T), con su descripción
+    opciones = {f"F{i}": {"captura": f.name, "texto": descripciones.get(f.stem, f"captura oficial de {p['nombre']}")}
+                for i, f in enumerate(fotos[:12], 1)}
+    opciones.update({f"T{i}": {"plano": pl["id"], "texto": pl["descripcion"] + (" (acción)" if pl["accion"] else "")}
+                     for i, pl in enumerate(planos_para_elegir(), 1)})
+    lista_capturas = "\n\nIMÁGENES:\n" + "\n".join(f"{c}. {o['texto']}" for c, o in opciones.items())
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
         raise RuntimeError("falta GROQ_API_KEY en el archivo .env")
@@ -110,7 +153,7 @@ def escribir_guion(clave: str) -> Path:
             g = json.loads(paso1_guiones.llamar_groq(
                 api_key, modelo, PROMPT.format(nombre=p["nombre"], tipo=TIPOS_TEMA.get(p.get("tipo"), "un tema")),
                 f"MATERIAL OFICIAL:\n{texto_material}{lista_capturas}"))
-            escenas = [{"narracion": _limpio(e.get("narracion", "")), "captura": e.get("captura")}
+            escenas = [{"narracion": _limpio(e.get("narracion", "")), "elegido": str(e.get("visual", "")).strip().upper()}
                        for e in g.get("escenas", []) if isinstance(e, dict) and str(e.get("narracion", "")).strip()]
         except (ValueError, AttributeError) as error:
             print(f"  intento {intento}: respuesta inservible ({error})")
@@ -151,19 +194,21 @@ def escribir_guion(clave: str) -> Path:
     if 2 in malas:
         print(f"  gancho sin respaldo («{gancho}»): se usa uno seguro")
         gancho = f"{p['nombre']} en GTA 6"
-    # La captura de cada escena: la que eligió la IA por su descripción y, si no, la siguiente sin usar
+    # Lo que se ve en cada escena: lo que eligió la IA y, si no vale o se repite, lo siguiente sin usar. La primera
+    # escena, siempre un plano de tráiler (el movimiento del primer segundo es lo que frena el dedo).
+    planos_t = [c for c in opciones if c.startswith("T")]
+    capturas_f = [c for c in opciones if c.startswith("F")]
     usadas, elegidas = set(), []
-    for e in escenas:
-        try:
-            foto = con_texto[int(e.get("captura")) - 1]
-        except (TypeError, ValueError, IndexError):
-            foto = None
-        if foto is None or foto in usadas:
-            foto = next((f for f in fotos if f not in usadas), fotos[len(elegidas) % len(fotos)] if fotos else None)
-        usadas.add(foto)
-        elegidas.append(foto)
-    escenas = [{"numero": i, "narracion": e["narracion"], "visual": foto.name if foto else ""}
-               for i, (e, foto) in enumerate(zip(escenas, elegidas), start=1)]
+    for n, e in enumerate(escenas):
+        codigo = e.get("elegido", "")
+        if codigo not in opciones or codigo in usadas or (n == 0 and not codigo.startswith("T") and planos_t):
+            reserva = (planos_t if n == 0 or n % 2 == 0 else capturas_f) or planos_t or capturas_f
+            codigo = next((c for c in reserva if c not in usadas), "")
+        usadas.add(codigo)
+        elegidas.append(opciones.get(codigo, {}))
+    escenas = [{"numero": i, "narracion": e["narracion"],
+                "visual": f"trailer:{o['plano']}" if o.get("plano") else o.get("captura", "")}
+               for i, (e, o) in enumerate(zip(escenas, elegidas), start=1)]
     hoy = date.today().isoformat()
     sin_articulo = re.sub(r"^(el|la|los|las)\s+|\s+de GTA 6$", "", p["nombre"], flags=re.I)
     sin_espacios = "".join(c for c in sin_articulo.title() if c.isalnum())
@@ -176,7 +221,7 @@ def escribir_guion(clave: str) -> Path:
         "pregunta": " ".join(str(g.get("pregunta", "")).split()), "palabras_clave": [],
         "fuentes": [datos["fuente"]], "sin_respaldo": dudas, "verificado": not dudas, "modelo": modelo,
         "clips_propios": {"origen": "capturas oficiales de Rockstar Games", "personaje": clave},
-        "credito": "Imágenes: Rockstar Games (material oficial de prensa)", "estilo": "fotos",
+        "credito": "Imágenes y tráileres: Rockstar Games (material oficial de prensa)", "estilo": "fotos",
     }
     ruta = paso1_guiones.CARPETA_SALIDA / f"{hoy}_gta6_{clave}_es.json"
     ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -215,10 +260,63 @@ def preparar_planos(ruta_guion: Path) -> None:
     carpeta = video_ia.carpeta_clips(nombre)
     for viejo in carpeta.glob("escena_*"):
         viejo.unlink()
+    de_trailer = planos()
     for e in guion["escenas"]:
+        destino, segundos = carpeta / f"escena_{e['numero']:02d}.mp4", duraciones[e["numero"]] + 1.0
+        ident = str(e.get("visual", "")).split("trailer:", 1)[-1] if str(e.get("visual", "")).startswith("trailer:") else ""
+        if ident in de_trailer:
+            trozo_de_trailer(de_trailer[ident], destino, segundos, de_trailer)
+            print(f"  plano {e['numero']}: tráiler {ident}")
+            continue
         imagen = fotos.get(e["visual"]) or next(iter(fotos.values()))
-        plano(imagen, carpeta / f"escena_{e['numero']:02d}.mp4", duraciones[e["numero"]] + 1.0, e["numero"] % 2 == 1)
+        plano(imagen, destino, segundos, e["numero"] % 2 == 1)
         print(f"  plano {e['numero']}: {imagen.name}")
+
+
+RECORTES = CARPETA / "recortes.json"
+
+
+def area_con_imagen(video: str) -> tuple:
+    """(ancho, alto, x, y) de la parte del tráiler con imagen, sin las franjas negras de cine. Se mira una vez por
+    tráiler (con cropdetect de ffmpeg en varios momentos) y se guarda."""
+    try:
+        guardados = json.loads(RECORTES.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        guardados = {}
+    if video in guardados:
+        return tuple(guardados[video])
+    medidas = []
+    for segundo in (20, 45, 70, 95):
+        salida = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-ss", str(segundo), "-t", "2",
+                                 "-i", video, "-an", "-vf", "cropdetect=24:2:0", "-f", "null", "-"],
+                                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr
+        encontradas = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", salida)
+        if encontradas:
+            medidas.append(tuple(map(int, encontradas[-1])))
+    if not medidas:
+        return (3840, 2160, 0, 0)
+    # La mayor zona con imagen de las medidas (en una escena oscura, cropdetect puede quedarse corto)
+    area = max(medidas, key=lambda m: m[0] * m[1])
+    guardados[video] = area
+    RECORTES.write_text(json.dumps(guardados, indent=2), encoding="utf-8")
+    return area
+
+
+def trozo_de_trailer(pl: dict, destino: Path, segundos: float, todos: dict) -> None:
+    """El trozo del tráiler desde el principio de ese plano, recortado a vertical por el centro y SIN su audio (las
+    canciones de los tráileres son de otros artistas: harían saltar Content ID). Si el plano es más corto que la
+    frase, sigue con los planos siguientes del tráiler, como en el original."""
+    final_seguro = max(p["fin"] for p in todos.values() if p["video"] == pl["video"])
+    inicio = max(0.0, min(pl["inicio"], final_seguro - segundos))
+    w, h, x, y = area_con_imagen(pl["video"])
+    ancho = round(h * 9 / 16 / 2) * 2
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-ss", f"{inicio:.2f}", "-t",
+                    f"{segundos:.3f}", "-i", pl["video"], "-an", "-vf",
+                    f"crop={ancho}:{h}:{x + (w - ancho) // 2}:{y},scale={ANCHO}:{ALTO},setsar=1,fps={FPS},format=yuv420p",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(destino)], check=True,
+                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
 def ejecutar(script: str, *argumentos: str) -> None:
@@ -242,6 +340,7 @@ def crear(clave: str) -> Path:
     print(f"· GTA 6: {material()['temas'][clave]['nombre']}")
     ruta = escribir_guion(clave)
     montar(ruta)
+    apuntar_planos(ruta)  # para que el siguiente vídeo use otros planos de los tráileres
     lista = hechos()
     lista[clave] = {"fecha": date.today().isoformat(), "guion": ruta.stem}
     HECHOS.parent.mkdir(parents=True, exist_ok=True)
