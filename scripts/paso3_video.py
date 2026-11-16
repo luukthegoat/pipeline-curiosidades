@@ -1857,7 +1857,8 @@ def main(argv=None) -> int:
                     print("  omitido: no está verificado")
                     omitidos += 1
                     continue
-                print("  aviso: guion sin verificar; revísalo antes de publicar")
+                print("  aviso: guion sin verificar; revísalo antes de publicar" if datos.get("sin_respaldo")
+                      else "  guion sin dudas del verificador; falta el visto bueno antes de publicar")
             print(f"  → {montar(carpeta, args.forzar)}")
             hechos += 1
         except (ValueError, KeyError, RuntimeError, OSError, requests.RequestException) as error:

@@ -6,6 +6,7 @@ No crea nada por su cuenta: propone una acción y el menú la lanza cuando pulsa
 import json
 import os
 import re
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -65,12 +66,21 @@ Responde SOLO con un JSON: {{"respuesta": "texto para el usuario", "accion": {{"
 
 # --- Motor: Ollama (local) o Groq ------------------------------------------------------------------
 
+_ollama_cache = {"hasta": 0.0, "modelos": []}
+
+
 def _ollama_modelos() -> list:
+    """Los modelos de Ollama, si está abierto. Se recuerda 1 min: en Windows, preguntar a un puerto cerrado tarda
+    más de un segundo y esto se mira al abrir varias páginas."""
+    if time.time() < _ollama_cache["hasta"]:
+        return _ollama_cache["modelos"]
     try:
-        respuesta = requests.get(f"{OLLAMA}/api/tags", timeout=1.5)
-        return [m["name"] for m in respuesta.json().get("models", [])]
+        respuesta = requests.get(f"{OLLAMA}/api/tags", timeout=(0.5, 3))
+        modelos = [m["name"] for m in respuesta.json().get("models", [])]
     except (requests.RequestException, ValueError):
-        return []
+        modelos = []
+    _ollama_cache.update(hasta=time.time() + 60, modelos=modelos)
+    return modelos
 
 
 def motor() -> dict:

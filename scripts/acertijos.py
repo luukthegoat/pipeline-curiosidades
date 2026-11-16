@@ -2,8 +2,9 @@
 pistas y una cuenta atrás («piensa, puedes pausar») para que la gente conteste en los comentarios, y después la
 solución. Todo con dibujos (scripts/dibujos_short.py), sin fotos.
 
-La IA (Groq) propone acertijos clásicos de ingenio (de los de «¿por qué hace eso?») con una única solución clara; un
-segundo modelo descarta los flojos, y no se repiten (salida/_trabajo/acertijos.json). El guion se guarda en
+La app elige un acertijo clásico de su BANCO (de los de «¿por qué hace eso?», con una única solución clara) y la IA
+(Groq) lo cuenta en viñetas; un segundo modelo descarta los que quedan mal contados, y no se repiten
+(salida/_trabajo/acertijos.json). Si el banco se agota, la IA propone clásicos por su cuenta. El guion se guarda en
 salida/guiones como los demás: después van la voz (paso 2) y el vídeo (paso 3).
 
 Uso:
@@ -13,6 +14,7 @@ Uso:
 import argparse
 import json
 import os
+import random
 import sys
 from datetime import date
 from pathlib import Path
@@ -20,6 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import paso1_guiones
+from acertijos_banco import BANCO
 
 load_dotenv()
 
@@ -39,7 +42,7 @@ Cada acertijo:
   madre) · el camionero que va en dirección contraria y la policía no le dice nada (va andando).
 - Tiene UNA explicación clara y correcta, que encaja con TODO lo que cuenta la historia y hace decir «¡ah, claro!».
 - Apto para todos los públicos: nada de suicidios, asesinatos, sangre ni temas ofensivos.
-- Se cuenta en 3 o 4 viñetas, en presente, con frases fáciles de decir en voz alta. La PRIMERA viñeta empieza
+- Se cuenta en 3 o 4 viñetas (la lista "historia" lleva 3 o 4 elementos, uno por viñeta), en presente, con frases fáciles de decir en voz alta. La PRIMERA viñeta empieza
   con lo raro, para enganchar («Este hombre sube diez pisos andando… teniendo ascensor.»).
 - La historia cuenta el planteamiento COMPLETO: todos los datos que hacen falta para resolverlo (quien no conozca el
   acertijo tiene que poder deducirlo solo con lo que oye). Entre 40 y 75 palabras en total.
@@ -54,7 +57,7 @@ Responde SOLO con JSON:
 {{"acertijos": [{{
   "titulo": "título del vídeo: una pregunta corta con gancho (máx. 55 caracteres), sin desvelar la solución",
   "historia": [{{"narracion": "lo que dice la voz en esta viñeta (12 a 22 palabras)",
-                "iconos": ["1 a 3 emojis que dibujen la viñeta: 🏢 🛗 🌧️ ☂️ 🧔 🍺 💧 🚚 👮 …"],
+                "iconos": ["1 a 3 emojis que dibujen la viñeta, CADA UNO en su propio elemento: 🏢 🛗 🌧️ ☂️ 🧔 🍺 💧 🚚 👮 …"],
                 "texto": "rótulo de la viñeta, 2 a 5 palabras"}}],
   "pistas": ["2 o 3 pistas que resumen lo que se sabe, de 3 a 7 palabras cada una"],
   "pregunta": "la pregunta del acertijo, corta (máx. 8 palabras): «¿Por qué no sube en ascensor?»",
@@ -68,6 +71,15 @@ def hechos() -> list:
         return json.loads(HECHOS.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
+
+
+def _del_banco(cantidad: int) -> list:
+    """Clásicos ya escritos (acertijos_banco.py) que aún no se han hecho, en orden al azar."""
+    hechas = {paso1_guiones.slug(a["solucion"]) for a in hechos()} | {a.get("titulo") for a in hechos()}
+    libres = [dict(a, enunciado=" ".join(v["narracion"] for v in a["historia"]), banco=True) for a in BANCO
+              if paso1_guiones.slug(a["solucion"]) not in hechas and a["titulo"] not in hechas]
+    random.shuffle(libres)
+    return libres[:cantidad]
 
 
 PROMPT_JUEZ = """Eres un juez exigente de acertijos de ingenio para un canal de vídeos. Para cada acertijo que te paso
@@ -99,7 +111,41 @@ def _aprobados(api_key: str, candidatos: list) -> list:
     return [a for _, a in sorted(buenos, key=lambda par: -par[0])]
 
 
-def pedir(cantidad: int) -> list:
+def _lista_de_acertijos(texto: str) -> list:
+    """Los acertijos de la respuesta, aunque la IA no respete del todo la forma pedida ({"acertijos": [...]})."""
+    try:
+        datos = json.loads(texto)
+    except ValueError:
+        return []
+    if isinstance(datos, dict):
+        datos = datos.get("acertijos", [datos] if "historia" in datos else [])
+    lista = []
+    for item in datos if isinstance(datos, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("acertijos"), list):
+            lista.extend(item["acertijos"])
+        elif isinstance(item, dict):
+            lista.append(item)
+    return lista
+
+
+def pedir(cantidad: int, intentos: int = 3) -> list:
+    """Primero los clásicos ya escritos; cuando se acaban, hasta `intentos` rondas de la IA con su juez."""
+    del_banco = _del_banco(cantidad)
+    if del_banco:
+        return del_banco
+    for ronda in range(1, intentos + 1):
+        try:
+            buenos = _pedir_una_vez(cantidad)
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            print(f"  ronda {ronda}: respuesta de la IA inservible ({error})")
+            buenos = []
+        if buenos:
+            return buenos
+        print(f"  ronda {ronda}: ningún acertijo pasó el filtro" + (", se prueba otra vez" if ronda < intentos else ""))
+    return []
+
+
+def _pedir_una_vez(cantidad: int) -> list:
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
         raise RuntimeError("falta GROQ_API_KEY en el archivo .env")
@@ -110,7 +156,7 @@ def pedir(cantidad: int) -> list:
     validos = []
     soluciones = {paso1_guiones.slug(a["solucion"]) for a in hechos()}
     limpio = lambda valor: " ".join(str(valor or "").split())  # noqa: E731
-    for a in json.loads(texto).get("acertijos", []):
+    for a in _lista_de_acertijos(texto):
         if not isinstance(a, dict):
             continue
         historia = [{"narracion": limpio(v.get("narracion")), "iconos": [str(e) for e in v.get("iconos") or []][:3],
@@ -166,7 +212,7 @@ def crear(cantidad: int = 1) -> list:
         ruta = paso1_guiones.CARPETA_SALIDA / f"{guion['fecha']}_acertijo_{numero:03d}_es.json"
         ruta.write_text(json.dumps(guion, ensure_ascii=False, indent=2), encoding="utf-8")
         lista.append({"numero": numero, "fecha": guion["fecha"], "enunciado": acertijo["enunciado"],
-                      "solucion": acertijo["solucion"]})
+                      "solucion": acertijo["solucion"], "titulo": acertijo["titulo"]})
         HECHOS.parent.mkdir(parents=True, exist_ok=True)
         HECHOS.write_text(json.dumps(lista, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"  {ruta} · «{acertijo['enunciado']}» → {acertijo['solucion']}")

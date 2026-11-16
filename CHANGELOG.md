@@ -3,6 +3,23 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.1.1] - 2026-11-16
+
+Revisión general de la app y del piloto automático.
+
+### Corregido
+- **El acertijo del día salía vacío**: la IA ya no recordaba más clásicos y los que se inventaba no pasaban el filtro.
+  Ahora hay un banco de 26 acertijos clásicos escritos a mano (viñetas, pistas y solución, sin nada que delate la
+  respuesta); la IA solo se usa cuando se acaben, con tres intentos.
+- **Vídeos contados solo por el muñeco**: cuando la IA devolvía la respuesta en una lista (`[{…}]`) en vez de en un
+  objeto, fallaba la elección de dibujos (y otras llamadas). Ahora se acepta esa forma y, si no sirve, se pide otra vez.
+- El aviso «guion sin verificar (0 frases sin respaldo)» de los pasos 2 y 3 ahora dice lo que pasa: el verificador no
+  ha marcado nada y falta el visto bueno.
+- Ajustes abre más rápido: la comprobación de la IA local se recuerda un minuto en vez de repetirse cada vez.
+
+### Cambiado
+- El verificador se fija también en quién hace cada cosa (quién paga, quién ofrece, quién gana).
+
 ## [3.1.0] - 2026-11-11
 
 Los vídeos se quedaban en unas 1.000 vistas: la mitad de la gente deslizaba en el primer segundo y pocos los veían

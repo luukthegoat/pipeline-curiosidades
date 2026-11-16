@@ -161,6 +161,22 @@ nombra lugares, al menos una escena es un mapa.
 Responde SOLO con JSON, con un dibujo por escena: {{"dibujos": [{{"escena": 1, "visual": {{...}}}}]}}""")
 
 
+def _lista_de_dibujos(datos) -> list:
+    """La lista de dibujos de la respuesta, venga como {"dibujos": [...]}, como la lista suelta o envuelta en otra
+    lista. ValueError si no hay ninguno."""
+    if isinstance(datos, dict):
+        datos = datos.get("dibujos", [datos] if "escena" in datos else [])
+    lista = []
+    for item in datos if isinstance(datos, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("dibujos"), list):
+            lista.extend(item["dibujos"])
+        elif isinstance(item, dict):
+            lista.append(item)
+    if not lista:
+        raise ValueError("respuesta sin dibujos")
+    return lista
+
+
 def planificar(datos: dict, trabajo: Path, huella) -> dict:
     """{número de escena: {"desde": palabra, "visual": {...}}}; {} si no hay IA o no está activado.
 
@@ -191,9 +207,15 @@ def planificar(datos: dict, trabajo: Path, huella) -> dict:
             api_key = os.getenv("GROQ_API_KEY", "")
             if not api_key:
                 raise RuntimeError("sin GROQ_API_KEY")
-            texto = paso1_guiones.llamar_groq(api_key, os.getenv("MODELO") or paso1_guiones.MODELO_POR_DEFECTO,
-                                              instrucciones.format(cuantas=_cuantas(len(escenas))), pedido)
-            respuesta = json.loads(re.sub(r"^```(?:json)?|```$", "", texto.strip())).get("dibujos", [])
+            for intento in (1, 2):  # a veces responde con otra forma: se pide una segunda vez
+                texto = paso1_guiones.llamar_groq(api_key, os.getenv("MODELO") or paso1_guiones.MODELO_POR_DEFECTO,
+                                                  instrucciones.format(cuantas=_cuantas(len(escenas))), pedido)
+                try:
+                    respuesta = _lista_de_dibujos(json.loads(re.sub(r"^```(?:json)?|```$", "", texto.strip())))
+                    break
+                except ValueError:
+                    if intento == 2:
+                        raise
         except Exception as error:  # noqa: BLE001 — sin IA el vídeo sale igual
             if not todo:
                 print(f"  aviso: no se han podido planificar los dibujos ({type(error).__name__}); van solo fotos")

@@ -224,6 +224,9 @@ REGLAS_VOZ_APP = """- La "narracion" la lee una voz en off sobre los clips: entr
 PROMPT_VERIFICADOR = """Eres verificador de datos. Recibirás un MATERIAL (las fuentes) y las escenas numeradas de un guion.
 Revisa cada afirmación factual de la narración (fechas, cifras, lugares, personas, cómo ocurrió algo, causas y consecuencias).
 Señala SOLO las que no estén respaldadas por el MATERIAL o lo contradigan. Ignora las frases de opinión, preguntas retóricas y llamadas a comentar.
+Fíjate en QUIÉN hace cada cosa y a QUIÉN: una frase que habla del tema correcto pero cambia los papeles (quién paga,
+quién gana, quién ofrece, quién ataca, quién captura a quién) también está sin respaldo. Ejemplo: si el MATERIAL dice
+que Atahualpa ofreció un rescate a Pizarro, «Pizarro aceptó pagar un rescate» es falsa.
 
 Responde SOLO con un objeto JSON:
 {"sin_respaldo": [{"escena": 1, "frase": "fragmento exacto del guion", "motivo": "qué no aparece o qué dice el material"}]}
@@ -472,8 +475,21 @@ def llamar_groq(api_key: str, modelo: str, sistema: str, usuario: str) -> str:
         if candidato != ultimo_modelo and candidato not in (modelo, principal):
             print(f"    usando el modelo de reserva {candidato}", flush=True)
         ultimo_modelo = candidato
-        return contenido
+        return _desenvolver(contenido)
     raise GroqSinCupo(min(cupos_agotados().values(), default=time.time() + 600))
+
+
+def _desenvolver(contenido: str) -> str:
+    """Todas las instrucciones piden un objeto JSON; a veces el modelo lo devuelve dentro de una lista ([{...}]) o
+    entre ```: se deja como el objeto que se pidió, para que quien llama no falle con un AttributeError."""
+    texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", (contenido or "").strip())
+    try:
+        datos = json.loads(texto)
+    except ValueError:
+        return contenido
+    if isinstance(datos, list) and len(datos) == 1 and isinstance(datos[0], dict):
+        return json.dumps(datos[0], ensure_ascii=False)
+    return texto if isinstance(datos, dict) else contenido
     raise RuntimeError("Límite de peticiones de Groq superado")
 
 

@@ -256,7 +256,8 @@ def main(argv=None) -> int:
                     omitidos += 1
                     continue
                 dudas = len(guion.get("sin_respaldo", []))
-                print(f"  aviso: guion sin verificar ({dudas} frase(s) sin respaldo); revísalo antes de publicar")
+                print(f"  aviso: guion sin verificar ({dudas} frase(s) sin respaldo); revísalo antes de publicar"
+                      if dudas else "  guion sin dudas del verificador; falta el visto bueno antes de publicar")
             ruta_salida = asyncio.run(procesar_guion(ruta, args.forzar))
             print(f"  → {ruta_salida}")
             hechos += 1
