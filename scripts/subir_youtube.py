@@ -346,6 +346,7 @@ NOMBRES_LISTAS = {
     "humor": ("Diarios de la historia", "La historia contada en primera persona y con humor."),
     "ingles": ("History in English", "History shorts in English."),
     "otros": ("Curiosidades de historia", "Historias curiosas en menos de un minuto."),
+    "gta6": ("GTA 6", "Personajes, zonas del mapa y novedades de Grand Theft Auto VI, en menos de un minuto."),
 }
 
 
@@ -357,6 +358,8 @@ def _lista_de(guion: dict, largo: bool = False) -> tuple:
     """(clave, título, descripción) de la lista de reproducción que le toca a un vídeo."""
     if largo:
         return ("largos", *NOMBRES_LISTAS["largos"])
+    if guion.get("clips_propios") or "#GTA6" in guion.get("hashtags", []):
+        return ("gta6", *NOMBRES_LISTAS["gta6"])
     import horarios
     tipo = horarios.tipo_de(guion)
     if tipo == "serie" and guion.get("nombre_corto"):

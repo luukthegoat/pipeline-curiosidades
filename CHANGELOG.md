@@ -3,6 +3,11 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.3.1] - 2026-11-17
+
+### Cambiado
+- Los vídeos de GTA 6 van a su propia lista de reproducción, «GTA 6», en vez de a «Curiosidades de historia».
+
 ## [3.3.0] - 2026-11-16
 
 ### Añadido
