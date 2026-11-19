@@ -33,7 +33,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(RAIZ / ".env")
 import webview  # noqa: E402
 
-TITULO = "MenteInquieta67"
+TITULO = __import__("canal").NOMBRE
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
 URL = f"http://127.0.0.1:{PUERTO}"
 ESTATICOS = Path(__file__).resolve().parent / "static"
@@ -89,7 +89,7 @@ def pantalla_de_carga() -> str:
       @keyframes latido {{ 50% {{ transform: scale(1.05); filter: brightness(1.15); }} }}
       @keyframes carga {{ from {{ transform: translateX(-100%); }} to {{ transform: translateX(250%); }} }}
     </style></head><body><div class="caja">
-      <img src="data:image/png;base64,{logo}" alt=""><div class="barra"></div><div>Abriendo MenteInquieta67…</div>
+      <img src="data:image/png;base64,{logo}" alt=""><div class="barra"></div><div>Abriendo {TITULO}…</div>
     </div></body></html>"""
 
 

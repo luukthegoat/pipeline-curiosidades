@@ -429,7 +429,7 @@ def ordenar_en_listas() -> int:
     return hechos
 
 
-ETIQUETAS_LARGOS = ["historia", "historia de España", "explicado", "documental", "en 10 minutos", "MenteInquieta67"]
+ETIQUETAS_LARGOS = ["historia", "historia de España", "explicado", "documental", "en 10 minutos", __import__("canal").NOMBRE]
 
 
 def subir_largo(carpeta, privacidad: str = "private", publicar_el: str = "") -> dict:

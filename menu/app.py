@@ -44,6 +44,7 @@ import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
 import dibujos_short  # noqa: E402  (dibujos animados dentro de los Shorts)
 import piloto  # noqa: E402  (piloto automático: los vídeos del día al encender el ordenador)
 import grabaciones  # noqa: E402  (tus partidas grabadas convertidas en Shorts)
+import canal  # noqa: E402  (el nombre del canal)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -53,7 +54,7 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "3.4.0"
+VERSION = "3.4.1"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
@@ -208,7 +209,7 @@ def contexto_global():
             "errores_programados": [v for v in programados.leer()["videos"] if v["estado"] == "error"],
             # Cambia al editar el CSS: así el navegador (o la ventana de la app) no usa una copia vieja.
             "version_css": int((Path(app.static_folder) / "estilo.css").stat().st_mtime),
-            "version_app": VERSION}
+            "version_app": VERSION, "nombre_canal": canal.NOMBRE, "iniciales_canal": canal.INICIALES}
 
 
 def producir(t: Trabajo, nombres: list) -> bool:

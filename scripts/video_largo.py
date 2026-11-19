@@ -538,7 +538,7 @@ def hacer_video(guion: dict, carpeta: Path) -> None:
     descripcion = [guion.get("gancho") or "", "", "Capítulos:", *[f"{t} {n}" for t, n in capitulos], "",
                    *_mira_tambien(guion),
                    f"Fuente: Wikipedia ({guion['fuente']}).",
-                   "Dibujos y animación: MenteInquieta67. Iconos: Twemoji (CC-BY 4.0). Mapas: Natural Earth y "
+                   f"Dibujos y animación: {__import__('canal').NOMBRE}. Iconos: Twemoji (CC-BY 4.0). Mapas: Natural Earth y "
                    "click_that_hood.", "", "#historia #historiadeespaña #explicado"]
     (carpeta / "descripcion.txt").write_text("\n".join(descripcion), encoding="utf-8")
     print(f"  vídeo: {final} ({_tiempo(transcurrido)})", flush=True)

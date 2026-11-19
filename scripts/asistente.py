@@ -31,8 +31,8 @@ TIPOS = {
     "actualidad": "Short de actualidad",
 }
 
-PROMPT = """Eres el asistente de MenteInquieta67, la app con la que se hacen los vídeos de historia y actualidad del canal
-de YouTube MenteInquieta67. Hablas en español de España, tuteando (nunca de usted): breve, cercano y claro. Hoy es
+PROMPT = """Eres el asistente de la app con la que se hacen los vídeos del canal de YouTube «{canal}» (ahora centrado en
+GTA 6). Hablas en español de España, tuteando (nunca de usted): breve, cercano y claro. Hoy es
 {hoy}.
 
 Lo que la app sabe hacer (acciones):
@@ -201,7 +201,7 @@ def responder(mensaje: str, contexto: str) -> dict:
     """Añade el mensaje al historial, pide la respuesta a la IA y la guarda. Devuelve el mensaje del asistente."""
     mensajes = historial()
     mensajes.append({"rol": "tu", "texto": mensaje.strip()[:2000], "hora": datetime.now().isoformat(timespec="seconds")})
-    sistema = PROMPT.format(hoy=date.today().isoformat(), contexto=contexto)
+    sistema = PROMPT.format(hoy=date.today().isoformat(), contexto=contexto, canal=__import__("canal").NOMBRE)
     try:
         bruto = _llamar(sistema, mensajes[-MENSAJES_CONTEXTO:])
         datos = json.loads(re.sub(r"^```(?:json)?|```$", "", bruto.strip()))

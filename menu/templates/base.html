@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titulo %}MenteInquieta67{% endblock %}</title>
+  <title>{% block titulo %}{{ nombre_canal }}{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,9 +31,9 @@
   {% endmacro %}
   <header class="barra">
     <div class="barra-dentro">
-      <a class="marca" href="{{ url_for('panel') }}" aria-label="MenteInquieta67: inicio">
-        <span class="sello" aria-hidden="true">MI</span>
-        <span class="nombre-marca">MenteInquieta67</span>
+      <a class="marca" href="{{ url_for('panel') }}" aria-label="{{ nombre_canal }}: inicio">
+        <span class="sello" aria-hidden="true">{{ iniciales_canal }}</span>
+        <span class="nombre-marca">{{ nombre_canal }}</span>
       </a>
       <nav class="navegacion" aria-label="Secciones">
         {{ enlace('panel', 'Inicio', '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10v9.5h11V10"/>') }}

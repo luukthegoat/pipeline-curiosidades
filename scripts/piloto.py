@@ -42,6 +42,7 @@ for _flujo in (sys.stdout, sys.stderr):
         _flujo.reconfigure(errors="replace")
 
 import avisos  # noqa: E402
+import canal  # noqa: E402  (el nombre del canal, para los avisos)
 import paso3_video  # noqa: E402
 import piloto_actualidad as pa  # noqa: E402  (registro, ejecución de pasos y tareas de Windows)
 
@@ -178,7 +179,7 @@ def publicar(tipo: str, ruta: Path, config: dict = None) -> bool:
         programados.revisar()  # lo sube ya a YouTube, programado: sale a su hora aunque se apague el ordenador
     except Exception as error:  # noqa: BLE001 — el vídeo está hecho: se publica a mano desde el menú
         registrar(f"No se pudo programar «{guion.get('titulo')}»: {error}")
-        avisos.notificar("MenteInquieta67 · no se pudo publicar", f"«{guion.get('titulo')}» está hecho; publícalo desde Mis vídeos.")
+        avisos.notificar(f"{canal.NOMBRE} · no se pudo publicar", f"«{guion.get('titulo')}» está hecho; publícalo desde Mis vídeos.")
         return True
     registrar(f"✔ {NOMBRES.get(tipo, tipo)}: «{guion.get('titulo')}» → "
               + (f"programado para las {cuando:%H:%M}" if cuando else "ya no quedan franjas hoy: se publica ahora"))
@@ -193,7 +194,7 @@ def _hacer(tipo: str, config: dict, crear_guion, intentos: int = 2) -> bool:
             return False
         # Los de GTA 6 ya salen montados de gta6.py (sus planos dependen de la duración de la voz)
         if not tipo.startswith("gta6") and not montar(ruta):
-            avisos.notificar("MenteInquieta67 · piloto automático",
+            avisos.notificar(f"{canal.NOMBRE} · piloto automático",
                              f"No se pudo montar el vídeo de {NOMBRES.get(tipo, tipo).lower()}.")
             return False
         apuntar(tipo, ruta.stem)
@@ -202,7 +203,7 @@ def _hacer(tipo: str, config: dict, crear_guion, intentos: int = 2) -> bool:
         guion = json.loads(ruta.read_text(encoding="utf-8"))
         registrar(f"«{guion.get('titulo')}» tiene {len(guion['sin_respaldo'])} frase(s) sin respaldo: no se publica solo."
                   + (" Pruebo con otro tema." if intento + 1 < intentos else ""))
-    avisos.notificar("MenteInquieta67 · revisa un vídeo",
+    avisos.notificar(f"{canal.NOMBRE} · revisa un vídeo",
                      f"El de {NOMBRES.get(tipo, tipo).lower()} de hoy tiene frases dudosas: está en Mis vídeos esperando "
                      "tu revisión.")
     return False
@@ -433,7 +434,7 @@ def _publicar_noticia(tipo: str, ruta: Path, guion: dict) -> bool:
     if publicar(tipo, ruta):
         return True
     registrar(f"NO se publica «{guion.get('titulo')}»: el verificador marcó {len(guion.get('sin_respaldo', []))} frase(s).")
-    avisos.notificar("MenteInquieta67 · revisa la noticia de hoy",
+    avisos.notificar(f"{canal.NOMBRE} · revisa la noticia de hoy",
                      f"«{guion.get('titulo')}» tiene frases dudosas: está en Mis vídeos esperando tu revisión.")
     return False
 
@@ -568,7 +569,7 @@ def main(argv=None) -> int:
         return 0
     except Exception:
         registrar("Error inesperado del piloto automático:\n" + traceback.format_exc())
-        avisos.notificar("MenteInquieta67 · error del piloto automático", "Mira el registro en Ajustes.")
+        avisos.notificar(f"{canal.NOMBRE} · error del piloto automático", "Mira el registro en Ajustes.")
         return 2
     finally:
         CERROJO.unlink(missing_ok=True)

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}{{ guion.titulo }} · MenteInquieta67{% endblock %}
+{% block titulo %}{{ guion.titulo }} · {{ nombre_canal }}{% endblock %}
 {% block contenido %}
 {% set yt = guion.get('youtube') %}
 <a class="volver" href="{{ url_for('ver_largos') }}">← Vídeos largos</a>

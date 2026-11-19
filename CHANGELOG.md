@@ -3,6 +3,14 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.4.1] - 2026-11-19
+
+### Cambiado
+- **El canal pasa a llamarse «Neón y Gasolina» (@NeonYGasolina)**, centrado en GTA 6: era el único nombre libre sin
+  canales parecidos. Sale en la pantalla final de los vídeos (que se rehace sola con el nombre nuevo), en la app,
+  los avisos y el asistente. El nombre está en un solo sitio (`scripts/canal.py`, o `NOMBRE_CANAL` y `HANDLE_CANAL`
+  en `.env`). Las tareas de Windows y los accesos directos mantienen su nombre interno.
+
 ## [3.4.0] - 2026-11-19
 
 ### Añadido

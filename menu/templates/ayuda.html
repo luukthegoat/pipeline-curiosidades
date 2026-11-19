@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block titulo %}Ayuda · MenteInquieta67{% endblock %}
+{% block titulo %}Ayuda · {{ nombre_canal }}{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('ajustes') }}">← Ajustes</a>
 <h1>Cómo funciona</h1>
-<p class="sub">MenteInquieta67 · versión {{ version_app }}. Convierte un tema, una fecha o una noticia en Shorts
+<p class="sub">{{ nombre_canal }} · versión {{ version_app }}. Convierte un tema, una fecha o una noticia en Shorts
   verticales de 40-45 segundos y en vídeos largos de unos 10 minutos explicados con dibujos.</p>
 
 <div class="tarjeta">

@@ -182,7 +182,7 @@ class Dibujante:
             img.paste(self.mano, (int(ANCHO / 2 + 40), int(y)), self.mano)
 
         # Pie: la marca del canal
-        pie = "MenteInquieta67"
+        pie = __import__("canal").HANDLE
         d.text(((ANCHO - d.textlength(pie, font=self.f_texto)) / 2, 1560), pie, font=self.f_texto, fill=(255, 255, 255))
         return img
 
@@ -195,7 +195,7 @@ def crear(datos: dict, trabajo: Path, huella) -> tuple:
     idioma = datos.get("idioma", "es")
     voz = paso2_audio.VOCES.get(idioma, paso2_audio.VOCES["es"])
     salida, clave = trabajo / "seg_cierre.mp4", trabajo / "seg_cierre.clave"
-    firma = huella(VERSION, info, voz, paso2_audio.VELOCIDAD)
+    firma = huella(VERSION, info, voz, paso2_audio.VELOCIDAD, __import__("canal").HANDLE)  # con otro nombre, se rehace
     if salida.exists() and clave.exists() and clave.read_text().startswith(firma):
         return salida, float(clave.read_text().split("|")[1])
 
