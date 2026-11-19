@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block titulo %}Grabaciones · MenteInquieta67{% endblock %}
+{% block contenido %}
+<h1>Tus grabaciones</h1>
+<p class="sub">Sube una partida grabada por ti y la app la convierte en Shorts: busca sola los mejores momentos o te
+  hace un Short narrado de lo que tú le digas. Lo que sale lo encuentras en <a href="{{ url_for('mis_videos') }}">Vídeos</a>
+  para revisarlo y programarlo.</p>
+
+{% if mensaje %}<div class="mensaje">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="aviso error">{{ error }}</div>{% endif %}
+
+<section class="tarjeta">
+  <h2>Subir una grabación</h2>
+  <form method="post" action="{{ url_for('subir_grabacion') }}" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" multiple required>
+    <div class="acciones">
+      <button type="submit">Subir</button>
+      <span class="ayuda-campo">MP4, MOV, MKV o WEBM. Las grabaciones grandes (más de 1-2 GB) van mejor copiándolas
+        directamente en la carpeta:</span>
+    </div>
+  </form>
+  <form method="post" action="{{ url_for('abrir_grabaciones') }}" class="acciones">
+    <button class="secundario" type="submit">Abrir la carpeta de grabaciones</button>
+  </form>
+</section>
+
+<div class="aviso">Graba tú la partida (PS5: botón Crear; Xbox: botón Compartir; PC: Win + Alt + R). <strong>Si en el
+  trozo suena la radio del juego</strong>, YouTube puede reclamar el vídeo por la canción: elige «música del canal» o
+  partes sin radio.</div>
+
+<div class="cabecera-seccion"><h2>Grabaciones</h2></div>
+{% if not grabaciones %}
+  <div class="tarjeta vacio">Todavía no hay ninguna. Súbela arriba o cópiala en la carpeta y recarga la página.</div>
+{% endif %}
+{% for g in grabaciones %}
+  <section class="tarjeta" id="g-{{ loop.index }}">
+    <div class="fila-video">
+      <span class="portadilla"><img class="mini-ancha" src="{{ url_for('portada_grabacion', archivo=g.archivo) }}" alt="" loading="lazy"></span>
+      <div class="cuerpo">
+        <span class="titulo">{{ g.archivo }}</span>
+        <div class="meta">
+          <span>{{ g.duracion }}</span><span>{{ g.tamano }}</span><span>{{ g.fecha }}</span>
+          {% if not g.sonido %}<span class="etiqueta mal">sin sonido</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <details class="plegable" {% if loop.first and not g.resultados %}open{% endif %}>
+      <summary>1 · Sacar clips de los mejores momentos</summary>
+      <p class="ayuda-campo">La app busca los trozos con más acción (sonido y movimiento), una IA mira cada uno y elige
+        los mejores, con título y gancho. Salen en vertical: la partida en grande y el gancho arriba.</p>
+      <form method="post" action="{{ url_for('clips_grabacion', archivo=g.archivo) }}">
+        <div class="fila">
+          <div>
+            <label>Cuántos clips</label>
+            <select name="cantidad">{% for n in range(1, 6) %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>{% endfor %}</select>
+          </div>
+          <div>
+            <label>Duración de cada uno</label>
+            <select name="duracion">{% for s in (15, 20, 25, 30, 45, 60) %}<option value="{{ s }}" {{ 'selected' if s == 25 }}>{{ s }} s</option>{% endfor %}</select>
+          </div>
+        </div>
+        <label>Sonido</label>
+        <div class="opciones">
+          <label><input type="radio" name="sonido" value="juego" checked> El del juego</label>
+          <label><input type="radio" name="sonido" value="musica"> Música del canal</label>
+        </div>
+        <label>Juego</label>
+        <input type="text" name="juego" value="GTA 6">
+        <div class="acciones"><button type="submit">Sacar clips</button>
+          <span class="ayuda-campo">Tarda unos minutos (más cuanto más larga sea la grabación).</span></div>
+      </form>
+    </details>
+
+    <details class="plegable">
+      <summary>2 · Short narrado: la app cuenta lo que has grabado</summary>
+      <p class="ayuda-campo">Dile en una línea qué enseña la grabación. La IA mira el trozo, escribe un guion corto con
+        gancho y Álvaro lo cuenta sobre tu partida, con subtítulos y el sonido del juego de fondo. Ideal para easter
+        eggs, trucos y secretos.</p>
+      <form method="post" action="{{ url_for('narrado_grabacion', archivo=g.archivo) }}">
+        <label>¿Qué has grabado?</label>
+        <textarea name="nota" rows="2" required placeholder="El easter egg del caimán gigante en Grassrivers: aparece si vas de noche con el hidrodeslizador"></textarea>
+        <div class="fila">
+          <div><label>Desde <span class="ayuda-campo">(min:seg, opcional)</span></label>
+            <input type="text" name="desde" placeholder="1:20"></div>
+          <div><label>Hasta <span class="ayuda-campo">(opcional)</span></label>
+            <input type="text" name="hasta" placeholder="2:05"></div>
+        </div>
+        <p class="ayuda-campo">Sin «desde» y «hasta», la app usa los 40 segundos con más acción.</p>
+        <label>Juego</label>
+        <input type="text" name="juego" value="GTA 6">
+        <div class="acciones"><button type="submit">Hacer el Short narrado</button></div>
+      </form>
+    </details>
+
+    {% if g.resultados %}
+      <details class="plegable" open>
+        <summary>Shorts hechos con esta grabación ({{ g.resultados | length }})</summary>
+        <div class="lista">
+          {% for r in g.resultados %}
+            <div class="fila-video">
+              <div class="cuerpo">
+                <a class="titulo" href="{{ url_for('ver_guion', nombre=r.nombre) }}">{{ r.titulo }}</a>
+                <div class="meta">
+                  <span class="etiqueta">{{ 'narrado' if r.modo == 'narrado' else 'clip' }}</span>
+                  {% if r.youtube %}<span class="etiqueta ok">en YouTube</span>
+                  {% elif r.programado %}<span class="etiqueta prog">programado</span>
+                  {% else %}<span class="etiqueta mal">sin publicar</span>{% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('borrar_grabacion', archivo=g.archivo) }}" class="acciones"
+          onsubmit="return confirm('¿Borrar la grabación «{{ g.archivo }}» del ordenador? Los Shorts ya hechos no se borran.')">
+      <button class="secundario" type="submit">Borrar la grabación</button>
+    </form>
+  </section>
+{% endfor %}
+{% endblock %}

@@ -15,7 +15,7 @@
   </script>
 </head>
 <body>
-  {# Cuatro secciones arriba; lo demás cuelga de ellas (fila pequeña de debajo). #}
+  {# Cinco secciones arriba; lo demás cuelga de ellas (fila pequeña de debajo). #}
   {% set seccion = {'ver_guion': 'mis_videos', 'imagenes_guion': 'mis_videos', 'ver_calendario': 'ver_programados',
                     'ver_largo': 'ver_largos',
                     'ver_actualidad': 'inicio', 'ayuda': 'ajustes'}.get(request.endpoint, request.endpoint) %}
@@ -39,6 +39,7 @@
         {{ enlace('panel', 'Inicio', '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10v9.5h11V10"/>') }}
         {{ enlace('mis_videos', 'Vídeos', '<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>', num_pendientes) }}
         {{ enlace('inicio', 'Crear', '<path d="M12 5v14M5 12h14"/>') }}
+        {{ enlace('ver_grabaciones', 'Grabaciones', '<rect x="3" y="6.5" width="13" height="11" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/>') }}
         {{ enlace('ajustes', 'Ajustes', '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>') }}
       </nav>
       <div class="barra-derecha">

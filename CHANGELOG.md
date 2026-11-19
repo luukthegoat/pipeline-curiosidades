@@ -3,6 +3,29 @@
 Todos los cambios importantes del proyecto, del más reciente al más antiguo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
+## [3.4.0] - 2026-11-19
+
+### Añadido
+- **Apartado «Grabaciones»** (en el menú de arriba): subes una partida grabada por ti (o la copias en
+  `salida/grabaciones`) y eliges:
+  1. **Sacar clips**: la app busca los trozos con más acción (sonido y movimiento), la IA con visión de Groq mira
+     cada uno, descarta menús, logos y desnudez, elige los mejores y escribe título y gancho para cada uno por
+     separado. Salen en vertical (la partida en grande, el fondo desenfocado y el gancho arriba), con el sonido del
+     juego o la música del canal.
+  2. **Short narrado**: escribes en una línea qué has grabado; la IA mira el trozo, escribe un guion corto y Álvaro
+     lo cuenta sobre la partida, con subtítulos, gancho y el sonido del juego de fondo.
+  Lo que sale aparece en Vídeos para revisarlo y programarlo. No hay ninguna IA de edición con API gratis (Opus Clip,
+  Vizard y Klap la cobran): se hace con Groq y ffmpeg (`scripts/grabaciones.py`).
+- Se pueden subir archivos de hasta 40 GB.
+- **Vídeos, por días**: en todas las pestañas de Vídeos (Todos, Publicados, Programados…), cada día es un
+  desplegable con sus vídeos, cuántos son y sus vistas, en orden de hora; hoy y lo que está por venir salen
+  abiertos. Los publicados van al día en que salieron y dicen a qué hora y cuánto tiempo llevan («hace 3 h 10 min»);
+  los programados, al día en que saldrán; el resto, al día en que se hicieron. Los vídeos de GTA 6 y de tus
+  grabaciones llevan su propia etiqueta.
+- 6 temas nuevos de GTA 6 sacados de las noticias oficiales de Rockstar: el lanzamiento, The Album, las emisoras de
+  radio (dos vídeos), la música de Justice y The Festival. Los temas que se añadan a `salida/gta6/material.json` entran
+  solos en el piloto, sin tocar el código.
+
 ## [3.3.1] - 2026-11-17
 
 ### Cambiado

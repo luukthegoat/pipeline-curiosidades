@@ -68,12 +68,12 @@ def fotograma(video: Path, segundo: float, destino: Path) -> None:
                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
-def describir(imagen: Path) -> dict:
+def describir(imagen: Path, prompt: str = None) -> dict:
     img = Image.open(imagen)
     img.thumbnail((384, 384))  # Groq da 8.000 tokens por minuto: a este tamaño caben unas 12 imágenes por minuto
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=80)
-    contenido = [{"type": "text", "text": PROMPT + " /no_think"},
+    contenido = [{"type": "text", "text": (prompt or PROMPT) + " /no_think"},
                  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()}}]
     for intento in range(6):
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",

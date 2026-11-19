@@ -33,7 +33,8 @@ CAPTURAS = CARPETA / "capturas"
 HECHOS = Path("salida/_trabajo/gta6.json")
 ANCHO, ALTO, FPS = 1080, 1920, 30
 # Primero los protagonistas; después, alternando personajes, zonas del mapa y novedades
-ORDEN = ["jason", "lucia", "pareja", "vicecity", "cal", "raul", "cayos", "boobie", "trailer", "grassrivers", "brian",
+ORDEN = ["lanzamiento", "album", "radio1", "festival", "radio2", "justice",  # los del día del lanzamiento, antes
+         "jason", "lucia", "pareja", "vicecity", "cal", "raul", "cayos", "boobie", "trailer", "grassrivers", "brian",
          "vintage", "drequan", "portgellhorn", "realdimez", "ambrosia", "ultimate", "kalaga"]
 
 PROMPT = """Eres guionista de un canal español de YouTube Shorts sobre GTA 6 (Grand Theft Auto VI). Escribe un Short de
@@ -187,13 +188,14 @@ def escribir_guion(clave: str) -> Path:
     extra = paso1_guiones.verificar_guion(api_key, paso1_guiones.MODELO_VERIFICADOR, texto_material,
                                           [{"narracion": titulo}, {"narracion": gancho or "-"}])
     malas = {d.get("escena") for d in extra}
+    # Los de reserva: sin repetir «GTA 6» si el nombre del tema ya lo lleva («el lanzamiento de GTA 6 en GTA 6»)
+    con_juego = p["nombre"] if "GTA 6" in p["nombre"] else f"{p['nombre']} en GTA 6"
     if 1 in malas:
         print(f"  título sin respaldo («{titulo}»): se usa uno seguro")
-        titulo = (f"Quién es {p['nombre']} en GTA 6" if p.get("tipo") == "personaje"
-                  else f"Así es {p['nombre']} en GTA 6")
+        titulo = f"Quién es {con_juego}" if p.get("tipo") == "personaje" else f"Así es {con_juego}"
     if 2 in malas:
         print(f"  gancho sin respaldo («{gancho}»): se usa uno seguro")
-        gancho = f"{p['nombre']} en GTA 6"
+        gancho = con_juego[0].upper() + con_juego[1:]
     # Lo que se ve en cada escena: lo que eligió la IA y, si no vale o se repite, lo siguiente sin usar. La primera
     # escena, siempre un plano de tráiler (el movimiento del primer segundo es lo que frena el dedo).
     planos_t = [c for c in opciones if c.startswith("T")]
@@ -350,7 +352,7 @@ def crear(clave: str) -> Path:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Shorts de GTA 6 con el material oficial de Rockstar Games")
-    parser.add_argument("--personaje", choices=ORDEN)
+    parser.add_argument("--personaje", help="clave del tema (python scripts/gta6.py --lista)")
     parser.add_argument("--siguiente", action="store_true", help="el siguiente personaje sin vídeo")
     parser.add_argument("--lista", action="store_true")
     parser.add_argument("--rehacer", type=Path, help="rehace voz, planos y vídeo de ese guion (tras cambiar el texto)")
@@ -366,11 +368,17 @@ def main(argv=None) -> int:
             print(f"[error] {error}", file=sys.stderr)
             return 1
     hecho = hechos()
+    # Los temas de ORDEN primero y, detrás, los que se añadan al material (salen solos, sin tocar este archivo)
+    temas = material()["temas"]
+    orden = [c for c in ORDEN if c in temas] + [c for c in temas if c not in ORDEN]
     if args.lista:
-        for clave in ORDEN:
-            print(f"{clave:10} {material()['temas'][clave]['nombre']:16} {hecho.get(clave, {}).get('fecha', '—')}")
+        for clave in orden:
+            print(f"{clave:12} {temas[clave]['nombre'][:40]:40} {hecho.get(clave, {}).get('fecha', '—')}")
         return 0
-    clave = args.personaje or next((c for c in ORDEN if c not in hecho), None)
+    if args.personaje and args.personaje not in temas:
+        print(f"[error] no hay ningún tema «{args.personaje}»; mira --lista", file=sys.stderr)
+        return 1
+    clave = args.personaje or next((c for c in orden if c not in hecho), None)
     if not clave:
         print("Ya tienen vídeo todos los temas.")
         return 0

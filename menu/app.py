@@ -12,6 +12,7 @@ import subprocess
 import sys
 import hashlib
 import re
+import shutil
 import threading
 import time
 import webbrowser
@@ -42,6 +43,7 @@ import asistente  # noqa: E402  (el chat que entiende lo que quieres y lanza el 
 import dibujos  # noqa: E402  (vestuario de Bonesy en los vídeos largos)
 import dibujos_short  # noqa: E402  (dibujos animados dentro de los Shorts)
 import piloto  # noqa: E402  (piloto automático: los vídeos del día al encender el ordenador)
+import grabaciones  # noqa: E402  (tus partidas grabadas convertidas en Shorts)
 
 GUIONES = RAIZ / "salida" / "guiones"
 AUDIO = RAIZ / "salida" / "audio"
@@ -51,11 +53,12 @@ MINIATURAS = RAIZ / "salida" / "cache_miniaturas"  # miniaturas de la página de
 MUESTRA = RAIZ / "salida" / "_trabajo" / "muestra_voz.mp3"
 ENV = RAIZ / ".env"
 PUERTO = int(os.getenv("MENU_PUERTO") or 8765)
-VERSION = "3.3.1"
+VERSION = "3.4.0"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 400 * 1024 * 1024  # imágenes y clips de vídeo subidos: 400 MB como mucho
+# Lo que se sube: imágenes, clips y grabaciones de partidas (estas pueden pesar varios GB). La app solo la usas tú.
+app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 ** 3
 
 
 # --- Cola de tareas: se ejecutan una detrás de otra --------------------------------------
@@ -213,6 +216,14 @@ def producir(t: Trabajo, nombres: list) -> bool:
     if not nombres:
         t.escribir("No hay guiones que procesar.")
         return False
+    # Los de tus grabaciones se rehacen con su propio motor (recortan la partida, no buscan imágenes)
+    de_grabacion = [n for n in nombres if (leer(n).get("grabacion") or {}).get("origen")]
+    for nombre in de_grabacion:
+        if t.ejecutar("grabaciones.py", "rehacer", str(GUIONES / f"{nombre}.json")) != 0:
+            return False
+    nombres = [n for n in nombres if n not in de_grabacion]
+    if not nombres:
+        return True
     if t.ejecutar("paso2_audio.py", *[str(GUIONES / f"{n}.json") for n in nombres]) == 1:
         return False
     con_audio = [str(AUDIO / n) for n in nombres if (AUDIO / n / "escenas.json").exists()]
@@ -302,7 +313,9 @@ def resumen(ruta: Path) -> dict:
         "modificado": ruta.stat().st_mtime,
         "serie": datos.get("serie"),
         "programado": programados.por_guion().get(nombre),
-        "tipo": horarios.tipo_de(datos),
+        "tipo": ("grabacion" if datos.get("grabacion") else
+                 "gta6" if datos.get("clips_propios") or "#GTA6" in datos.get("hashtags", []) else
+                 horarios.tipo_de(datos)),
         "rehecho_de": datos.get("rehecho_de"),
         "video_ia": bool(datos.get("video_ia")),
     }
@@ -430,7 +443,10 @@ def revisar_rapido(nombre):
 
     def trabajo(t: Trabajo) -> bool:
         t.resultado = [nombre]
-        if (rehacer or not ruta_video(datos)) and datos.get("clips_propios"):  # GTA 6: los planos van con la voz
+        if (rehacer or not ruta_video(datos)) and (datos.get("grabacion") or {}).get("origen"):
+            if t.ejecutar("grabaciones.py", "rehacer", str(GUIONES / f"{nombre}.json")) != 0:
+                return False
+        elif (rehacer or not ruta_video(datos)) and datos.get("clips_propios"):  # GTA 6: los planos van con la voz
             if t.ejecutar("gta6.py", "--rehacer", str(GUIONES / f"{nombre}.json")) != 0:
                 return False
         elif rehacer or not ruta_video(datos):  # sin las frases quitadas: voz y vídeo de nuevo (solo lo que cambia)
@@ -467,6 +483,85 @@ def apartado(g: dict) -> str:
     if g["youtube"]:
         return "publicados"
     return "listos" if g["verificado"] else "revisar"
+
+
+DIAS_SEMANA = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+         "noviembre", "diciembre")
+
+
+def _cuando_salio(g: dict, horas_cola: dict):
+    """Cuándo se hizo público en YouTube: su hora en la cola de programados, la hora programada o la de subida."""
+    yt = g.get("youtube") or {}
+    for texto in (horas_cola.get(g["nombre"]), yt.get("publicar_el"), yt.get("subido")):
+        if not texto:
+            continue
+        try:
+            return datetime.fromisoformat(str(texto)[:19])
+        except ValueError:
+            continue
+    return None
+
+
+def hace(momento: datetime, ahora: datetime) -> str:
+    """«hace 25 min», «hace 3 h 10 min», «hace 2 días»…"""
+    minutos = max(0, int((ahora - momento).total_seconds() // 60))
+    if minutos < 1:
+        return "ahora mismo"
+    if minutos < 60:
+        return f"hace {minutos} min"
+    horas, resto = divmod(minutos, 60)
+    if horas < 24:
+        return f"hace {horas} h" + (f" {resto} min" if resto else "")
+    dias, horas = divmod(horas, 24)
+    if dias < 7:
+        return f"hace {dias} día{'s' if dias > 1 else ''}" + (f" y {horas} h" if horas else "")
+    semanas = dias // 7
+    return f"hace {semanas} semana{'s' if semanas > 1 else ''}" if dias < 60 else f"hace {dias // 30} meses"
+
+
+def _momento(g: dict, horas_cola: dict):
+    """El momento que cuenta para el día de cada vídeo: cuándo se publicó, cuándo saldrá (programados) o, si aún
+    no está en YouTube, cuándo se hizo."""
+    if g["apartado"] == "publicados":
+        return _cuando_salio(g, horas_cola)
+    if g["apartado"] == "programados" and g.get("programado"):
+        try:
+            return datetime.fromisoformat(str(g["programado"]["hora"])[:16])
+        except (KeyError, ValueError):
+            pass
+    return datetime.fromtimestamp(g["modificado"])
+
+
+def paquetes_por_dia(lista: list) -> list:
+    """Los vídeos agrupados por día (el de más adelante primero: mañana, hoy, ayer…); dentro de cada día, por hora
+    (o en el orden pedido: más vistos, mejor retención). Cada uno: {"titulo", "fecha", "videos", "vistas",
+    "abierto"}. Los publicados llevan la hora a la que salieron («salio») y cuánto tiempo llevan («lleva»)."""
+    ahora = datetime.now()
+    horas_cola = {v["nombre"]: v["hora"] for v in programados.leer()["videos"] if v.get("estado") == "en_youtube"}
+    grupos = {}
+    for posicion, g in enumerate(lista):
+        momento = _momento(g, horas_cola)
+        publicado = g["apartado"] == "publicados" and momento
+        g["salio"] = momento.strftime("%H:%M") if publicado else ""
+        g["lleva"] = hace(momento, ahora) if publicado else ""
+        g["_orden"] = (posicion, momento.timestamp() if momento else 0)
+        grupos.setdefault(momento.date() if momento else None, []).append(g)
+    paquetes = []
+    for dia in sorted(grupos, key=lambda d: d or date.min, reverse=True):
+        videos = grupos[dia]
+        videos.sort(key=lambda g: g["_orden"][0] if request.args.get("orden") else g["_orden"][1])
+        if dia is None:
+            titulo = "Sin fecha"
+        else:
+            diferencia = (ahora.date() - dia).days
+            nombre = {0: "Hoy", 1: "Ayer", -1: "Mañana"}.get(diferencia, DIAS_SEMANA[dia.weekday()].capitalize())
+            titulo = f"{nombre} · {dia.day} de {MESES[dia.month - 1]}" + (f" de {dia.year}" if dia.year != ahora.year else "")
+        paquetes.append({"titulo": titulo, "fecha": dia.isoformat() if dia else "", "videos": videos,
+                         "vistas": sum((g["estadisticas"] or {}).get("vistas", 0) for g in videos),
+                         # Abiertos: hoy y lo que está por venir (y, si no hay nada de eso, el más reciente)
+                         "abierto": bool(dia and dia >= ahora.date()) or not paquetes})
+    return paquetes
 
 
 def resumen_del_dia() -> dict:
@@ -508,8 +603,11 @@ def mis_videos():
     vistas["se_quedan"], vistas["visto_pct"] = _media(fiables, "se_quedan"), _media(fiables, "visto_pct")
     vistas["error_retencion"] = subir_youtube.retencion().get("error", "")
     sin_youtube = [g["nombre"] for g in lista if g["apartado"] in ("revisar", "listos") and g["video"]]
+    # En paquetes por día (cada uno, un desplegable): el día en que salió, en que saldrá o en que se hizo
+    paquetes = paquetes_por_dia(lista)
     return render_template(
-        "videos.html", guiones=lista, ver=ver, filtros=FILTROS, cuantos=cuantos, dia=resumen_del_dia(),
+        "videos.html", guiones=lista, paquetes=paquetes, ver=ver, filtros=FILTROS, cuantos=cuantos,
+        dia=resumen_del_dia(),
         vistas=vistas, orden=request.args.get("orden", ""),
         recomendadas=horarios.recomendar(sin_youtube) if sin_youtube else {},
         con_dudas=sum(1 for g in guiones if g["apartado"] == "revisar" and g["dudas"]),
@@ -1878,6 +1976,134 @@ def resumen_largo(carpeta: Path) -> dict:
         "ocupado": largo_ocupado(carpeta.name),
         "stats": estadisticas_youtube()["videos"].get((guion.get("youtube") or {}).get("id")),
     }
+
+
+# --- Grabaciones: tus partidas convertidas en Shorts ------------------------------------------------
+
+def _tamano(bytes_: int) -> str:
+    return f"{bytes_ / 1024 ** 3:.1f} GB" if bytes_ >= 1024 ** 3 else f"{bytes_ / 1024 ** 2:.0f} MB"
+
+
+def _archivo_grabacion(archivo: str) -> Path:
+    try:
+        return grabaciones.ruta_grabacion(archivo)
+    except ValueError:
+        abort(404)
+
+
+@app.route("/grabaciones")
+def ver_grabaciones():
+    en_cola = programados.por_guion()
+    hechos = {}
+    for ruta in GUIONES.glob("*_grabacion_*.json"):
+        try:
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        g = datos.get("grabacion") or {}
+        hechos.setdefault(g.get("origen"), []).append({
+            "nombre": ruta.stem, "titulo": datos.get("titulo", ruta.stem), "modo": g.get("modo"),
+            "youtube": bool(datos.get("youtube")), "programado": ruta.stem in en_cola, "orden": ruta.stat().st_mtime})
+    lista = []
+    for video in grabaciones.lista():
+        info = grabaciones.info(video)
+        minutos, segs = divmod(int(info["duracion"]), 60)
+        lista.append({"archivo": video.name, "duracion": f"{minutos}:{segs:02d} min", "sonido": info["sonido"],
+                      "tamano": _tamano(video.stat().st_size),
+                      "fecha": time.strftime("%d/%m %H:%M", time.localtime(video.stat().st_mtime)),
+                      "resultados": sorted(hechos.get(video.name, []), key=lambda r: -r["orden"])})
+    return render_template("grabaciones.html", grabaciones=lista, mensaje=request.args.get("mensaje", ""),
+                           error=request.args.get("error", ""))
+
+
+@app.route("/grabaciones/<path:archivo>/portada.jpg")
+def portada_grabacion(archivo):
+    ruta = grabaciones.portada(_archivo_grabacion(archivo))
+    if not ruta.exists():
+        abort(404)
+    return send_file(ruta.resolve(), mimetype="image/jpeg")
+
+
+@app.post("/grabaciones/subir")
+def subir_grabacion():
+    grabaciones.CARPETA.mkdir(parents=True, exist_ok=True)
+    guardadas = []
+    for archivo in request.files.getlist("video"):
+        nombre = Path(archivo.filename or "").name
+        if Path(nombre).suffix.lower() not in grabaciones.EXTENSIONES:
+            continue
+        nombre = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", nombre).strip() or f"grabacion_{int(time.time())}.mp4"
+        destino, n = grabaciones.CARPETA / nombre, 2
+        while destino.exists():
+            destino = grabaciones.CARPETA / f"{Path(nombre).stem}_{n}{Path(nombre).suffix}"
+            n += 1
+        archivo.save(destino)
+        guardadas.append(destino.name)
+    if not guardadas:
+        return redirect(url_for("ver_grabaciones", error="Sube un vídeo MP4, MOV, MKV o WEBM."))
+    return redirect(url_for("ver_grabaciones", mensaje=f"Subida: {', '.join(guardadas)}. Elige qué hacer con ella."))
+
+
+@app.post("/grabaciones/abrir-carpeta")
+def abrir_grabaciones():
+    grabaciones.CARPETA.mkdir(parents=True, exist_ok=True)
+    os.startfile(grabaciones.CARPETA.resolve())
+    return redirect(url_for("ver_grabaciones"))
+
+
+@app.post("/grabaciones/<path:archivo>/borrar")
+def borrar_grabacion(archivo):
+    ruta = _archivo_grabacion(archivo)
+    if cola.en_curso():
+        return redirect(url_for("ver_grabaciones", error="Hay tareas en marcha: espera a que terminen para borrarla."))
+    ruta.unlink()
+    shutil.rmtree(grabaciones.TRABAJO / ruta.stem, ignore_errors=True)
+    return redirect(url_for("ver_grabaciones", mensaje=f"«{ruta.name}» borrada del ordenador."))
+
+
+def _trabajo_grabacion(titulo: str, archivo: str, argumentos: list) -> Trabajo:
+    def trabajo(t: Trabajo) -> bool:
+        inicio = time.time() - 1
+        codigo = t.ejecutar("grabaciones.py", *argumentos)
+        t.resultado = [r.stem for r in sorted(GUIONES.glob("*_grabacion_*.json"), key=lambda r: r.stat().st_mtime)
+                       if r.stat().st_mtime >= inicio
+                       and (json.loads(r.read_text(encoding="utf-8")).get("grabacion") or {}).get("origen") == archivo]
+        if t.resultado:
+            t.escribir("✔ Listo. Ábrelos abajo para verlos y, si te gustan, pulsa «Revisado y programar».")
+        return codigo == 0
+    return cola.anadir(titulo, trabajo)
+
+
+@app.post("/grabaciones/<path:archivo>/clips")
+def clips_grabacion(archivo):
+    ruta = _archivo_grabacion(archivo)
+    cantidad = min(max(request.form.get("cantidad", 3, type=int), 1), 5)
+    duracion = min(max(request.form.get("duracion", 25, type=int), 10), 60)
+    sonido = "musica" if request.form.get("sonido") == "musica" else "juego"
+    juego = request.form.get("juego", "").strip()[:30] or "GTA 6"
+    nuevo = _trabajo_grabacion(f"Clips de «{ruta.name}»", ruta.name,
+                               ["clips", ruta.name, "--cantidad", str(cantidad), "--duracion", str(duracion),
+                                "--sonido", sonido, "--juego", juego])
+    return redirect(url_for("ver_tarea", id=nuevo.id))
+
+
+@app.post("/grabaciones/<path:archivo>/narrado")
+def narrado_grabacion(archivo):
+    ruta = _archivo_grabacion(archivo)
+    nota = " ".join(request.form.get("nota", "").split())[:400]
+    if not nota:
+        return redirect(url_for("ver_grabaciones", error="Escribe en una línea qué has grabado."))
+    argumentos = ["narrado", ruta.name, "--nota", nota, "--juego", request.form.get("juego", "").strip()[:30] or "GTA 6"]
+    for campo in ("desde", "hasta"):
+        valor = request.form.get(campo, "").strip()
+        if valor:
+            try:
+                grabaciones.segundos(valor)
+            except ValueError:
+                return redirect(url_for("ver_grabaciones", error=f"«{valor}» no es una hora válida: usa min:seg (1:20)."))
+            argumentos += [f"--{campo}", valor]
+    nuevo = _trabajo_grabacion(f"Short narrado de «{ruta.name}»", ruta.name, argumentos)
+    return redirect(url_for("ver_tarea", id=nuevo.id))
 
 
 @app.route("/largos")

@@ -298,7 +298,9 @@ def _guion_gta6():
         return listo
     inicio = time.time() - 1
     pa.ejecutar("gta6.py", "--siguiente")
-    nuevos = [r for r in _guiones_nuevos(inicio) if "_gta6_" in r.name]
+    # Solo vale si tiene vídeo: si falló algo (la voz sin internet, el montaje…) el guion existe pero no se publica
+    nuevos = [r for r in _guiones_nuevos(inicio) if "_gta6_" in r.name
+              and Path(pa.leer_json(r, {}).get("video") or "-").exists()]
     if not nuevos:
         registrar("GTA 6: no quedan temas nuevos con el material oficial (o ha fallado); mira el registro.")
     return nuevos[-1] if nuevos else None

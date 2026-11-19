@@ -2,7 +2,8 @@
 {% block titulo %}Mis vídeos · MenteInquieta67{% endblock %}
 {% block contenido %}
 {% set tipos = {'efemeride': 'Efeméride', 'serie': 'Serie', 'humor': 'Humor', 'serio': 'Serio / misterio',
-                'general': 'Divulgación', 'ingles': 'En inglés', 'actualidad': 'Actualidad'} %}
+                'general': 'Divulgación', 'ingles': 'En inglés', 'actualidad': 'Actualidad', 'gta6': 'GTA 6',
+                'grabacion': 'Tu grabación'} %}
 <div class="cabecera-pagina">
   <h1>Mis vídeos</h1>
   <form method="post" action="{{ url_for('abrir_carpeta') }}" class="en-linea">
@@ -96,8 +97,26 @@
 {% endif %}
 
 {# ---------------------------------------------------------------- Lista #}
+{% if not guiones %}
+  <div class="tarjeta vacio">
+    {% if ver == 'revisar' %}Nada por revisar. ¡Al día!
+    {% elif ver == 'listos' %}Nada listo para programar. Cuando revises un vídeo, aparecerá aquí.
+    {% elif ver == 'programados' %}Nada programado.
+    {% elif ver == 'publicados' %}Todavía no hay nada publicado.
+    {% else %}Aún no hay vídeos. <a href="{{ url_for('inicio') }}">Crea el primero</a>.{% endif %}
+  </div>
+{% endif %}
+{% for paquete in paquetes if paquete.videos %}
+{% if paquete.titulo %}
+<details class="paquete-dia" {% if paquete.abierto %}open{% endif %}>
+  <summary>
+    <span class="dia">{{ paquete.titulo }}</span>
+    <span class="resumen-paquete">{{ paquete.videos | length }} vídeo{{ 's' if paquete.videos | length != 1 }}
+      {% if paquete.vistas %}· <b>{{ paquete.vistas | miles }}</b> vista{{ 's' if paquete.vistas != 1 }}{% endif %}</span>
+  </summary>
+{% endif %}
 <div class="lista">
-  {% for g in guiones %}
+  {% for g in paquete.videos %}
     {% set r = recomendadas.get(g.nombre) %}
     <div class="fila-video">
       <a class="portadilla" href="{{ url_for('ver_guion', nombre=g.nombre) }}" tabindex="-1" aria-hidden="true">
@@ -115,7 +134,11 @@
           {% endif %}
           {% if not g.video %}<span class="etiqueta">sin vídeo</span>{% endif %}
           {% if g.apartado == 'programados' %}<span class="etiqueta prog">{{ g.programado.bonita }}</span>{% endif %}
-          {% if g.apartado == 'publicados' %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+          {% if g.apartado == 'publicados' %}
+            {% if g.salio %}<span class="etiqueta ok" title="Hora a la que se hizo público en YouTube">publicado a las {{ g.salio }}</span>
+              <span class="lleva">{{ g.lleva }}</span>
+            {% else %}<span class="etiqueta ok">en YouTube</span>{% endif %}
+          {% endif %}
           {% if g.duracion %}<span>{{ '%.0f' % g.duracion }} s</span>{% endif %}
           {% if g.estadisticas %}
             <span class="reproducciones" title="{{ g.estadisticas.me_gusta | miles }} me gusta · {{ g.estadisticas.comentarios | miles }} comentario{{ 's' if g.estadisticas.comentarios != 1 }}">
@@ -191,14 +214,8 @@
         {% endif %}
       </div>
     </div>
-  {% else %}
-    <div class="tarjeta vacio">
-      {% if ver == 'revisar' %}Nada por revisar. ¡Al día!
-      {% elif ver == 'listos' %}Nada listo para programar. Cuando revises un vídeo, aparecerá aquí.
-      {% elif ver == 'programados' %}Nada programado.
-      {% elif ver == 'publicados' %}Todavía no hay nada publicado.
-      {% else %}Aún no hay vídeos. <a href="{{ url_for('inicio') }}">Crea el primero</a>.{% endif %}
-    </div>
   {% endfor %}
 </div>
+{% if paquete.titulo %}</details>{% endif %}
+{% endfor %}
 {% endblock %}
